@@ -8,9 +8,10 @@
 # secrets / tokens
 .neon_token
 
-# OS / editor
+# OS / editor / agent tooling
 .DS_Store
 Thumbs.db
+.claude/
 
 # transient data-fetch staging (raw NEON pulls live outside the repo)
 /plant-data-fetch/
