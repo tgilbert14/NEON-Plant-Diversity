@@ -29,8 +29,8 @@ shiny::runApp(".", port = 8190)
 ```
 
 The Santa Rita (**SRER**) demo — a Sonoran desert grassland with a textbook *Eragrostis
-lehmanniana* (Lehmann lovegrass) invasion — loads instantly. KONZ (Konza tallgrass) and JORN
-(Jornada) are also bundled.
+lehmanniana* (Lehmann lovegrass) invasion — loads instantly. **All 46 NEON terrestrial sites**
+are bundled, from Arctic tundra (Utqiaġvik) to Puerto Rico dry forest — pick any by state.
 
 ## Data
 
@@ -43,12 +43,15 @@ Per-site bundles live in `data/sites/<SITE>.rds` as `list(occ, ground, meta)`:
 
 ### Rebuild the bundles
 
-NEON pulls need **R-4.1.1** (neonUtilities; R-4.5.2 crashes on `loadByProduct`) and a token in
-`.neon_token`:
+NEON pulls need **neonUtilities** (validated on R-4.3.1; R-4.5.2 crashes on `loadByProduct`)
+and a NEON API token in `.neon_token` (also read from the sibling app / `$NEON_TOKEN`):
 
-1. Fetch raw: `Rscript-4.1.1 ../App-NEON-Small-Mammal-Tracker/scripts/fetch_plant_demo.R`
+1. Fetch raw — **resumable + chunkable** so a 46-site sweep never hangs (skips sites already
+   pulled): `Rscript scripts/fetch_plant_all.R` for all sites, or pass a subset to chunk it,
+   e.g. `Rscript scripts/fetch_plant_all.R HARV BART BLAN SCBI SERC`
    (writes `../plant-data-fetch/<SITE>_raw.rds`).
-2. Bundle: `Rscript scripts/bundle_plant_data.R` (trims → `data/sites/*.rds` + `data/site_index.rds` + the demo).
+2. Bundle: `Rscript scripts/bundle_plant_data.R` — trims **every** raw dump present →
+   `data/sites/*.rds` + a rebuilt `data/site_index.rds` + the demo.
 
 ## Lineage
 
