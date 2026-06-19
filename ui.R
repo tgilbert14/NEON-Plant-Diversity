@@ -83,11 +83,17 @@ ui <- bslib::page_sidebar(
            span(class = "title-tag", "unofficial")),
         p(class = "app-subtitle",
           "A field guide to what grows where NEON samples — how rich each site is, what covers the ground, and where introduced plants are gaining a foothold. Built on the nested-quadrat plant survey (DP1.10058.001).")),
-      p("Pick a ", tags$b("site"), " below, or step into the Santa Rita demo — a Sonoran desert grassland with a textbook Lehmann-lovegrass invasion."),
-      uiOutput("siteCards"),
-      div(class = "picker-actions",
+      p("Tap a ", tags$b("site"), " on the map — dot size is species richness, colour is how introduced-invaded it is — or step into the Santa Rita demo (a Sonoran desert grassland with a textbook Lehmann-lovegrass invasion)."),
+      mapPickerUI("picker", height = "520px", spinner = DDL$green),
+      div(class = "picker-actions", style = "margin:14px 0",
         actionButton("demoBtn2", tagList(bs_icon("stars"), " Open the Santa Rita demo instantly"),
-                     class = "btn-primary btn-lg", onclick = "smtLoadStart('Santa Rita — demo dataset')")))),
+                     class = "btn-primary btn-lg", onclick = "smtLoadStart('Santa Rita — demo dataset')")),
+      # site-card grid stays VISIBLE below the map: it has intrinsic width, so it
+      # keeps the splash column from shrink-wrapping to 0 (the width-less leaflet
+      # alone would collapse it), and doubles as the "pick from a list" path.
+      div(class = "site-list-block",
+        tags$div(class = "site-list-head", bs_icon("list-ul"), " or pick from the full site list"),
+        uiOutput("siteCards")))),
 
   # ---- main tabs ---------------------------------------------------------
   div(id = "mainTabsWrap", class = "main-tabs-wrap",

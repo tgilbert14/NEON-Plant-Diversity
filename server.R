@@ -113,6 +113,19 @@ server <- function(input, output, session) {
   observeEvent(input$demoBtn,  ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
   observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
 
+  # national site-picker map on the splash: dot size = richness, colour = % introduced; tap to load
+  local({
+    mx <- suppressWarnings(max(site_table$pct_introduced, na.rm = TRUE)); if (!is.finite(mx)) mx <- 100
+    pip_pal <- leaflet::colorNumeric("YlOrBr", domain = c(0, mx), na.color = "#c9d3bb")
+    picked_site <- mapPickerServer("picker", site_table = site_table, radius_metric = "richness",
+      color_fn = function(st) pip_pal(st$pct_introduced),
+      label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> species · <b>%s</b> introduced cover · %s plots",
+        r$site, r$name %||% r$site, r$state %||% "", r$richness %||% "?",
+        if (is.finite(r$pct_introduced)) paste0(round(r$pct_introduced), "%") else "n/a", r$n_plots %||% "?"))
+    # load in the MAIN server context so ingest()'s shinyjs::hide("splash") isn't namespaced
+    observeEvent(picked_site(), { s <- picked_site(); if (!is.null(s) && nzchar(s)) load_site(s) }, ignoreInit = TRUE)
+  })
+
   # ---- selecting a plot (the funnel) -------------------------------------
   pick_plot <- function(p, navigate = FALSE) {
     if (is.null(p) || is.na(p) || p == "") return()
