@@ -181,8 +181,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .ec-rvalue .bi { font-size: 18px; }
-.ec-rvalue.ec-sgn-pos { color: #1a7f37; }
-.ec-rvalue.ec-sgn-neg { color: var(--terra, #AB0520); }
+/* correlation SIGN rides the CVD-safe blue/vermillion axis (--corr-pos/--corr-neg),
+   NOT nativity green/clay — so a +r never reads as "native" next to the legend. */
+.ec-rvalue.ec-sgn-pos { color: var(--corr-pos, #0072B2); }
+.ec-rvalue.ec-sgn-neg { color: var(--corr-neg, #D55E00); }
 
 .ec-foot {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px 9px;
@@ -194,8 +196,8 @@ body {
 .ec-meta b { color: var(--ink); font-weight: 800; }
 .ec-meta-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .4; }
 .ec-dir { margin-left: auto; }                   /* push "higher -> more/fewer" to the right edge */
-.ec-dir.ec-sgn-pos b { color: #1a7f37; }
-.ec-dir.ec-sgn-neg b { color: var(--terra, #AB0520); }
+.ec-dir.ec-sgn-pos b { color: var(--corr-pos, #0072B2); }
+.ec-dir.ec-sgn-neg b { color: var(--corr-neg, #D55E00); }
 
 /* ---- dark mode (mirrors the app-wide [data-bs-theme="dark"] pattern) ---- */
 [data-bs-theme="dark"] .ec {
@@ -205,9 +207,9 @@ body {
 [data-bs-theme="dark"] .ec.rail-strong { --ec-rail: #5fcf86; }   /* raw greens read dim on navy */
 [data-bs-theme="dark"] .ec.rail-mod    { --ec-rail: var(--gold-ink); }
 [data-bs-theme="dark"] .ec-rvalue.ec-sgn-pos,
-[data-bs-theme="dark"] .ec-dir.ec-sgn-pos b { color: #5fcf86; }
+[data-bs-theme="dark"] .ec-dir.ec-sgn-pos b { color: var(--corr-pos, #4DA6E0); }
 [data-bs-theme="dark"] .ec-rvalue.ec-sgn-neg,
-[data-bs-theme="dark"] .ec-dir.ec-sgn-neg b { color: #ff7a8a; }  /* cardinal too dark on navy */
+[data-bs-theme="dark"] .ec-dir.ec-sgn-neg b { color: var(--corr-neg, #F08A4B); }
 [data-bs-theme="dark"] .ec-demo {
   color: var(--gold-ink); background: rgba(232, 197, 82, .12); border-color: rgba(232, 197, 82, .32);
 }

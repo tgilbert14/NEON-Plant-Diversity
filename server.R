@@ -339,6 +339,149 @@ server <- function(input, output, session) {
           font = list(color = if (is_dark()) "#9fb0c4" else "#6b7a85", size = 11))))
   })
 
+  # ---- ENVIRONMENT (climate & phenology vs the plant signal) -------------
+  # Env data loads lazily per site (only when something on this tab renders).
+  cur_env <- reactive({ s <- rv$site; if (is.null(s) || !nzchar(s)) return(NULL); load_env(s) })
+
+  observe({                                       # populate the driver picker from this site's data
+    e <- cur_env(); ch <- c("Strongest driver" = "best")
+    if (!is.null(e)) ch <- c(ch, env_layer_choices(e)[-1])
+    sel <- input$envLayer %||% "best"; if (!(sel %in% ch)) sel <- "best"
+    updateSelectInput(session, "envLayer", choices = ch, selected = sel)
+  })
+
+  env_series <- reactive({ req(rv$occ); plant_metric_series(rv$occ, input$envMetric %||% "pct_introduced") })
+  env_rank   <- reactive({ ms <- env_series(); e <- cur_env(); if (is.null(ms) || is.null(e)) NULL else plant_env_all(ms, e) })
+  env_perm   <- reactive({
+    ms <- env_series(); e <- cur_env(); if (is.null(ms) || is.null(e)) return(NULL)
+    lay <- input$envLayer %||% "best"
+    plant_env_perm(ms, e, B = 499, only = if (lay == "best") NULL else lay)
+  })
+  env_metric_lab <- reactive(PLANT_METRICS[[input$envMetric %||% "pct_introduced"]]$label)
+  env_metric_dig <- reactive(PLANT_METRICS[[input$envMetric %||% "pct_introduced"]]$dig %||% 1)
+
+  output$envSourceNote <- renderUI({
+    if (is.null(cur_env())) return(NULL)
+    div(class = "env-source env-real", bs_icon("patch-check-fill"),
+        tags$span(HTML(sprintf(" Live from co-located NEON sensors at <b>%s</b> — precipitation, air temperature, and plant phenology, aggregated to one value per year.",
+                               rv$site %||% "this site"))))
+  })
+
+  output$envCorrNote <- renderUI({
+    e <- cur_env(); ms <- env_series()
+    if (is.null(e)) return(div(class = "chart-insight ci-muted", bs_icon("cloud-slash"),
+      div(class = "ci-text", "No co-located environmental data is bundled for this site yet.")))
+    if (is.null(ms) || nrow(ms) < MIN_ENV_YEARS)
+      return(div(class = "chart-insight ci-muted", bs_icon("hourglass-split"),
+        div(class = "ci-text", HTML(sprintf("Only <b>%d</b> survey year%s here — too few to test a climate link (need %d+). The series below still show the raw context.",
+          if (is.null(ms)) 0L else nrow(ms), if (!is.null(ms) && nrow(ms) == 1) "" else "s", MIN_ENV_YEARS)))))
+    pm <- env_perm(); if (is.null(pm)) return(NULL); pk <- pm$top
+    v <- env_verdict(pk$r, pm$p, pk$n); pos <- pk$r >= 0
+    rail <- switch(v$tone, strong = "rail-strong", mod = "rail-mod", "rail-weak")
+    lagtxt <- if (pk$lag == 0) "same-year signal" else if (pk$lag == 1) "1-yr lead" else sprintf("%d-yr lead", pk$lag)
+    metricLab <- env_metric_lab()
+    div(class = paste("ec", rail),
+      style = sprintf("--ec-driver-hue:%s;", ENV_LAYERS[[pk$layer]]$color %||% "#8a97a8"),
+      div(class = "ec-eyebrow", bs_icon("graph-up-arrow"), tags$span("climate & phenology tracking"),
+          tags$span(class = "ec-demo", "exploratory")),
+      div(class = "ec-hero",
+        div(class = "ec-hero-text",
+          tags$span(class = "ec-strength", tools::toTitleCase(v$word)), " — ", tolower(metricLab), " vs ",
+          tags$span(class = "ec-driver", tolower(pk$label))),
+        div(class = paste("ec-rvalue", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
+          title = "Spearman rank-correlation, -1 to +1, at the best lag",
+          bs_icon(if (pos) "arrow-up-right" else "arrow-down-right"), HTML(sprintf("r&nbsp;%+.2f", pk$r)))),
+      div(class = "ec-foot",
+        tags$span(class = "ec-meta", bs_icon("clock-history"), lagtxt),
+        tags$span(class = "ec-meta-dot"),
+        tags$span(class = "ec-meta", bs_icon("calendar3"), HTML(sprintf("<b>%d</b> survey years", pk$n))),
+        tags$span(class = "ec-meta-dot"),
+        tags$span(class = "ec-meta", bs_icon("shuffle"), HTML(sprintf("permutation <b>p = %.2f</b>", pm$p))),
+        tags$span(class = paste("ec-meta ec-dir", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
+          HTML(sprintf("more %s \U2192 <b>%s</b> %s", tolower(pk$label), if (pos) "more" else "less", tolower(metricLab))))))
+  })
+
+  output$envCaveat <- renderUI({
+    pm <- env_perm(); if (is.null(pm)) return(NULL); pk <- pm$top
+    n_drv <- if (is.null(env_rank())) 0L else nrow(env_rank())
+    sig <- !is.na(pm$p) && pm$p < 0.05
+    div(class = "pop-caveat", style = "margin: 0 0 14px;", bs_icon("exclamation-triangle"),
+      HTML(sprintf(" The r above is the <b>strongest of %d driver%s \U00D7 3 lags</b>; the permutation p (%.2f) already accounts for that search. %s With only %d survey years, climate and vegetation can also drift together over time, so even a strong-looking r is a hypothesis, not proof of cause.",
+        n_drv, if (n_drv == 1) "" else "s", pm$p,
+        if (sig) "It clears the chance bar here." else "It does <b>not</b> clear the chance bar here.",
+        pk$n)))
+  })
+
+  output$envScatter <- renderPlotly({
+    e <- cur_env(); ms <- env_series(); pm <- env_perm()
+    if (is.null(e) || is.null(ms)) return(note_plot("No environmental data for this site", "\U0001F326"))
+    if (is.null(pm)) return(note_plot("Too few survey years to compare", "\U0001F326"))
+    pk <- pm$top; meta <- ENV_LAYERS[[pk$layer]]
+    pts <- plant_env_points(ms, e, pk$layer, pk$lag)
+    if (is.null(pts) || nrow(pts) < 3) return(note_plot("Not enough year-matched data for this driver", "\U0001F326"))
+    metricLab <- env_metric_lab(); mdig <- env_metric_dig()
+    p <- plot_ly(pts, x = ~driver, y = ~metric, type = "scatter", mode = "markers+text",
+      text = ~year, textposition = "top center",
+      textfont = list(size = 10, color = if (is_dark()) "#9fb0c4" else "#6b7a85"),
+      marker = list(size = 12, color = meta$color, opacity = 0.85, line = list(color = "#fff", width = 1)),
+      hovertemplate = paste0("year %{text}<br>", meta$label, ": %{x:.", (meta$dig %||% 0), "f} ", meta$unit,
+                             "<br>", metricLab, ": %{y:.", mdig, "f}<extra></extra>"))
+    if (stats::sd(pts$driver) > 0) {
+      fit <- stats::lm(metric ~ driver, data = pts); xs <- range(pts$driver)
+      yh <- stats::predict(fit, newdata = data.frame(driver = xs))
+      p <- p %>% add_trace(x = xs, y = yh, type = "scatter", mode = "lines", inherit = FALSE,
+        showlegend = FALSE, hoverinfo = "skip",
+        line = list(color = ec_corr_color(pk$layer, pk$r, is_dark()), width = 2, dash = "dash"))
+    }
+    p %>% plotly_theme(legend = FALSE) %>% plotly::layout(
+      xaxis = list(title = sprintf("%s (%s)%s", meta$label, meta$unit, if (pk$lag) sprintf(" \U00B7 %d-yr lead", pk$lag) else "")),
+      yaxis = list(title = metricLab))
+  })
+
+  output$envDriverRank <- renderPlotly({
+    r <- env_rank(); if (is.null(r) || !nrow(r)) return(note_plot("Too few survey years to rank drivers", "\U0001F326"))
+    r <- r[order(abs(r$r)), ]
+    r$lab <- ifelse(r$lag == 0, "same yr", sprintf("%d-yr lead", r$lag))
+    r$ccol <- mapply(ec_corr_color, r$layer, r$r, MoreArgs = list(dark = is_dark()))
+    n_drv <- nrow(r)
+    plot_ly(r, x = ~r, y = ~factor(label, levels = label), type = "bar", orientation = "h",
+      marker = list(color = ~ccol),
+      text = ~sprintf("r %+.2f \U00B7 %s \U00B7 n=%d", r, lab, n), textposition = "auto",
+      hovertemplate = ~paste0("<b>", label, "</b><br>r %{x:+.2f} at ", lab, " \U00B7 n=", n, "<extra></extra>")) %>%
+      plotly_theme(legend = FALSE) %>%
+      plotly::layout(
+        xaxis = list(title = "Spearman r with the plant signal — left of 0 = inverse",
+                     range = c(-1, 1), zeroline = TRUE, zerolinecolor = "rgba(31,42,48,0.30)"),
+        yaxis = list(title = ""), margin = list(b = 72),
+        annotations = list(list(
+          text = sprintf("best of %d driver%s \U00D7 3 lags \U00B7 sorted by strength \U00B7 NOT independent evidence",
+                         n_drv, if (n_drv == 1) "" else "s"),
+          x = 0, y = -0.30, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
+          showarrow = FALSE, font = list(color = if (is_dark()) "#9fb0c4" else "#8a97a8", size = 10))))
+  })
+
+  output$envTrend <- renderPlotly({
+    e <- cur_env(); ms <- env_series(); pm <- env_perm()
+    if (is.null(e) || is.null(ms)) return(note_plot("No environmental data for this site", "\U0001F326"))
+    lay <- if (!is.null(pm)) pm$top$layer else { rk <- env_rank(); if (!is.null(rk)) rk$layer[1] else NA }
+    if (is.na(lay) || is.null(ENV_LAYERS[[lay]])) return(note_plot("No driver to overlay", "\U0001F326"))
+    meta <- ENV_LAYERS[[lay]]; ea <- env_annual(e, lay)
+    metricLab <- env_metric_lab(); mdig <- env_metric_dig()
+    p <- plot_ly()
+    if (!is.null(ea) && nrow(ea)) p <- p %>% add_trace(data = ea, x = ~year, y = ~value, yaxis = "y2",
+      type = "scatter", mode = "lines+markers", name = meta$label,
+      line = list(color = meta$color, width = 2, shape = "spline"), marker = list(color = meta$color, size = 7),
+      hovertemplate = paste0(meta$label, " %{x}: %{y:.", (meta$dig %||% 0), "f} ", meta$unit, "<extra></extra>"))
+    p <- p %>% add_trace(data = ms, x = ~year, y = ~value, type = "scatter", mode = "lines+markers",
+      name = metricLab, line = list(color = DDL$green2, width = 3), marker = list(color = DDL$green, size = 9),
+      hovertemplate = paste0(metricLab, " %{x}: %{y:.", mdig, "f}<extra></extra>"))
+    p %>% plotly_theme() %>% plotly::layout(
+      xaxis = list(title = "", dtick = 1),
+      yaxis = list(title = metricLab, rangemode = "tozero"),
+      yaxis2 = list(title = sprintf("%s (%s)", meta$label, meta$unit), overlaying = "y", side = "right",
+                    showgrid = FALSE, rangemode = "tozero", color = meta$color))
+  })
+
   # ---- DIVERSITY LAB (the flagship pin-card scatter) ---------------------
   output$labScatter <- renderPlotly({
     lb <- rv$lb; req(lb)

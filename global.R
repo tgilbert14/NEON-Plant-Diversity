@@ -16,6 +16,7 @@ suppressPackageStartupMessages({
 # ---- helpers + metadata ---------------------------------------------------
 source("R/site_metadata.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
+source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
 
 NEON_DPID <- "DP1.10058.001"   # Plant presence and percent cover
 
