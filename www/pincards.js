@@ -21,11 +21,21 @@
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
 
+  /* Herbarium leader-line palette, read once from the live CSS tokens so the
+     pins stay theme-aware (ochre line/dot fill, leaf-green dot stroke). Static
+     hexes are the fallback if the tokens aren't present yet. */
+  var cssVar = function (name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  };
+  var LINE_STROKE = cssVar("--gold", "#C99A2E");   // ochre highlight
+  var DOT_STROKE = cssVar("--pine", "#1F5C3D");    // leaf-green primary
+
   function boxOf(node) { return node ? node.closest(".smt-pinnable") : null; }
   function bgColor() {
     var dark = document.documentElement.getAttribute("data-bs-theme") === "dark" ||
                document.body.getAttribute("data-bs-theme") === "dark";
-    return dark ? "#16213a" : "#ffffff";
+    return cssVar("--paper", dark ? "#18271E" : "#ffffff");
   }
 
   /* map a data point (dx, dy) to box-relative pixels via plotly's live axes, so
@@ -100,12 +110,12 @@
     var layer = linesLayer(box);
     var ln = document.createElementNS(NS, "line");
     ln.setAttribute("x1", a.ax); ln.setAttribute("y1", a.ay);
-    ln.setAttribute("stroke", "#FFD200"); ln.setAttribute("stroke-width", "2.5");
+    ln.setAttribute("stroke", LINE_STROKE); ln.setAttribute("stroke-width", "2.5");
     ln.setAttribute("stroke-linecap", "round");
     layer.appendChild(ln);
     var dot = document.createElementNS(NS, "circle");
     dot.setAttribute("cx", a.ax); dot.setAttribute("cy", a.ay); dot.setAttribute("r", "4.5");
-    dot.setAttribute("fill", "#FFD200"); dot.setAttribute("stroke", "#0C234B");
+    dot.setAttribute("fill", LINE_STROKE); dot.setAttribute("stroke", DOT_STROKE);
     dot.setAttribute("stroke-width", "1.5");
     layer.appendChild(dot);
     pin.__line = ln; pin.__dot = dot;
@@ -261,7 +271,7 @@
         .then(function () { saving = false; });
     }, 90);
   }
-  window.smtSaveScatter = function () { snap(document.querySelector(".smt-pinnable"), "neon-bodysize-lab.png"); };
+  window.smtSaveScatter = function () { snap(document.querySelector(".smt-pinnable"), "neon-plant-diversity-lab.png"); };
   window.smtSaveQcCard = function () {
     var node = document.getElementById("qcCardNode");
     if (!node) return;

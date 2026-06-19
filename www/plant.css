@@ -39,9 +39,11 @@
 .il-item .ci-hero { color: var(--green); font-weight: 800; }
 
 /* ---- native vs introduced cover bar (plot card) ----------------------- */
+/* colours read the single nativity source (--native / --introduced tokens) so the
+   piv-bar can never drift from the charts, the map, or the species table. */
 .piv-bar { display: flex; height: 24px; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); font-size: 11px; font-weight: 600; }
-.piv-native { background: #1a7f37; color: #fff; display: flex; align-items: center; justify-content: center; }
-.piv-intro  { background: #c1502e; color: #fff; display: flex; align-items: center; justify-content: center; }
+.piv-native { background: var(--native); color: #fff; display: flex; align-items: center; justify-content: center; }
+.piv-intro  { background: var(--introduced); color: #fff; display: flex; align-items: center; justify-content: center; }
 
 /* ---- Diversity Lab selected-plot strip -------------------------------- */
 .lab-sel { display: flex; gap: 14px; align-items: center; background: var(--bg); border: 1px solid var(--line);

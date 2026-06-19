@@ -24,16 +24,28 @@ species_level_only <- function(d) {
   d[ok & !amb, , drop = FALSE]
 }
 
-# Stable species -> color (same species, same color everywhere). Ported.
+# Okabe-Ito colourblind-safe qualitative palette — the categorical key colours
+# (NLCD class, plot type, dominant family in the Diversity Lab, and the species
+# palette below). Distinguishable under deuteranopia/protanopia, unlike Set2/Dark2.
+OKABE_ITO <- c("#0072B2", "#E69F00", "#009E73", "#CC79A7",
+               "#56B4E9", "#D55E00", "#F0E442", "#117733", "#882255", "#999999")
+
+# Stable species -> color (same species, same color everywhere). Ported; now keyed
+# off the CVD-safe Okabe-Ito ramp instead of Set2.
 make_species_pal <- function(d) {
   sp <- sort(unique(d$scientificName[!is.na(d$scientificName)]))
   if (length(sp) == 0) return(character(0))
-  cols <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(sp))
+  cols <- grDevices::colorRampPalette(OKABE_ITO)(length(sp))
   stats::setNames(cols, sp)
 }
 
-# nativity -> a fixed display color (the first-class plant lens)
-NATIVITY_COLS <- c(Native = "#1a7f37", Introduced = "#c1502e", Unknown = "#9aa6b2")
+# nativity -> a fixed display color (the first-class plant lens). THE single source
+# of truth: global.R's DDL and the CSS --native/--introduced/--unknown tokens are
+# derived from / mirror these, so the chart, the piv-bar, the map, and the legend
+# can never drift. Herbarium values — native stays a true green, introduced a clay
+# rust nudged for luminance separation from the green (CVD-aware; always pair with
+# a second non-colour channel on any chart where the distinction carries a claim).
+NATIVITY_COLS <- c(Native = "#2E7D32", Introduced = "#B85C38", Unknown = "#9AA39A")
 
 # corner code from a NEON subplotID ("31_1_1" -> "31", "40_100" -> "40")
 subplot_corner <- function(x) sub("_.*$", "", as.character(x))
@@ -47,12 +59,25 @@ subplot_corner <- function(x) sub("_.*$", "", as.character(x))
 # instantaneous-spatial picture. The time-series (native_trend) still uses the
 # full multi-year table — that's where temporal change belongs.
 # ---------------------------------------------------------------------------
+# NOTE: NEON runs multiple BOUTS within a year at some sites (spring + monsoon at
+# SRER/JORN). Collapsing to the latest YEAR alone still pools both bouts of that
+# year, so a quadrat's two visits get double-counted into richness, the cover
+# denominator, and the Chao2 incidence units. We therefore keep the latest
+# (year, bout) per plot — one survey per plot, the honest instantaneous picture.
 latest_snapshot <- function(occ) {
   if (is.null(occ) || !nrow(occ)) return(occ)
   ly <- occ %>% dplyr::group_by(.data$plotID) %>%
     dplyr::summarise(.snapyr = max(.data$year, na.rm = TRUE), .groups = "drop")
-  occ %>% dplyr::inner_join(ly, by = "plotID") %>%
+  snap <- occ %>% dplyr::inner_join(ly, by = "plotID") %>%
     dplyr::filter(.data$year == .data$.snapyr) %>% dplyr::select(-".snapyr")
+  if ("bout" %in% names(snap) && any(!is.na(snap$bout))) {
+    lb <- snap %>% dplyr::group_by(.data$plotID) %>%
+      dplyr::summarise(.snapbout = suppressWarnings(max(.data$bout, na.rm = TRUE)), .groups = "drop")
+    snap <- snap %>% dplyr::inner_join(lb, by = "plotID") %>%
+      dplyr::filter(is.na(.data$bout) | !is.finite(.data$.snapbout) | .data$bout == .data$.snapbout) %>%
+      dplyr::select(-".snapbout")
+  }
+  snap
 }
 
 # site-level introduced-cover share — the ONE definition used by the hero, the
@@ -63,6 +88,16 @@ site_invasion <- function(occ) {
   tot <- sum(psc$mean_cover, na.rm = TRUE)
   intro <- sum(psc$mean_cover[psc$nativity == "Introduced"], na.rm = TRUE)
   if (tot > 0) round(100 * intro / tot, 1) else NA_real_
+}
+
+# site-level UNKNOWN cover share — the cover-unit companion to unknown_rate()
+# (which is a species-count figure). Surfaced next to the % introduced hero so the
+# honesty number is measured on the same unit (cover) as the metric it qualifies.
+unknown_cover_share <- function(occ) {
+  psc <- plot_species_cover(occ); if (is.null(psc)) return(NA_real_)
+  tot <- sum(psc$mean_cover, na.rm = TRUE)
+  unk <- sum(psc$mean_cover[psc$nativity == "Unknown"], na.rm = TRUE)
+  if (tot > 0) round(100 * unk / tot, 1) else NA_real_
 }
 
 # ---------------------------------------------------------------------------
@@ -206,7 +241,8 @@ chao2 <- function(occ, year = NULL) {
   d <- d[d$scale == 1, , drop = FALSE]                       # 1 m^2 subplots = incidence units
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  unit <- paste(d$plotID, d$subplotID, d$year, sep = "|")
+  bcol <- if ("bout" %in% names(d)) ifelse(is.na(d$bout), "", as.character(d$bout)) else ""
+  unit <- paste(d$plotID, d$subplotID, d$year, bcol, sep = "|")   # bout-aware incidence unit
   m <- length(unique(unit))
   inc <- tapply(unit, d$scientificName, function(u) length(unique(u)))   # # units each species in
   inc <- as.numeric(inc)

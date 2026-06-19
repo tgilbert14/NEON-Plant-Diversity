@@ -63,20 +63,30 @@ plant_sites_in_state <- function(stt) {
   setNames(rows$site, sprintf("%s — %s", rows$site, rows$name))
 }
 
-# ---- theme (Desert Data Labs / Girth-Index house style; greened for plants) --
-# Same triad as the mammal app; the accent leans evergreen for a plant app, but
-# the navy/cardinal/gold core is kept so the DDL family reads as one.
+# ---- theme (Herbarium — the plant-forward Desert Data Labs identity) ---------
+# Deliberately distinct from the navy/cardinal/gold Small Mammal Tracker: a deep
+# leaf-green primary, a clay/terracotta accent, an ochre highlight, on cream paper.
+# The token KEYS are kept (navy/cardinal/gold) so server.R needs no churn — only
+# the VALUES change, so the whole cascade re-skins from here. Nativity colours come
+# from the single source NATIVITY_COLS (sourced above via plant_helpers.R) so the
+# chart palette, the CSS --native/--introduced tokens, and DDL can never drift.
+# corr_pos / corr_neg are a CVD-safe (blue/vermillion) correlation-sign axis kept
+# OFF the nativity green/clay poles, ready for the Environment tab.
 DDL <- list(
-  navy = "#0C234B", navy2 = "#16386e", cardinal = "#AB0520", gold = "#FFD200",
-  gold2 = "#c9a300", sky = "#2f7fb5", green = "#1a7f37", green2 = "#12612a",
-  ink = "#1c2733", muted = "#6b7a89", bg = "#eef2f8", paper = "#ffffff", line = "#dbe2ec",
-  native = "#1a7f37", introduced = "#c1502e", unknown = "#9aa6b2")
+  navy = "#1F5C3D", navy2 = "#2E7D52", cardinal = "#C56A3A", gold = "#C99A2E",
+  gold2 = "#B07E1C", sky = "#2F7D9E", green = "#2E7D32", green2 = "#1E5C24",
+  ink = "#232B22", muted = "#6B7468", bg = "#F5F1E6", paper = "#ffffff", line = "#E2DCCB",
+  corr_pos = "#0072B2", corr_neg = "#D55E00",
+  native = unname(NATIVITY_COLS["Native"]),
+  introduced = unname(NATIVITY_COLS["Introduced"]),
+  unknown = unname(NATIVITY_COLS["Unknown"]))
 
 app_theme <- bs_theme(
   version = 5, bg = "#ffffff", fg = DDL$ink,
   primary = DDL$navy, secondary = DDL$cardinal,
   success = DDL$green, info = DDL$sky, warning = DDL$gold, danger = DDL$cardinal,
-  base_font = font_google("Rubik"), heading_font = font_google("Rubik"),
+  base_font = font_google("Rubik"),
+  heading_font = font_google("Fraunces"),   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
   "border-radius" = "10px")
 
 # ---- static-asset cache-busting (mtime query) -----------------------------
@@ -98,7 +108,7 @@ insight_banner <- function(icon, ..., tone = "navy")
   div(class = paste("chart-insight", paste0("ci-", tone)),
       bsicons::bs_icon(icon), div(class = "ci-text", ...))
 
-glow_badge <- function(label, color = "#0C234B", glow = color)
+glow_badge <- function(label, color = DDL$navy, glow = color)
   span(class = "glow-badge",
        style = sprintf("color:#fff; background:%s; border-color:%s;", color, color), label)
 

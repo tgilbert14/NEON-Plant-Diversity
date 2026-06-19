@@ -20,7 +20,7 @@ server <- function(input, output, session) {
       yaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
       legend = list(bgcolor = "rgba(0,0,0,0)", orientation = "h", y = -0.2, font = list(color = legc)),
       margin = list(l = 55, r = 30, t = 48, b = 44),
-      hoverlabel = list(bgcolor = "rgba(12,35,75,0.96)", bordercolor = "#FFD200",
+      hoverlabel = list(bgcolor = "rgba(31,92,61,0.96)", bordercolor = DDL$gold,
         font = list(color = "#ffffff", family = "Rubik", size = 13))) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   }
@@ -145,6 +145,10 @@ server <- function(input, output, session) {
   observeEvent(input$goLab,       nav_select("tabs", "lab"))
   observeEvent(input$goPlot,      { if (is.null(rv$plot) && !is.null(rv$lb)) rv$plot <- rv$lb$plotID[1]; nav_select("tabs", "plot") })
   observeEvent(input$goMap,       nav_select("tabs", "map"))
+  # the four hero KPI cards are nav doors -> the tab that explains each metric
+  observeEvent(input$heroNav, {
+    tab <- input$heroNav; if (!is.null(tab) && nzchar(tab)) nav_select("tabs", tab)
+  })
 
   # ---- hero stats ---------------------------------------------------------
   output$heroStats <- renderUI({
@@ -153,18 +157,24 @@ server <- function(input, output, session) {
     n_sp <- dplyr::n_distinct(sp$scientificName)
     n_intro <- dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"])
     site_intro <- site_invasion(snap)
-    hero <- function(v, l, suf = "", icon, tone, ttl = NULL) div(class = paste0("hero-stat hero-", tone), title = ttl,
-      div(class = "hs-icon", bs_icon(icon)),
-      div(div(class = "hs-v count-up", `data-target` = v, `data-suffix` = suf, "0"),
-          div(class = "hs-l", l)))
+    ucs <- unknown_cover_share(snap)
+    # each KPI is a nav door — clicking jumps to the tab that explains it
+    hero <- function(v, l, suf = "", icon, tone, ttl = NULL, nav = NULL, sub = NULL)
+      div(class = paste0("hero-stat hero-", tone, if (!is.null(nav)) " hero-clickable" else ""), title = ttl,
+        onclick = if (!is.null(nav)) sprintf("Shiny.setInputValue('heroNav','%s',{priority:'event'});", nav),
+        div(class = "hs-icon", bs_icon(icon)),
+        div(div(class = "hs-v count-up", `data-target` = v, `data-suffix` = suf, "0"),
+            div(class = "hs-l", l),
+            if (!is.null(sub)) div(class = "hs-sub", sub)))
     div(class = "hero-band",
       div(class = "hero-title", bs_icon("broadcast"), tags$b(rv$label)),
       div(class = "hero-grid",
-        hero(n_sp, "species", icon = "flower3", tone = "navy"),
-        hero(nrow(lb), "plots", icon = "grid-3x3", tone = "pine"),
-        hero(if (is.na(site_intro)) 0 else site_intro, "% introduced cover", icon = "shield-exclamation", tone = "terra",
-             ttl = "Share of vegetative cover that is introduced. Cover is an ocular estimate and plant layers overlap, so this is a relative index — not a percent of ground."),
-        hero(n_intro, "introduced species", icon = "exclamation-triangle", tone = "gold")))
+        hero(n_sp, "species", icon = "flower3", tone = "navy", nav = "diversity"),
+        hero(nrow(lb), "plots", icon = "grid-3x3", tone = "pine", nav = "map"),
+        hero(if (is.na(site_intro)) 0 else site_intro, "% introduced cover", icon = "shield-exclamation", tone = "terra", nav = "invasive",
+             ttl = "Share of vegetative cover that is introduced. Cover is an ocular estimate and plant layers overlap, so this is a relative index — not a percent of ground.",
+             sub = if (!is.na(ucs)) sprintf("%.0f%% of cover is unknown status", ucs)),
+        hero(n_intro, "introduced species", icon = "exclamation-triangle", tone = "gold", nav = "invasive")))
   })
 
   # ---- OVERVIEW -----------------------------------------------------------
@@ -192,7 +202,7 @@ server <- function(input, output, session) {
       dplyr::summarise(c = sum(.data$mean_cover), .groups = "drop") %>% dplyr::arrange(dplyr::desc(.data$c))
     dom <- top$scientificName[1]; dom_nat <- top$nativity[1]
     insight_banner("stars", tone = if (dom_nat == "Introduced") "terra" else "pine",
-      HTML(sprintf("<b><i>%s</i></b> is the most abundant plant by cover here (%s). The site holds <span class='ci-hero'>%d</span> plant species across %d plots.",
+      HTML(sprintf("<b><i>%s</i></b> is the most dominant plant across the site (%s). The site holds <span class='ci-hero'>%d</span> plant species across %d plots.",
         dom, tolower(dom_nat), dplyr::n_distinct(species_level_only(occ)$scientificName), nrow(rv$lb))))
   })
   output$siteInsights <- renderUI({
@@ -219,9 +229,16 @@ server <- function(input, output, session) {
   # ---- DIVERSITY ----------------------------------------------------------
   output$saPlot <- renderPlotly({
     occ <- rv$snap; req(occ); sa <- species_area_site(occ); if (is.null(sa)) return(note_plot("Not enough data for a species–area curve"))
+    # the curve is a MEAN across n plots per area — carry its spread (±1 sd) as a
+    # band and surface n so the reader sees how many plots back each point.
+    sa$sd[!is.finite(sa$sd)] <- 0
+    sa$n  <- ifelse(is.finite(sa$n), sa$n, 0)
+    sa$nlab <- paste0("mean of ", sa$n, " plot", ifelse(sa$n == 1, "", "s"))
     plot_ly(sa, x = ~area_m2, y = ~richness, type = "scatter", mode = "lines+markers",
       line = list(color = DDL$green, width = 3), marker = list(color = DDL$green2, size = 9),
-      hovertemplate = "%{x} m²<br>%{y:.0f} species<extra></extra>") %>%
+      error_y = list(type = "data", array = sa$sd, color = "rgba(46,125,50,0.35)", thickness = 1.4, width = 4),
+      text = sa$nlab,
+      hovertemplate = "%{x} m²<br>%{y:.0f} species (±%{error_y.array:.1f})<br>%{text}<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(xaxis = list(title = "Area sampled (m², log)", type = "log",
         tickvals = c(1,10,100,400), ticktext = c("1","10","100","400")),
@@ -230,17 +247,23 @@ server <- function(input, output, session) {
   output$saInsight <- renderUI({
     occ <- rv$snap; req(occ); sa <- species_area_site(occ); req(!is.null(sa))
     slope <- (sa$richness[sa$area_m2==400] - sa$richness[sa$area_m2==100])
+    n400 <- sa$n[sa$area_m2==400]; if (!length(n400) || !is.finite(n400)) n400 <- 0
+    shape <- if (n400 < 5)
+        sprintf(" Based on just <b>%.0f</b> plot%s, so read the shape as a rough floor, not a firm curve.", n400, ifelse(n400 == 1, "", "s"))
+      else if (slope > 15) " Still rising steeply at 400 m² — the site is undersampled, there's more out there."
+      else " The curve is flattening — most species are being caught."
     insight_banner("graph-up", tone = "pine",
       HTML(sprintf("Richness climbs from <b>%.0f</b> species/m² to <span class='ci-hero'>%.0f</span> per 400 m² plot.%s",
-        sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400],
-        if (slope > 15) " Still rising steeply at 400 m² — the site is undersampled, there's more out there." else " The curve is flattening — most species are being caught.")))
+        sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400], shape)))
   })
   output$hillPlot <- renderPlotly({
     occ <- rv$snap; req(occ); h <- hill_site(occ); if (is.null(h)) return(note_plot("Not enough cover data"))
     df <- data.frame(q = c("q0\nrichness","q1\ncommon","q2\ndominant"), v = as.numeric(h))
     df$q <- factor(df$q, levels = df$q)
+    # q0 ≥ q1 ≥ q2 is ONE ordered quantity, not three categories — paint it a
+    # single-hue lightness ramp of the primary so the colour can't imply types.
     plot_ly(df, x = ~q, y = ~v, type = "bar",
-      marker = list(color = c(DDL$navy2, DDL$green, DDL$gold2)),
+      marker = list(color = c("#1F5C3D", "#3E8B5E", "#86C2A1")),
       text = ~round(v), textposition = "outside",
       hovertemplate = "%{x}<br>%{y:.1f} effective species<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
@@ -249,9 +272,12 @@ server <- function(input, output, session) {
   output$hillInsight <- renderUI({
     occ <- rv$snap; req(occ); h <- hill_site(occ); req(!is.null(h))
     even <- round(h["q1"] / h["q0"], 2)
-    insight_banner("diagram-2", tone = "navy",
-      HTML(sprintf("Of <b>%.0f</b> species, only <span class='ci-hero'>%.0f</span> are effectively common (q1). Evenness ≈ <b>%.2f</b> — %s.",
-        h["q0"], h["q1"], even, if (even < 0.25) "a few species dominate the cover" else "cover is fairly spread")))
+    tagList(
+      insight_banner("diagram-2", tone = "navy",
+        HTML(sprintf("Of <b>%.0f</b> species, only <span class='ci-hero'>%.0f</span> are effectively common (q1). Evenness ≈ <b>%.2f</b> — %s.",
+          h["q0"], h["q1"], even, if (even < 0.25) "a few species dominate the cover" else "cover is fairly spread"))),
+      p(class = "hill-foot", bsicons::bs_icon("info-circle"),
+        " q1/q2 weight species by cover — an ocular index whose overlapping layers make it a relative measure, not a share of ground."))
   })
   output$chaoBanner <- renderUI({
     occ <- rv$snap; req(occ); ch <- chao2(occ); req(!is.null(ch))
@@ -292,16 +318,23 @@ server <- function(input, output, session) {
     occ <- rv$snap; req(occ); ip <- invasion_pressure(occ); if (is.null(ip) || !nrow(ip)) return(note_plot("No invasion-pressure data"))
     ip$lab <- short_plot(ip$plotID)
     mx <- max(c(ip$intro_1m, ip$intro_400), 1)
-    plot_ly(ip, x = ~intro_1m, y = ~intro_400, type = "scatter", mode = "markers",
-      text = ~lab, marker = list(color = DDL$introduced, size = 11, opacity = 0.7, line = list(color = "#fff", width = 1)),
-      hovertemplate = "plot %{text}<br>%{x} introduced at 1 m²<br>%{y} introduced in 400 m²<extra></extra>") %>%
+    # both axes are small integer counts, so ties pile up invisibly at (0,0) and
+    # on the 1:1 line — nudge the DISPLAY positions deterministically while the
+    # hover still reports the TRUE integers (carried in customdata).
+    set.seed(1)
+    ip$jx <- ip$intro_1m  + stats::runif(nrow(ip), -0.12, 0.12)
+    ip$jy <- ip$intro_400 + stats::runif(nrow(ip), -0.12, 0.12)
+    ip$cd <- lapply(seq_len(nrow(ip)), function(i) list(ip$lab[i], ip$intro_1m[i], ip$intro_400[i]))
+    plot_ly(ip, x = ~jx, y = ~jy, type = "scatter", mode = "markers",
+      customdata = ~cd, marker = list(color = DDL$introduced, size = 11, opacity = 0.7, line = list(color = "#fff", width = 1)),
+      hovertemplate = "plot %{customdata[0]}<br>%{customdata[1]} introduced at 1 m²<br>%{customdata[2]} introduced in 400 m²<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(showlegend = FALSE,
         xaxis = list(title = "Introduced species detectable at 1 m²", rangemode = "tozero"),
         yaxis = list(title = "Introduced species in the whole 400 m² plot", rangemode = "tozero"),
         shapes = list(list(type = "line", x0 = 0, y0 = 0, x1 = mx, y1 = mx,
           line = list(color = "rgba(120,130,140,0.5)", dash = "dot", width = 1))),
-        annotations = list(list(text = "on the 1:1 line = every invader is already at the finest scale",
+        annotations = list(list(text = "on the 1:1 line = every invader is already at the finest scale (points jittered to separate ties)",
           x = 0, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
           font = list(color = if (is_dark()) "#9fb0c4" else "#6b7a85", size = 11))))
   })
@@ -319,8 +352,15 @@ server <- function(input, output, session) {
       pts$key <- fam
     } else pts$key <- as.character(pts[[keycol]])
     pts$key[is.na(pts$key) | pts$key == ""] <- "—"
-    keys <- sort(unique(pts$key))
-    kpal <- setNames(grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Dark2"))(length(keys)), keys)
+    # family/NLCD colouring can yield many keys; an interpolated Dark2 muddies
+    # past 8. Collapse to the top-8 by point count + an "Other" bucket, then map
+    # straight onto the CVD-safe Okabe-Ito set so the legend always fits (≤9).
+    keep <- names(sort(table(pts$key), decreasing = TRUE))
+    keep <- keep[seq_len(min(8, length(keep)))]
+    pts$key[!(pts$key %in% keep)] <- "Other"
+    keys <- c(keep, if (any(pts$key == "Other")) "Other")
+    kpal <- setNames(OKABE_ITO[seq_along(keep)], keep)
+    if (any(pts$key == "Other")) kpal["Other"] <- "#999999"
 
     # per-plot pin-card HTML (customdata) — the .smt-open chip opens the plot profile
     tip <- paste0(
@@ -339,7 +379,7 @@ server <- function(input, output, session) {
     for (k in keys) {
       sub <- pts[pts$key == k, ]
       p <- p %>% add_trace(data = sub, x = ~richness, y = ~piv, type = "scatter", mode = "markers",
-        name = k, customdata = ~tip, showlegend = length(keys) <= 10,
+        name = k, customdata = ~tip, showlegend = TRUE,
         marker = list(color = unname(kpal[k]), size = 13, opacity = 0.82, line = list(color = "#fff", width = 0.8)),
         text = ~paste0("plot ", short, " · ", richness, " spp"),
         hovertemplate = "%{text}<br>%{y:.1f}% introduced cover<extra></extra>")
@@ -475,11 +515,16 @@ server <- function(input, output, session) {
   # ---- MAP ----------------------------------------------------------------
   output$map <- leaflet::renderLeaflet({
     lb <- rv$lb; req(lb)
+    # drop coord-less / non-finite plots so the map can't render blank or fit to NA
+    lb <- lb[is.finite(lb$lat) & is.finite(lb$lng), , drop = FALSE]
+    validate(need(nrow(lb) > 0, "No plots have mappable coordinates for this site."))
     metric <- input$mapMetric %||% "pct_introduced"
     val <- if (metric == "pct_introduced") ifelse(is.na(lb$pct_introduced), 0, lb$pct_introduced) else lb$richness
     # guard a degenerate (all-equal) domain so colorNumeric doesn't error
     dom <- if (diff(range(val, na.rm = TRUE)) > 0) range(val, na.rm = TRUE) else c(val[1] - 1, val[1] + 1)
-    pal <- leaflet::colorNumeric(if (metric == "pct_introduced") c("#1a7f37","#e0a32e","#c1502e") else "viridis", domain = dom)
+    # % introduced is a one-ended magnitude, not a diverging metric — a SEQUENTIAL
+    # single-hue sand→clay ramp (no false midpoint, no native-green reuse).
+    pal <- leaflet::colorNumeric(if (metric == "pct_introduced") c("#F3E9D8","#D9A066","#B85C38") else "viridis", domain = dom)
     bm <- input$view %||% "Esri.WorldImagery"
     rr <- range(lb$richness, na.rm = TRUE)
     lb$radius <- if (diff(rr) > 0) 6 + 14 * (lb$richness - rr[1]) / diff(rr) else 11
@@ -489,6 +534,7 @@ server <- function(input, output, session) {
         label = ~lapply(sprintf("<b>%s</b><br>%d species · %s%% introduced cover", short_plot(plotID), richness,
           ifelse(is.na(pct_introduced), "—", pct_introduced)), htmltools::HTML),
         layerId = ~plotID) %>%
+      leaflet::fitBounds(min(lb$lng), min(lb$lat), max(lb$lng), max(lb$lat)) %>%
       leaflet::addLegend("bottomright", pal = pal, values = val,
         title = if (metric == "pct_introduced") "% introduced" else "richness")
   })
