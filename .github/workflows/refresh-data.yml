@@ -11,12 +11,14 @@ name: Refresh NEON plant data bundle
 # deploy.R step here (unlike the mammal sibling): the commit at the end of this
 # workflow is the deploy.
 #
-# CADENCE — QUARTERLY (not monthly): NEON publishes plant presence & % cover
-# (DP1.10058.001) roughly annually, and a full 46-site loadByProduct sweep runs
-# ~1–2h, so a monthly pull would burn hours re-downloading unchanged data. Cron
-# can't express "first Saturday of a quarter month", so we fire every Saturday
-# 06:00 UTC and let the `gate` job proceed only on the FIRST Saturday (Arizona
-# time, America/Phoenix — no DST) of a quarter-start month (Jan/Apr/Jul/Oct).
+# CADENCE — MONTHLY, first Saturday night (Arizona), matching the Small Mammal
+# reference and every other NEON sibling (suite consistency). Cron can't express
+# "first Saturday of the month", so we fire every Saturday 06:00 UTC and let the
+# `gate` job proceed only on the FIRST Saturday (Arizona time, America/Phoenix —
+# no DST). NOTE: NEON plant presence & % cover (DP1.10058.001) publishes ~annually
+# and a full 46-site loadByProduct sweep runs ~1–2h, so most monthly runs re-pull
+# unchanged data; it's off-peak + gated so harmless, but switch the gate back to
+# quarter-months (Jan/Apr/Jul/Oct) if CI minutes matter more than uniformity.
 # Manual runs (workflow_dispatch) always proceed; tick `skip_download` to
 # rebundle + redeploy the already-committed raw/bundle fast (a deploy test that
 # skips the long NEON re-pull).
@@ -26,7 +28,7 @@ name: Refresh NEON plant data bundle
 #                46-site pull finishes faster. Anonymous works too (just slower),
 #                so this secret is OPTIONAL; fetch_plant_all.R reads $NEON_TOKEN.
 #
-# FLOW: gate (quarter check) → checkout → setup-r + deps → fetch raw to
+# FLOW: gate (monthly check) → checkout → setup-r + deps → fetch raw to
 # ../plant-data-fetch (resumable, time-boxed, non-fatal) → bundle every raw dump
 # present into data/sites/*.rds + indexes → regenerate manifest.json → guarded
 # commit + push to master (no-ops cleanly when nothing changed). The raw dumps
@@ -35,9 +37,11 @@ name: Refresh NEON plant data bundle
 
 on:
   schedule:
-    # Every Saturday 06:00 UTC == Friday 23:00 America/Phoenix. Cron can't say
-    # "first Saturday of a quarter month", so we fire weekly and gate below.
-    - cron: "0 6 * * 6"
+    # Every Sunday 06:00 UTC == Saturday 23:00 America/Phoenix (Arizona, no DST) —
+    # the SAME off-peak slot as every other NEON sibling. Cron can't say "first
+    # Saturday of the month", so we fire weekly and let the gate proceed only on
+    # the first one (monthly), matching the Small Mammal reference.
+    - cron: "0 6 * * 0"
   workflow_dispatch:
     inputs:
       skip_download:
@@ -49,9 +53,9 @@ permissions:
   contents: write          # push the refreshed data bundles to master
 
 jobs:
-  # Gate: only the FIRST Saturday (Arizona time) of a quarter-start month
-  # (Jan / Apr / Jul / Oct) runs the heavy quarterly refresh. Manual runs
-  # (workflow_dispatch) always proceed.
+  # Gate: only the FIRST Saturday (Arizona time) of each month runs the heavy
+  # refresh — the same monthly off-peak cadence as the Small Mammal reference and
+  # the other siblings. Manual runs (workflow_dispatch) always proceed.
   gate:
     runs-on: ubuntu-latest
     outputs:
@@ -65,13 +69,11 @@ jobs:
           fi
           dow=$(TZ='America/Phoenix' date +%u)    # 6 = Saturday
           day=$(TZ='America/Phoenix' date +%-d)   # day-of-month, no leading zero
-          mon=$(TZ='America/Phoenix' date +%-m)   # month, no leading zero
-          if [ "$dow" = "6" ] && [ "$day" -le 7 ] \
-             && { [ "$mon" = "1" ] || [ "$mon" = "4" ] || [ "$mon" = "7" ] || [ "$mon" = "10" ]; }; then
-            echo "First Saturday of a quarter month in Arizona (month $mon, day $day) — proceeding."
+          if [ "$dow" = "6" ] && [ "$day" -le 7 ]; then
+            echo "First Saturday in Arizona (day $day) — proceeding."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Not the first Saturday of a quarter month in Arizona (dow=$dow day=$day mon=$mon) — skipping."
+            echo "Not the first Saturday in Arizona (dow=$dow day=$day) — skipping."
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -140,7 +142,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes — nothing to commit or deploy."
           else
-            git commit -m "data: quarterly NEON plant refresh (bundles + manifest) [bot]"
+            git commit -m "data: monthly NEON plant refresh (bundles + manifest) [bot]"
             git push origin HEAD:master
             echo "Pushed refreshed bundles to master — Connect Cloud will redeploy."
           fi
