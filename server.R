@@ -350,15 +350,15 @@ server <- function(input, output, session) {
     updateSelectInput(session, "envLayer", choices = ch, selected = sel)
   })
 
-  env_series <- reactive({ req(rv$occ); plant_metric_series(rv$occ, input$envMetric %||% "pct_introduced") })
+  env_series <- reactive({ req(rv$occ); plant_metric_series(rv$occ, input$envMetric %||% "richness") })
   env_rank   <- reactive({ ms <- env_series(); e <- cur_env(); if (is.null(ms) || is.null(e)) NULL else plant_env_all(ms, e) })
   env_perm   <- reactive({
     ms <- env_series(); e <- cur_env(); if (is.null(ms) || is.null(e)) return(NULL)
     lay <- input$envLayer %||% "best"
     plant_env_perm(ms, e, B = 499, only = if (lay == "best") NULL else lay)
   })
-  env_metric_lab <- reactive(PLANT_METRICS[[input$envMetric %||% "pct_introduced"]]$label)
-  env_metric_dig <- reactive(PLANT_METRICS[[input$envMetric %||% "pct_introduced"]]$dig %||% 1)
+  env_metric_lab <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$label)
+  env_metric_dig <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$dig %||% 1)
 
   output$envSourceNote <- renderUI({
     if (is.null(cur_env())) return(NULL)

@@ -100,7 +100,7 @@ env_annual <- function(env, layer) {
 }
 
 # annual plant-metric series: one value per survey year for the chosen metric
-plant_metric_series <- function(occ, metric = "pct_introduced") {
+plant_metric_series <- function(occ, metric = "richness") {
   if (is.null(occ) || !nrow(occ)) return(NULL)
   yrs <- sort(unique(occ$year[!is.na(occ$year)]))
   if (!length(yrs)) return(NULL)
