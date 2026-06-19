@@ -1,0 +1,146 @@
+name: Refresh NEON plant data bundle
+
+# Automated rebuild of the per-site PLANT .rds bundles (data/sites/*.rds, the
+# species-area / cover / nativity database for all 46 NEON terrestrial sites)
+# plus the precomputed indexes (data/site_index.rds, data-sample/demo.rds) and
+# manifest.json — then redeploy by pushing the refreshed data to `master`.
+#
+# DEPLOY MODEL: this app lives on Posit Connect Cloud with a GIT-BACKED deploy,
+# so "deploy" IS the push to master — Connect Cloud watches master and auto-
+# redeploys on every push. That's why there are NO shinyapps.io secrets and NO
+# deploy.R step here (unlike the mammal sibling): the commit at the end of this
+# workflow is the deploy.
+#
+# CADENCE — QUARTERLY (not monthly): NEON publishes plant presence & % cover
+# (DP1.10058.001) roughly annually, and a full 46-site loadByProduct sweep runs
+# ~1–2h, so a monthly pull would burn hours re-downloading unchanged data. Cron
+# can't express "first Saturday of a quarter month", so we fire every Saturday
+# 06:00 UTC and let the `gate` job proceed only on the FIRST Saturday (Arizona
+# time, America/Phoenix — no DST) of a quarter-start month (Jan/Apr/Jul/Oct).
+# Manual runs (workflow_dispatch) always proceed; tick `skip_download` to
+# rebundle + redeploy the already-committed raw/bundle fast (a deploy test that
+# skips the long NEON re-pull).
+#
+# OPTIONAL SECRET (Settings → Secrets and variables → Actions):
+#   NEON_TOKEN   a NEON API token — raises the anonymous rate limit so the
+#                46-site pull finishes faster. Anonymous works too (just slower),
+#                so this secret is OPTIONAL; fetch_plant_all.R reads $NEON_TOKEN.
+#
+# FLOW: gate (quarter check) → checkout → setup-r + deps → fetch raw to
+# ../plant-data-fetch (resumable, time-boxed, non-fatal) → bundle every raw dump
+# present into data/sites/*.rds + indexes → regenerate manifest.json → guarded
+# commit + push to master (no-ops cleanly when nothing changed). The raw dumps
+# live OUTSIDE the repo (../plant-data-fetch is gitignored), so CI re-pulls from
+# scratch each run — expected.
+
+on:
+  schedule:
+    # Every Saturday 06:00 UTC == Friday 23:00 America/Phoenix. Cron can't say
+    # "first Saturday of a quarter month", so we fire weekly and gate below.
+    - cron: "0 6 * * 6"
+  workflow_dispatch:
+    inputs:
+      skip_download:
+        description: "Skip the NEON re-pull and just rebundle/redeploy the committed data (fast test)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write          # push the refreshed data bundles to master
+
+jobs:
+  # Gate: only the FIRST Saturday (Arizona time) of a quarter-start month
+  # (Jan / Apr / Jul / Oct) runs the heavy quarterly refresh. Manual runs
+  # (workflow_dispatch) always proceed.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run — proceeding."
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          dow=$(TZ='America/Phoenix' date +%u)    # 6 = Saturday
+          day=$(TZ='America/Phoenix' date +%-d)   # day-of-month, no leading zero
+          mon=$(TZ='America/Phoenix' date +%-m)   # month, no leading zero
+          if [ "$dow" = "6" ] && [ "$day" -le 7 ] \
+             && { [ "$mon" = "1" ] || [ "$mon" = "4" ] || [ "$mon" = "7" ] || [ "$mon" = "10" ]; }; then
+            echo "First Saturday of a quarter month in Arizona (month $mon, day $day) — proceeding."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not the first Saturday of a quarter month in Arizona (dow=$dow day=$day mon=$mon) — skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  refresh:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout with a token so the final push to master can trigger the
+      # Connect Cloud (and GitHub Pages) redeploy.
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R packages
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: >
+            neonUtilities, dplyr, tibble, tidyr, stringr, rsconnect,
+            shiny, bslib, bsicons, plotly, leaflet, DT, shinyjs,
+            shinycssloaders, RColorBrewer, htmltools, cpp11
+
+      # Pull the raw NEON dumps for all 46 sites into ../plant-data-fetch (OUTSIDE
+      # the repo, gitignored). RESUMABLE — skips any site whose _raw.rds already
+      # exists — but CI starts clean each run, so it re-pulls from scratch. Time-
+      # boxed generously (under the 6h job cap; public repo = free Actions
+      # minutes) and continue-on-error so a partial pull never blocks the rebundle
+      # below — the bundler simply packages whatever raw dumps landed.
+      - name: Fetch raw NEON plant data (all sites, resumable)
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        continue-on-error: true
+        timeout-minutes: 330
+        env:
+          NEON_TOKEN: ${{ secrets.NEON_TOKEN }}   # optional — anonymous works (slower)
+        run: |
+          Rscript scripts/fetch_plant_all.R
+
+      # Bundle every raw dump present → lean data/sites/*.rds + data/site_index.rds
+      # + the SRER demo sample, then regenerate manifest.json (R 4.3.x here has
+      # the full runtime toolchain the manifest scanner needs).
+      - name: Bundle the per-site plant data
+        run: |
+          Rscript scripts/bundle_plant_data.R
+
+      - name: Regenerate manifest.json
+        run: |
+          Rscript scripts/write_manifest.R
+
+      # Commit + push the refreshed bundles directly to master. THIS is the
+      # deploy: the push makes Connect Cloud auto-redeploy. Guarded so it no-ops
+      # cleanly when nothing changed (no empty commit, no failed push).
+      - name: Commit & push refreshed bundles to master
+        run: |
+          git config user.name  "neon-data-bot"
+          git config user.email "neon-data-bot@users.noreply.github.com"
+          git add -A \
+            data/sites \
+            data/env \
+            data/site_index.rds \
+            data-sample/demo.rds \
+            manifest.json
+          if git diff --cached --quiet; then
+            echo "No data changes — nothing to commit or deploy."
+          else
+            git commit -m "data: quarterly NEON plant refresh (bundles + manifest) [bot]"
+            git push origin HEAD:master
+            echo "Pushed refreshed bundles to master — Connect Cloud will redeploy."
+          fi

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NEON Plant Diversity Explorer</title>
+  <meta name="description"
+    content="Explore real NEON plant presence &amp; percent-cover data across all 46 terrestrial field sites — pick a site, read its native-vs-introduced cover composition, walk the nested 1→400 m² species-area curve with Hill numbers &amp; Chao2, track invasion pressure, and test climate &amp; phenology correlations with honest, permutation-backed statistics. Instant loads, no API waits." />
+
+  <meta name="theme-color" content="#1F5C3D" />
+
+  <!-- Open Graph / social card. Absolute URLs = the GitHub Pages domain for this repo. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Diversity/" />
+  <meta property="og:title" content="NEON Plant Diversity Explorer" />
+  <meta property="og:description"
+    content="Real NEON plant presence &amp; percent-cover across all 46 terrestrial sites — native-vs-introduced composition, nested species-area curves, Hill &amp; Chao2 diversity, invasion pressure, and permutation-tested climate &amp; phenology correlations. Honest stats, instant loads." />
+  <meta property="og:image"
+    content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="NEON Plant Diversity Explorer" />
+  <meta name="twitter:description"
+    content="Real NEON plant diversity across all 46 terrestrial sites. Honest, permutation-backed stats, instant loads." />
+  <meta name="twitter:image"
+    content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Rubik:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --green: #1F5C3D;
+      --green2: #2E7D52;
+      --clay: #C56A3A;
+      --ochre: #C99A2E;
+      --ochre-ink: #8a6914;
+      --native: #2E7D32;
+      --introduced: #B85C38;
+      --cream: #F5F1E6;
+      --ink: #232B22;
+      --slate: #5c6a5a;
+      --bg: #F5F1E6;
+      --card: #ffffff;
+    }
+
+    * { box-sizing: border-box }
+
+    body {
+      margin: 0;
+      font-family: Rubik, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.55
+    }
+
+    h1, h2, h3 { font-family: Fraunces, Georgia, serif; line-height: 1.15; margin: 0; font-weight: 700 }
+    a { color: var(--green2) }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+      background: radial-gradient(120% 140% at 18% 0%, var(--green2) 0%, var(--green) 48%, #143f29 100%)
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .55;
+      pointer-events: none;
+      background:
+        radial-gradient(46px 46px at 12% 30%, rgba(201, 154, 46, .14), transparent 70%),
+        radial-gradient(60px 60px at 84% 22%, rgba(245, 241, 230, .08), transparent 70%),
+        radial-gradient(54px 54px at 66% 80%, rgba(197, 106, 58, .10), transparent 70%)
+    }
+
+    .hero .wrap { position: relative; padding: 70px 22px 64px }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .76rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--ochre);
+      background: rgba(255, 255, 255, .10);
+      padding: 6px 13px;
+      border-radius: 999px
+    }
+
+    .hero h1 {
+      font-size: clamp(2.1rem, 5vw, 3.3rem);
+      margin: 18px 0 10px;
+      letter-spacing: -.015em
+    }
+    .hero h1 .tag {
+      font-size: .42em; font-weight: 700; vertical-align: middle; margin-left: 12px;
+      font-family: Rubik, sans-serif;
+      text-transform: uppercase; letter-spacing: .12em; color: rgba(255,255,255,.66);
+      border: 1px solid rgba(255,255,255,.38); border-radius: 999px; padding: 3px 10px
+    }
+
+    .hero p.lead {
+      font-size: clamp(1.05rem, 2.2vw, 1.26rem);
+      max-width: 62ch;
+      margin: 0 0 28px;
+      color: rgba(255, 255, 255, .92)
+    }
+
+    .cta-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.04rem;
+      padding: 14px 26px;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: transform .12s ease, box-shadow .12s ease
+    }
+
+    .btn-primary { background: var(--ochre); color: #2b2410; box-shadow: 0 8px 24px rgba(0, 0, 0, .22) }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0, 0, 0, .3) }
+    .btn-ghost { color: #fff; border: 1.5px solid rgba(255, 255, 255, .6) }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .12) }
+
+    .warm { font-size: .82rem; color: rgba(255, 255, 255, .85); margin-top: 14px; min-height: 1.2em }
+
+    /* Stats strip */
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+      margin: -34px auto 0; position: relative; z-index: 2
+    }
+    .stat { background: var(--card); border-radius: 14px; padding: 18px 16px; box-shadow: 0 6px 22px rgba(31, 92, 61, .12) }
+    .stat .n { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: 1.7rem; color: var(--green) }
+    .stat .l { font-size: .82rem; color: var(--slate); font-weight: 500 }
+
+    /* Features */
+    section.body { padding: 54px 0 10px }
+    .sub { color: var(--slate); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .78rem }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 22px }
+
+    .feat {
+      background: var(--card); border: 1px solid #e4ded0; border-top: 3px solid #ddd6c4;
+      border-radius: 12px; padding: 20px
+    }
+    .feat-star { border-top: 3px solid var(--ochre); background: linear-gradient(180deg, rgba(201, 154, 46, .08), #fff 42%) }
+    .feat h3 { font-size: 1.16rem; margin-bottom: 6px; color: var(--green) }
+    .feat p { margin: 0; color: #3f4d3d; font-size: .95rem }
+
+    .honest {
+      margin: 40px 0; background: rgba(31, 92, 61, .06); border-left: 4px solid var(--ochre);
+      border-radius: 10px; padding: 20px 22px
+    }
+    .honest h2 { font-size: 1.4rem; margin-bottom: 10px; color: var(--green) }
+    .honest ul { margin: 0; padding-left: 18px; color: #3a473a }
+    .honest li { margin: 6px 0 }
+
+    footer { border-top: 1px solid #e0dac9; padding: 26px 0 50px; color: var(--slate); font-size: .9rem }
+    footer a { font-weight: 600; text-decoration: none }
+    .cta-foot { display: inline-block; margin-bottom: 10px; font-weight: 700; color: var(--clay) }
+
+    @media(max-width:760px) {
+      .stats { grid-template-columns: repeat(2, 1fr) }
+      .grid { grid-template-columns: 1fr }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="hero">
+    <div class="wrap">
+      <span class="badge"><span aria-hidden="true">🌿</span> NEON · Plant Presence &amp; % Cover · DP1.10058.001</span>
+      <h1>NEON Plant Diversity Explorer <span class="tag">unofficial</span></h1>
+      <p class="lead">See how plant communities are built across the country. Pick a NEON site, then
+        read its native-vs-introduced cover composition, walk the nested species-area curve, weigh its
+        invasion pressure, and test whether diversity tracks climate — all on real data, with
+        statistics that refuse to over-claim.</p>
+      <div class="cta-row">
+        <a id="launch" class="btn btn-primary" href="#">Launch the app&nbsp;→</a>
+        <a class="btn btn-ghost" href="https://github.com/tgilbert14/NEON-Plant-Diversity"
+          target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+      <div class="warm" id="warm"></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat">
+        <div class="n">46</div>
+        <div class="l">field sites</div>
+      </div>
+      <div class="stat">
+        <div class="n">23</div>
+        <div class="l">states</div>
+      </div>
+      <div class="stat">
+        <div class="n">1→400 m²</div>
+        <div class="l">nested design</div>
+      </div>
+      <div class="stat">
+        <div class="n">instant</div>
+        <div class="l">no live API waits</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="body">
+    <div class="wrap">
+      <span class="sub">What you can do</span>
+      <div class="grid">
+        <div class="feat feat-star">
+          <h3>Pick a site</h3>
+          <p>Start from any of the 46 NEON terrestrial sites across 23 states — from Arctic tundra to
+            Sonoran desert grassland to agricultural Midwest — and the whole app retunes to that
+            community in an instant.</p>
+        </div>
+        <div class="feat">
+          <h3>Cover composition</h3>
+          <p>The Overview reads each site as native vs introduced percent cover plus its ground-cover
+            makeup — litter, bare soil, rock, wood — so you see the structure of the community, not
+            just a species list.</p>
+        </div>
+        <div class="feat">
+          <h3>Diversity, done properly</h3>
+          <p>Walk the nested 1→400 m² species-area curve, read a Hill-number profile that scales from
+            richness to evenness, and get a Chao2 incidence estimate of the species the plots
+            haven&rsquo;t caught yet.</p>
+        </div>
+        <div class="feat">
+          <h3>Native vs invasive lens</h3>
+          <p>Track the introduced-cover trend over time, scan a per-site invasive watchlist, and read
+            the 1 m² <b>invasion-pressure foothold index</b> — how often non-natives are gaining a toe-hold
+            at the smallest scale.</p>
+        </div>
+        <div class="feat feat-star">
+          <h3>Environment — the new headline</h3>
+          <p>The star tab: does diversity actually track annual climate &amp; phenology? Every
+            correlation ships with a <b>permutation null</b> and a <b>matched-n</b>, so on a short record it
+            tells you &ldquo;not enough years to say&rdquo; instead of inventing a trend.</p>
+        </div>
+        <div class="feat">
+          <h3>Diversity Lab — tap to pin</h3>
+          <p>Every plot is a tap-to-pin dot. Pin the ones you care about into persistent profile
+            cards, then open a downloadable <b>Plot Profile</b> card for any one — the per-plot record,
+            ready to share.</p>
+        </div>
+      </div>
+
+      <div class="honest">
+        <h2>Statistics</h2>
+        <p>Every view leads with transparent, well-sourced methods:</p>
+        <ul>
+          <li><b>Cover is an index, not a census</b> — NEON percent cover is an <i>ocular, relative</i>
+            estimate, and vegetation layers overlap, so a plot&rsquo;s cover can sum past 100%. It&rsquo;s read
+            as relative composition, never as an exact area.</li>
+          <li><b>Diversity</b> — Hill numbers give one continuous family from richness through
+            evenness; richness is extended with <b>Chao2</b>, an <i>incidence-based</i> estimator over the
+            nested subplots, reported with its confidence interval rather than a bare count.</li>
+          <li><b>Environment correlation</b> — climate &amp; phenology relationships are tested against a
+            <b>permutation null</b> on a <b>matched-n</b> sample, so a site with only a handful of survey
+            years is told it has too short a record to claim a trend, not handed a spurious one.</li>
+          <li><b>Unknown nativity is published</b> — some taxa can&rsquo;t be confidently called native or
+            introduced, so the <b>unknown-nativity rate</b> is shown alongside every native-vs-introduced
+            split instead of being silently folded into one side.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .series { background: #1F5C3D; color: #fff; padding: 56px 0; }
+    .series h2 { color: #fff; margin: 0; font-size: 1.7rem; font-family: Fraunces, Georgia, serif; }
+    .series-sub { color: #cbdcc9; margin: 8px 0 26px; max-width: 640px; }
+    .series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .series-card { display: flex; flex-direction: column; gap: 5px; padding: 22px; border-radius: 16px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #fff;
+      text-decoration: none; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+    .series-card:hover { transform: translateY(-3px); border-color: #C99A2E; background: rgba(255,255,255,.10); }
+    .series-emoji { font-size: 1.9rem; line-height: 1; }
+    .series-name { font-weight: 800; font-size: 1.12rem; }
+    .series-tag { color: #cbdcc9; font-size: .95rem; }
+    .series-go { color: #C99A2E; font-weight: 700; margin-top: 6px; }
+    @media (max-width: 640px) { .series-grid { grid-template-columns: 1fr; } }
+  </style>
+  <section class="series">
+    <div class="wrap">
+      <h2>Check out some of our other NEON series apps</h2>
+      <p class="series-sub">Pick another data type to explore.</p>
+      <div class="series-grid">
+        <a class="series-card" href="https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/" target="_blank" rel="noopener">
+          <span class="series-emoji">🐾</span>
+          <span class="series-name">NEON Small Mammal Tracker</span>
+          <span class="series-tag">Small-mammal box-trapping captures across NEON sites.</span>
+          <span class="series-go">Open&nbsp;→</span>
+        </a>
+        <a class="series-card" href="https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/" target="_blank" rel="noopener">
+          <span class="series-emoji">🪲</span>
+          <span class="series-name">NEON Ground Beetle Tracker</span>
+          <span class="series-tag">Ground-beetle (carabid) pitfall sampling across NEON sites.</span>
+          <span class="series-go">Open&nbsp;→</span>
+        </a>
+        <a class="series-card" href="https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/" target="_blank" rel="noopener">
+          <span class="series-emoji">💧</span>
+          <span class="series-name">NEON Water Chemistry Analyte Viewer</span>
+          <span class="series-tag">Surface-water chemistry across 34 aquatic sites.</span>
+          <span class="series-go">Open&nbsp;→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer"><span aria-hidden="true">👋</span> Want a custom data app like this for your project?</a><br>
+      Built on the NEON <a href="https://data.neonscience.org/data-products/DP1.10058.001" target="_blank"
+        rel="noopener">Plant Presence and Percent Cover</a> product by <b>Desert Data Labs</b> · Tucson, AZ.
+      Data: National Ecological Observatory Network (operated by Battelle, funded by NSF). An
+      educational data-exploration tool, not affiliated with NEON, Battelle, or the NSF.
+    </div>
+  </footer>
+
+  <script>
+    // ── Set this to your deployed app URL. Today it points at a placeholder; after
+    //    publishing to Posit Connect Cloud, paste the new share URL here (or "app/"
+    //    for a shinylive static build) and re-publish Pages. ──
+    const APP_URL = "REPLACE-WITH-CONNECT-CLOUD-URL";
+
+    (function () {
+      const placeholder = APP_URL.indexOf("REPLACE-WITH") !== -1;
+      const launch = document.getElementById("launch");
+      const warm = document.getElementById("warm");
+
+      if (placeholder) {
+        launch.addEventListener("click", function (e) {
+          e.preventDefault();
+          warm.textContent = "⚠ Set APP_URL in docs/index.html to your deployed app URL, then re-publish.";
+        });
+        return;
+      }
+      launch.href = APP_URL;
+
+      // Pre-warm the (possibly sleeping) app while the visitor reads, to soften cold start.
+      // Aborts after 8s so a hung request never leaves "Warming up…" stuck on screen.
+      try {
+        warm.textContent = "Warming up the app…";
+        var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+        var killer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+        fetch(APP_URL, { mode: "no-cors", cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
+          .then(function () { warm.textContent = "Ready when you are."; })
+          .catch(function () { warm.textContent = ""; })
+          .finally(function () { if (killer) clearTimeout(killer); });
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+</body>
+
+</html>
