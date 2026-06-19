@@ -4,6 +4,8 @@ An (unofficial) R/Shiny explorer for NEON's **Plant presence & percent cover** p
 (**DP1.10058.001**) — a *NEONize* sibling of the [NEON Small Mammal Tracker][smt], built to
 the same Desert Data Labs quality bar but with analyses native to plant-community data.
 
+🌿 **[Launch the live app](https://019ee0f9-ce8f-2722-4e17-e86ebdfcc3b8.share.connect.posit.cloud/)** · [Landing page](https://tgilbert14.github.io/NEON-Plant-Diversity/) · all **46 NEON terrestrial sites** bundled
+
 > Plants have no marked individuals, so this app's unit is the **plot** (and the **species**),
 > not an animal's capture career. There is no dossier / Hall of Fame / home range here — instead:
 > cover, nested species-area curves, native vs. invasive, and a per-plot drill-down.
