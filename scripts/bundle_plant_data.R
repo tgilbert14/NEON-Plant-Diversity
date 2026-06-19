@@ -18,8 +18,14 @@ source("R/plant_helpers.R")   # share the EXACT site_invasion/latest_snapshot re
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || (length(a) == 1 && is.na(a))) b else a
 
 RAW <- "../plant-data-fetch"
-SITES <- c("KONZ", "SRER", "JORN")
 DEMO  <- "SRER"   # the invasion-story demo (Lehmann lovegrass / buffelgrass)
+# Process EVERY raw dump present in ../plant-data-fetch (so the all-site build is
+# just "fetch more raw, re-run this"). Optional CLI subset: Rscript scripts/
+# bundle_plant_data.R SRER JORN ...  — re-bundling is cheap (seconds/site).
+.args <- commandArgs(trailingOnly = TRUE)
+all_raw <- sub("_raw\\.rds$", "", list.files(RAW, pattern = "_raw\\.rds$"))
+SITES <- if (length(.args)) intersect(.args, all_raw) else all_raw
+if (!length(SITES)) stop("No <SITE>_raw.rds dumps found in ", RAW, " — run scripts/fetch_plant_all.R first.")
 
 # scale (m^2) from the NEON subplotID encoding: 31_1_1 = 1, 31_10_1 = 10, 31_100 = 100
 parse_scale <- function(x) {
