@@ -29,7 +29,7 @@
   border-radius: 12px; padding: 14px 16px; text-decoration: none; color: inherit; box-shadow: 0 4px 14px var(--shadow);
   border-left: 4px solid var(--green); transition: transform .12s ease, box-shadow .12s ease; }
 .site-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px var(--shadow); }
-.sc-emoji { font-size: 30px; }
+.sc-emoji { font-size: 20px; color: var(--green); display: inline-flex; align-items: center; }
 .sc-name { font-weight: 600; color: var(--ink); }
 .sc-meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 

@@ -63,7 +63,7 @@ server <- function(input, output, session) {
         tags$a(class = "site-card", href = "#",
           onclick = sprintf("smtLoadStart('%s — loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;",
                             gsub("'", "", r$name), r$site),
-          div(class = "sc-emoji", "\U0001F33E"),
+          div(class = "sc-emoji", bs_icon("flower1")),
           div(class = "sc-body",
             div(class = "sc-name", tags$b(r$site), sprintf(" · %s", r$name)),
             div(class = "sc-meta", sprintf("%s · %s species · %s%% introduced cover",
