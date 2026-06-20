@@ -8,7 +8,7 @@
   <meta name="description"
     content="Explore real NEON plant presence &amp; percent-cover data across all 46 terrestrial field sites — pick a site, read its native-vs-introduced cover composition, walk the nested 1→400 m² species-area curve with Hill numbers &amp; Chao2, track invasion pressure, and test climate &amp; phenology correlations with honest, permutation-backed statistics. Instant loads, no API waits." />
 
-  <meta name="theme-color" content="#070d1f" />
+  <meta name="theme-color" content="#08140d" />
 
   <!-- Open Graph / social card. Absolute URLs = the GitHub Pages domain for this repo. -->
   <meta property="og:type" content="website" />
@@ -32,17 +32,17 @@
     rel="stylesheet" />
   <style>
     :root {
-      --green: #2dd4bf;        /* teal primary */
-      --green2: #5eead4;       /* bright teal */
-      --clay: #fb8a7e;         /* coral accent */
-      --ochre: #ffd24a;        /* gold */
-      --ochre-ink: #ffd24a;
+      --green: #5fd16a;        /* leaf primary */
+      --green2: #9be67a;       /* bright leaf */
+      --clay: #fb8a7e;         /* bloom-coral accent */
+      --ochre: #b4d84a;        /* chartreuse */
+      --ochre-ink: #b4d84a;
       --native: #5fb56a;
       --introduced: #fb8a7e;
-      --cream: #0e1d40;
-      --ink: #eaf2ff;
-      --slate: #9fb0cf;
-      --bg: #070d1f;
+      --cream: #143322;
+      --ink: #eaf6ec;
+      --slate: #a6c4ac;
+      --bg: #08140d;
       --card: rgba(255, 255, 255, .05);
       --line: rgba(255, 255, 255, .12);
     }
@@ -71,9 +71,9 @@
       background-size: 220px 240px, 220px 240px, 220px 240px, 220px 240px;
       background-image:
         radial-gradient(1.4px 1.4px at 30px 40px, rgba(255, 255, 255, .55), transparent),
-        radial-gradient(1.2px 1.2px at 150px 90px, rgba(150, 220, 255, .45), transparent),
-        radial-gradient(1.5px 1.5px at 90px 185px, rgba(255, 210, 74, .35), transparent),
-        radial-gradient(1.1px 1.1px at 185px 28px, rgba(94, 234, 212, .45), transparent);
+        radial-gradient(1.2px 1.2px at 150px 90px, rgba(180, 255, 170, .45), transparent),
+        radial-gradient(1.5px 1.5px at 90px 185px, rgba(180, 216, 74, .35), transparent),
+        radial-gradient(1.1px 1.1px at 185px 28px, rgba(155, 230, 122, .45), transparent);
       animation: pdvStars 140s linear infinite;
     }
     @keyframes pdvStars { to { background-position: 0 240px, 0 240px, 0 240px, 0 240px; } }
@@ -88,8 +88,8 @@
       position: relative;
       overflow: hidden;
       color: #fff;
-      background: radial-gradient(125% 150% at 16% -12%, #15425f 0%, #0b1733 46%, #070d1f 100%);
-      box-shadow: inset 0 0 0 1px rgba(45, 212, 191, .12);
+      background: radial-gradient(125% 150% at 16% -12%, #154a2c 0%, #0e2417 46%, #08140d 100%);
+      box-shadow: inset 0 0 0 1px rgba(95, 209, 106, .12);
     }
 
     .hero::after {
@@ -99,9 +99,9 @@
       opacity: .6;
       pointer-events: none;
       background:
-        radial-gradient(60px 60px at 12% 30%, rgba(45, 212, 191, .16), transparent 70%),
+        radial-gradient(60px 60px at 12% 30%, rgba(95, 209, 106, .16), transparent 70%),
         radial-gradient(72px 72px at 84% 22%, rgba(251, 138, 126, .12), transparent 70%),
-        radial-gradient(54px 54px at 66% 80%, rgba(255, 210, 74, .12), transparent 70%)
+        radial-gradient(54px 54px at 66% 80%, rgba(180, 216, 74, .12), transparent 70%)
     }
 
     .hero .wrap { position: relative; z-index: 1; padding: 70px 22px 64px }
@@ -124,7 +124,7 @@
       font-size: clamp(2.1rem, 5vw, 3.3rem);
       margin: 18px 0 10px;
       letter-spacing: -.015em;
-      background: linear-gradient(100deg, #ffffff 0%, #5eead4 52%, #fb8a7e 100%);
+      background: linear-gradient(100deg, #ffffff 0%, #9be67a 52%, #fb8a7e 100%);
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent; color: transparent;
     }
@@ -159,15 +159,15 @@
 
     .btn-primary {
       color: #06231f;
-      background: linear-gradient(100deg, #2dd4bf, #5eead4, #2dd4bf);
+      background: linear-gradient(100deg, #5fd16a, #9be67a, #5fd16a);
       background-size: 220% 100%;
-      box-shadow: 0 10px 28px -8px rgba(45, 212, 191, .55);
+      box-shadow: 0 10px 28px -8px rgba(95, 209, 106, .55);
       animation: ctaFlow 6s ease infinite;
     }
     @keyframes ctaFlow { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 34px -8px rgba(45, 212, 191, .7) }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 34px -8px rgba(95, 209, 106, .7) }
     .btn-ghost { color: #fff; border: 1.5px solid rgba(255, 255, 255, .5) }
-    .btn-ghost:hover { background: rgba(255, 255, 255, .10); border-color: #5eead4 }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .10); border-color: #9be67a }
 
     .warm { font-size: .82rem; color: rgba(255, 255, 255, .85); margin-top: 14px; min-height: 1.2em }
 
@@ -176,9 +176,9 @@
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
       margin: -34px auto 0; position: relative; z-index: 2
     }
-    .stat { background: linear-gradient(180deg, #15294f 0%, #0e1d40 100%); border: 1px solid var(--line);
+    .stat { background: linear-gradient(180deg, #143322 0%, #08140d 100%); border: 1px solid var(--line);
       border-radius: 14px; padding: 18px 16px; box-shadow: 0 14px 30px -14px rgba(3, 8, 20, .7) }
-    .stat .n { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: 1.7rem; color: #5eead4 }
+    .stat .n { font-family: Fraunces, Georgia, serif; font-weight: 700; font-size: 1.7rem; color: #9be67a }
     .stat .l { font-size: .82rem; color: var(--slate); font-weight: 500 }
 
     /* Features */
@@ -190,16 +190,16 @@
       background: var(--card); border: 1px solid var(--line); border-top: 3px solid rgba(255, 255, 255, .14);
       border-radius: 12px; padding: 20px
     }
-    .feat-star { border-top: 3px solid var(--ochre); background: linear-gradient(180deg, rgba(255, 210, 74, .08), rgba(255, 255, 255, .05) 42%) }
-    .feat h3 { font-size: 1.16rem; margin-bottom: 6px; color: #5eead4 }
-    .feat p { margin: 0; color: #c4d2ea; font-size: .95rem }
+    .feat-star { border-top: 3px solid var(--ochre); background: linear-gradient(180deg, rgba(180, 216, 74, .08), rgba(255, 255, 255, .05) 42%) }
+    .feat h3 { font-size: 1.16rem; margin-bottom: 6px; color: #9be67a }
+    .feat p { margin: 0; color: #cfe0d4; font-size: .95rem }
 
     .honest {
       margin: 40px 0; background: rgba(255, 255, 255, .05); border-left: 4px solid var(--ochre);
       border-radius: 10px; padding: 20px 22px
     }
-    .honest h2 { font-size: 1.4rem; margin-bottom: 10px; color: #5eead4 }
-    .honest ul { margin: 0; padding-left: 18px; color: #c4d2ea }
+    .honest h2 { font-size: 1.4rem; margin-bottom: 10px; color: #9be67a }
+    .honest ul { margin: 0; padding-left: 18px; color: #cfe0d4 }
     .honest li { margin: 6px 0 }
 
     footer { border-top: 1px solid var(--line); padding: 26px 0 50px; color: var(--slate); font-size: .9rem }
@@ -322,19 +322,19 @@
   </section>
 
   <style>
-    .series { background: linear-gradient(180deg, #0b1733 0%, #070d1f 100%); color: #fff; padding: 56px 0;
-      border-top: 1px solid rgba(45, 212, 191, .14); }
+    .series { background: linear-gradient(180deg, #0e2417 0%, #08140d 100%); color: #fff; padding: 56px 0;
+      border-top: 1px solid rgba(95, 209, 106, .14); }
     .series h2 { color: #fff; margin: 0; font-size: 1.7rem; font-family: Fraunces, Georgia, serif; }
-    .series-sub { color: #9fb0cf; margin: 8px 0 26px; max-width: 640px; }
+    .series-sub { color: #a6c4ac; margin: 8px 0 26px; max-width: 640px; }
     .series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
     .series-card { display: flex; flex-direction: column; gap: 5px; padding: 22px; border-radius: 16px;
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #fff;
       text-decoration: none; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
-    .series-card:hover { transform: translateY(-3px); border-color: #2dd4bf; background: rgba(255,255,255,.09); }
+    .series-card:hover { transform: translateY(-3px); border-color: #5fd16a; background: rgba(255,255,255,.09); }
     .series-emoji { font-size: 1.9rem; line-height: 1; }
     .series-name { font-weight: 800; font-size: 1.12rem; }
-    .series-tag { color: #9fb0cf; font-size: .95rem; }
-    .series-go { color: #ffd24a; font-weight: 700; margin-top: 6px; }
+    .series-tag { color: #a6c4ac; font-size: .95rem; }
+    .series-go { color: #b4d84a; font-weight: 700; margin-top: 6px; }
     @media (max-width: 640px) { .series-grid { grid-template-columns: 1fr; } }
   </style>
   <section class="series">

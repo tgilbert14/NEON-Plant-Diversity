@@ -29,7 +29,7 @@
     return v || fallback;
   };
   var LINE_STROKE = cssVar("--gold", "#ffd24a");   // desert gold leader line
-  var DOT_STROKE = cssVar("--pine", "#2dd4bf");    // teal primary
+  var DOT_STROKE = cssVar("--pine", "#5fd16a");    // leaf primary
 
   function boxOf(node) { return node ? node.closest(".smt-pinnable") : null; }
   function bgColor() {
