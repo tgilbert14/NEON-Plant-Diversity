@@ -4,22 +4,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>NEON Plant Diversity — the Explorer Suite by Desert Data Labs</title>
+  <title>NEON Plant Diversity · the Explorer Suite by Desert Data Labs</title>
   <meta name="description"
-    content="Nested-plot plant surveys turned into honest diversity: species richness and Hill-number profiles at each NEON site, with estimators that account for what the plots could not see. Part of the NEON Explorer Suite. Honest statistics, instant loads." />
+    content="See which plants grow at NEON research sites across the United States and how varied each place is. Count the species at a site, see how much is native versus introduced, and compare plant life across the country. Free, no account, pick a site and start." />
   <meta name="theme-color" content="#08140d" />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Diversity/" />
-  <meta property="og:title" content="NEON Plant Diversity — Desert Data Labs" />
+  <meta property="og:title" content="NEON Plant Diversity · Desert Data Labs" />
   <meta property="og:description"
-    content="Real NEON plant presence & percent-cover across all 46 terrestrial sites — native-vs-introduced composition, nested species-area curves, Hill & Chao2 diversity, and permutation-tested correlations. Honest stats, instant loads." />
+    content="See which plants grow at NEON research sites across the United States, how much is native versus introduced, and how plant diversity changes across the country. Free, no account, pick a site and start." />
   <meta property="og:image"
     content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="NEON Plant Diversity — Desert Data Labs" />
+  <meta name="twitter:title" content="NEON Plant Diversity · Desert Data Labs" />
   <meta name="twitter:description"
-    content="Real NEON plant diversity across all 46 terrestrial sites. Honest, permutation-backed stats, instant loads." />
+    content="See which plants grow at NEON research sites across the United States, and how varied each place is. Free, pick a site and start." />
   <meta name="twitter:image"
     content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
 
@@ -306,12 +306,14 @@
         <b>Desert Data Labs</b>
       </span>
 
-      <div class="eyebrow">The NEON Explorer Suite · Producers</div>
+      <div class="eyebrow">Part of the NEON Explorer Suite · Plants</div>
       <h1>NEON Plant Diversity</h1>
-      <p class="lead">Nested-plot plant surveys turned into honest diversity: <b>species richness</b> and
-        <b>Hill-number</b> profiles at each NEON site, with estimators that account for what the plots
-        could not see. Pick a site, read its native-vs-introduced cover, walk the nested species-area
-        curve, and let the statistics refuse to over-claim on a short record.</p>
+      <p class="lead">See which plants grow at research sites all over the country, and how varied each
+        place is. <b>NEON</b>, the National Ecological Observatory Network, is a set of research sites
+        across the United States, funded by the National Science Foundation, that measure plants, animals,
+        water, and climate the same way everywhere, year after year. This free app lets you pick a site
+        and see its plants: how many species live there, how much is native versus introduced, and how
+        plant life changes from place to place. No account, no setup. Pick a site and start.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/">
@@ -347,41 +349,42 @@
   <!-- how the survey reads: plot survey -> identify -> richness -> compare -->
   <section class="cascade-band">
     <div class="wrap">
-      <span class="kick">How the survey reads</span>
-      <h2>From nested plots to honest diversity.</h2>
-      <p>Plant diversity is built from the ground up — nested subplots, named taxa, estimators that allow
-        for what the plots missed. The app lines those steps up so you can follow the build, on real
-        sites, with the statistics shown at every turn.</p>
+      <span class="kick">What this shows you</span>
+      <h2>From a field survey to a picture of plant life.</h2>
+      <p>Every number here starts with people in a field. Crews walk marked plots at each site and write
+        down every plant they find. The app turns those notes into something you can read at a glance, on
+        real sites, one step at a time.</p>
       <div class="flow" data-flow>
-        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Plot survey</b> &middot; <span>nested 1 &rarr; 10 &rarr; 100 &rarr; 400 m&sup2; subplots</span></span></div>
+        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Survey the plots</b> &middot; <span>crews check marked squares of ground, from 1 up to 400 square meters</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Identify</b> &middot; <span>taxa, nativity &amp; percent cover</span></span></div>
+        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Name the plants</b> &middot; <span>each species, whether it is native or introduced, and how much ground it covers</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Richness</b> &middot; <span>Hill-number profile &amp; Chao2 estimator</span></span></div>
+        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Count the variety</b> &middot; <span>how many species a site holds, plus an estimate of the ones the crew likely missed</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare</b> &middot; <span>sites, strata &amp; native-vs-invasive pressure</span></span></div>
+        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare places</b> &middot; <span>site against site, and how much pressure introduced plants are putting on natives</span></span></div>
       </div>
 
       <div class="stats">
-        <div class="stat"><div class="n">46</div><div class="l">NEON sites</div></div>
-        <div class="stat"><div class="n">1&rarr;400 m&sup2;</div><div class="l">nested design</div></div>
-        <div class="stat"><div class="n">real</div><div class="l">open data</div></div>
-        <div class="stat"><div class="n">instant</div><div class="l">no API waits</div></div>
+        <div class="stat"><div class="n">46</div><div class="l">research sites</div></div>
+        <div class="stat"><div class="n">1&rarr;400 m&sup2;</div><div class="l">plot sizes surveyed</div></div>
+        <div class="stat"><div class="n">real</div><div class="l">public data</div></div>
+        <div class="stat"><div class="n">instant</div><div class="l">no loading waits</div></div>
       </div>
 
       <details class="more">
-        <summary>How it stays honest</summary>
+        <summary>How we keep it honest</summary>
         <div class="mbody">
-          The app loads pre-bundled snapshots so there are no live-API waits, and leads with transparent,
-          well-sourced methods. <b>Cover is an index, not a census</b> — NEON percent cover is an ocular,
-          relative estimate over overlapping layers, so it is read as composition, never as exact area.
-          <b>Diversity</b> uses Hill numbers for one continuous family from richness through evenness, and
-          extends richness with <b>Chao2</b>, an incidence-based estimator over the nested subplots, reported
-          with its confidence interval rather than a bare count. <b>Climate &amp; phenology correlations</b>
-          are tested against a permutation null on a matched-n sample, so a site with only a few survey years
-          is told its record is too short to claim a trend, not handed a spurious one. The
-          <b>unknown-nativity rate</b> is published alongside every native-vs-introduced split.
-          <b>Educational data-exploration tools, not affiliated with NEON, Battelle, or the NSF.</b>
+          The app uses real NEON data, saved ahead of time so pages open right away, and it is upfront about
+          what the numbers can and cannot say. <b>Cover is an estimate, not an exact measurement.</b> In the
+          field a person eyes how much ground each plant covers, and plants overlap, so we treat cover as a
+          rough sense of what is common, never as an exact area. <b>Counting variety.</b> A short visit
+          always misses a few rare plants, so alongside the plain species count we show an estimate of how
+          many species are likely really there, with a range around it instead of one hard number.
+          <b>Trends over time.</b> When we check whether plant life tracks weather, we test it against what
+          random chance would produce, so a site with only a few years of data is told its record is too
+          short to call a trend rather than handed a false one. And whenever we split plants into native
+          versus introduced, we also show the share we could not classify. <b>These are educational tools,
+          not affiliated with NEON, Battelle, or the NSF.</b>
         </div>
       </details>
     </div>
@@ -389,10 +392,10 @@
 
   <footer>
     <div class="wrap">
-      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer">Want a custom data app like these for your project?</a><br>
+      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer">Want a custom data app like this for your project?</a><br>
       Built on the NEON <a href="https://data.neonscience.org/data-products/DP1.10058.001" target="_blank" rel="noopener">Plant Presence &amp; Percent Cover</a>
-      product by <b>Desert Data Labs</b> &middot; Tucson, AZ. Data: National Ecological Observatory Network
-      (operated by Battelle, funded by NSF). Educational tools, not affiliated with NEON, Battelle, or the NSF.
+      dataset by <b>Desert Data Labs</b> &middot; Tucson, AZ. Data comes from the National Ecological Observatory Network
+      (run by Battelle, funded by the NSF). These are educational tools, not affiliated with NEON, Battelle, or the NSF.
     </div>
   </footer>
 
