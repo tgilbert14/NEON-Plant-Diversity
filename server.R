@@ -696,6 +696,186 @@ server <- function(input, output, session) {
   })
   observeEvent(input$map_marker_click, { p <- input$map_marker_click$id; if (!is.null(p)) pick_plot(p, navigate = TRUE) })
 
+  # ---- EXPECTED vs OBSERVED (the EcoPlot completeness + QC lens) -----------
+  observeEvent(input$goExpected, nav_select("tabs", "expected"))
+
+  expected_for_site <- reactive({ load_expected(rv$site) })
+  evo <- reactive({
+    occ <- rv$occ; e <- expected_for_site()
+    if (is.null(occ) || is.null(e)) return(NULL)
+    expected_vs_observed(occ, e, PLANT_AUTHORITY)
+  })
+  coarse_flag <- reactive({ occ <- rv$occ; req(occ); flag_coarse_rank(occ) })
+
+  evo_empty_dt <- function(msg) DT::datatable(data.frame(Note = msg), rownames = FALSE,
+    options = list(dom = "t"), colnames = "")
+
+  # reference ecological-site header
+  output$evoHeader <- renderUI({
+    req(rv$occ)
+    e <- expected_for_site()
+    if (is.null(e)) return(insight_banner("info-circle", tone = "navy",
+      HTML("No NRCS ecological-site reference list is bundled for this site <i>yet</i> — the completeness comparison is live for Santa Rita (SRER) and a growing set of sites. Everything else on this page still works.")))
+    src <- e$source %||% "esd"
+    badge <- if (identical(src, "esd")) glow_badge("ecological site", DDL$navy) else glow_badge("MLRA union", DDL$gold)
+    div(class = "evo-header",
+      bs_icon("geo-fill"),
+      HTML(sprintf(" Reference community: <b>%s</b> &nbsp;<code>%s</code> &nbsp;·&nbsp; MLRA&nbsp;%s &nbsp;",
+        htmltools::htmlEscape(e$ecosite_name %||% "—"), e$ecoclassid, e$mlra)),
+      badge,
+      tags$a(class = "evo-cite", target = "_blank", rel = "noopener",
+        href = sprintf("https://edit.sc.egov.usda.gov/catalogs/esd/%s/%s", e$mlra, e$ecoclassid),
+        bs_icon("box-arrow-up-right"), " view on EDIT"))
+  })
+
+  # headline value boxes + match-rate honesty line
+  output$evoHeadline <- renderUI({
+    ev <- evo(); if (is.null(ev)) return(NULL)
+    cr <- coarse_flag(); mr <- qc_match_rate(rv$occ, expected_for_site(), PLANT_AUTHORITY)
+    box <- function(v, l, tone, sub = NULL) div(class = paste0("evo-box evo-box-", tone),
+      div(class = "evo-box-v", v), div(class = "evo-box-l", l),
+      if (!is.null(sub)) div(class = "evo-box-sub", sub))
+    resolved <- if (is.finite(cr$pct_records)) 100 - cr$pct_records else NA_real_
+    div(
+      div(class = "evo-boxrow",
+        box(sprintf("%.0f%%", ev$overlap_pct), "of reference species detected", "green",
+            sprintf("%d of %d", ev$n_overlap, ev$n_ref)),
+        if (ev$dom_total > 0)
+          box(sprintf("%d / %d", ev$dom_obs, ev$dom_total), "reference dominants observed", "navy",
+              "the big species you'd most expect")
+        else
+          box("—", "reference dominants observed", "navy",
+              "this site's reference list ranks cover, not production"),
+        box(as.character(nrow(ev$C)), "observed, not in reference", "clay",
+            sprintf("%d introduced · %d native", ev$n_review_intro, ev$n_review_native)),
+        box(if (is.finite(resolved)) sprintf("%.0f%%", resolved) else "—",
+            "of records resolved to species", "amber",
+            sprintf("%.0f%% coarser than species", cr$pct_records))),
+      div(class = "evo-matchnote", bs_icon("info-circle"),
+        HTML(sprintf(" Comparison is one-survey-per-plot, species level only. Reference list: <b>%d</b> species (of %d entries; rest are genus/aggregate codes).%s NEON samples ~400&nbsp;m² per plot, so <b>expected-but-absent reflects completeness, not error.</b>",
+          mr$ref_n_species, mr$ref_n_all,
+          if (is.finite(mr$obs_resolved_pct)) sprintf(" <b>%.0f%%</b> of observed species matched the USDA authority.", mr$obs_resolved_pct) else ""))))
+  })
+
+  # Flag 1 — coarse-rank advisory, surfaced FIRST (frames every other comparison)
+  output$evoCoarse <- renderUI({
+    cr <- coarse_flag(); if (is.null(cr) || !is.finite(cr$pct_records) || cr$pct_records < 1) return(NULL)
+    insight_banner("exclamation-triangle", tone = "terra",
+      HTML(sprintf("<b>%.0f%%</b> of records here are identified coarser than species — genus, family, or just “plant”%s. These can't be matched to a species-level reference list, so read the comparisons below as a floor, not a census.",
+        cr$pct_records,
+        if (is.finite(cr$pct_cover)) sprintf(", carrying <b>%.0f%%</b> of measured cover", cr$pct_cover) else "")))
+  })
+
+  # Bucket A — reference flora detected (green)
+  output$evoTableA <- DT::renderDT({
+    ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
+    A <- ev$A; if (!nrow(A)) return(evo_empty_dt("None of the reference species were detected in the sampled plots."))
+    df <- data.frame(Symbol = A$plantsym, Species = A$sciname, `Common name` = A$comname,
+      Role = ifelse(A$is_dominant %in% TRUE, "dominant", "associated"),
+      `Ref. production` = ifelse(is.finite(A$rangeprod), A$rangeprod, NA),
+      `Observed cover %` = ifelse(is.finite(A$obs_cover), A$obs_cover, NA),
+      `# plots` = A$obs_plots, check.names = FALSE)
+    DT::datatable(df, rownames = FALSE, options = list(pageLength = 10, dom = "tp",
+      order = list(list(4, "desc")), columnDefs = list(list(className = "dt-center", targets = 3:6)))) %>%
+      DT::formatStyle("Role", target = "row", fontWeight = DT::styleEqual("dominant", "700"))
+  })
+
+  # Bucket C — observed, not in reference (clay; the review lane)
+  output$evoTableC <- DT::renderDT({
+    ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
+    C <- ev$C; if (!nrow(C)) return(evo_empty_dt("Every observed species is on the reference list — nothing to review."))
+    df <- data.frame(Symbol = C$sym, Species = C$scientificName, Family = C$family,
+      Nativity = C$nativity, `Mean cover %` = ifelse(is.finite(C$mean_cover), C$mean_cover, NA),
+      `# plots` = C$n_plots, check.names = FALSE)
+    DT::datatable(df, rownames = FALSE, options = list(pageLength = 10, dom = "tp",
+      order = list(list(5, "desc")), columnDefs = list(list(className = "dt-center", targets = 4:5)))) %>%
+      DT::formatStyle("Nativity", fontWeight = "bold",
+        color = DT::styleEqual(c("Introduced", "Native", "Unknown"),
+                               c(DDL$introduced, DDL$green, DDL$muted)))
+  })
+
+  # Bucket B — expected but not detected (neutral completeness; dominants highlighted)
+  output$evoTableB <- DT::renderDT({
+    ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
+    B <- ev$B; if (!nrow(B)) return(evo_empty_dt("Every reference species was detected — a complete sample of the reference flora."))
+    df <- data.frame(Symbol = B$plantsym, Species = B$sciname, `Common name` = B$comname,
+      Role = ifelse(B$is_dominant %in% TRUE, "dominant", "associated"),
+      `Ref. production` = ifelse(is.finite(B$rangeprod), B$rangeprod, NA), check.names = FALSE)
+    DT::datatable(df, rownames = FALSE, options = list(pageLength = 10, dom = "tp",
+      order = list(list(4, "desc")), columnDefs = list(list(className = "dt-center", targets = 3:4)))) %>%
+      DT::formatStyle("Role", target = "row",
+        backgroundColor = DT::styleEqual("dominant", "#F3EFE2"),
+        fontWeight = DT::styleEqual("dominant", "700"))
+  })
+
+  # Flags 2 + 4 — the true data-quality cross-checks
+  output$evoFlags <- renderUI({
+    occ <- rv$occ; req(occ)
+    nm <- flag_nativity_mismatch(occ, PLANT_AUTHORITY)
+    cs <- flag_cover_sum(occ)
+    nm_ui <- if (is.null(nm)) {
+      div(class = "evo-flag evo-flag-muted", bs_icon("hourglass-split"),
+        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> needs the USDA PLANTS authority file — being added in a follow-up build. NEON's own native/introduced labels are used everywhere else on the page."))
+    } else if (nm$n == 0) {
+      div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
+        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> no disagreements — every species' native/introduced label matches USDA PLANTS."))
+    } else {
+      rows <- utils::head(nm$rows, 12)
+      div(class = "evo-flag evo-flag-warn",
+        div(class = "evo-flag-h", bs_icon("exclamation-triangle-fill"),
+          sprintf(" %d species: NEON's nativity label disagrees with USDA PLANTS", nm$n)),
+        tags$table(class = "evo-flag-tbl",
+          tags$thead(tags$tr(tags$th("Species"), tags$th("NEON"), tags$th("USDA"), tags$th("# plots"))),
+          tags$tbody(lapply(seq_len(nrow(rows)), function(i) tags$tr(
+            tags$td(tags$i(rows$scientificName[i])), tags$td(rows$nativity[i]),
+            tags$td(rows$usda_nativity[i]), tags$td(rows$n_plots[i]))))),
+        if (nm$n > 12) div(class = "evo-flag-more", sprintf("+ %d more in the full report (CSV)", nm$n - 12)),
+        div(class = "evo-flag-note", "Nativity is regional — USDA's lower-48 label and NEON's site label can legitimately differ at a range edge. Worth a look, not necessarily an error."))
+    }
+    cs_ui <- if (cs$n == 0) {
+      div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
+        HTML(sprintf(" <b>Cover sanity:</b> no 1 m² quadrat sums above %d%% — within what overlapping canopy layers explain.", cs$ceiling)))
+    } else {
+      div(class = "evo-flag evo-flag-warn",
+        div(class = "evo-flag-h", bs_icon("exclamation-triangle-fill"),
+          sprintf(" %d quadrat-visits sum above %d%% cover (possible entry error)", cs$n, cs$ceiling)),
+        tags$table(class = "evo-flag-tbl",
+          tags$thead(tags$tr(tags$th("Plot"), tags$th("Subplot"), tags$th("Year"), tags$th("Total cover %"))),
+          tags$tbody(lapply(seq_len(min(nrow(cs$rows), 12)), function(i) tags$tr(
+            tags$td(short_plot(cs$rows$plotID[i])), tags$td(cs$rows$subplotID[i]),
+            tags$td(cs$rows$year[i]), tags$td(sprintf("%.0f", cs$rows$total_cover[i])))))))
+    }
+    tagList(nm_ui, cs_ui)
+  })
+
+  # downloads — per bucket + the combined report
+  .evo_dl <- function(getdf, tag) downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_%s_%s.csv", rv$site %||% "site", tag, format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      ev <- evo(); df <- if (is.null(ev)) data.frame() else getdf(ev)
+      utils::write.csv(df %||% data.frame(), file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
+  output$evoCsvA <- .evo_dl(function(ev) {
+    A <- ev$A; if (is.null(A) || !nrow(A)) return(data.frame())
+    data.frame(symbol = A$plantsym, scientificName = A$sciname, commonName = A$comname,
+      reference_role = ifelse(A$is_dominant %in% TRUE, "dominant", "associated"),
+      reference_production = A$rangeprod, observed_cover_pct = A$obs_cover, n_plots = A$obs_plots) }, "expected-observed")
+  output$evoCsvB <- .evo_dl(function(ev) {
+    B <- ev$B; if (is.null(B) || !nrow(B)) return(data.frame())
+    data.frame(symbol = B$plantsym, scientificName = B$sciname, commonName = B$comname,
+      reference_role = ifelse(B$is_dominant %in% TRUE, "dominant", "associated"),
+      reference_production = B$rangeprod) }, "expected-absent")
+  output$evoCsvC <- .evo_dl(function(ev) {
+    C <- ev$C; if (is.null(C) || !nrow(C)) return(data.frame())
+    data.frame(symbol = C$sym, scientificName = C$scientificName, family = C$family,
+      nativity = C$nativity, mean_cover_pct = C$mean_cover, n_plots = C$n_plots) }, "observed-not-expected")
+  output$evoReport <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_completeness-report_%s.csv", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      ev <- evo()
+      utils::write.csv(qc_report_table(ev, site = rv$site %||% NA_character_), file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
+
   # ---- ABOUT --------------------------------------------------------------
   output$aboutPanel <- renderUI({
     div(class = "about-wrap",
@@ -709,6 +889,13 @@ server <- function(input, output, session) {
       div(class = "about-card", h4(bs_icon("shield-exclamation"), " Native vs invasive"),
         p("Status is NEON's ", tags$code("nativeStatusCode"), " (N native / I introduced / others → unknown). We publish the ", tags$b("unknown rate"),
           " so the invasion numbers are read honestly. The ", tags$b("invasion-pressure"), " index uses the nested scales to flag invaders established at the finest grain.")),
+      div(class = "about-card", h4(bs_icon("clipboard-check"), " Expected vs Observed"),
+        p("We resolve each site's coordinates to its NRCS ", tags$b("Ecological Site"), " and pull that site's ",
+          tags$b("reference plant community"), " (the plants the soil and climate can support), then compare it to what NEON actually recorded — the ", tags$b("EcoPlot"), " recipe."),
+        p("Because NEON samples ~400 m² per plot at peak greenness, a reference species not detected is read as ",
+          tags$b("completeness"), " (or a real state-transition), ", tags$b("never as error"), ". Only two lanes are true data-quality signals: coarse IDs and nativity disagreements with USDA PLANTS."),
+        p(class = "caveat", bs_icon("info-circle"), " Reference flora: USDA-NRCS Soil Data Access / Ecological Site Descriptions (public domain). Nativity authority: USDA, NRCS, ",
+          tags$a(href = "https://plants.usda.gov", target = "_blank", "The PLANTS Database"), ". NEON taxonomy follows USDA PLANTS symbols, so the match is an exact symbol join.")),
       div(class = "about-card", h4(bs_icon("diagram-3"), " A NEONize sibling"),
         p("Built to the NEON Small Mammal Tracker quality bar — same Desert Data Labs design system, bundling, and pin-card interaction — but the analyses are plant-native (there are no individuals to track in cover data). See the NEONize playbook."),
         p(bs_icon("envelope"), " ", tags$a(href = "mailto:desertdatalabs@gmail.com", "desertdatalabs@gmail.com"),

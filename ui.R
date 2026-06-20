@@ -103,6 +103,7 @@ ui <- bslib::page_sidebar(
         div(class = "home-nav",
           actionButton("goDiversity", tagList(bs_icon("diagram-3-fill"), div("Diversity"), tags$small("richness & species-area")), class = "home-btn"),
           actionButton("goInvasive", tagList(bs_icon("shield-exclamation"), div("Native vs Invasive"), tags$small("the invasion lens")), class = "home-btn home-btn-star"),
+          actionButton("goExpected", tagList(bs_icon("clipboard-check"), div("Expected vs Observed"), tags$small("completeness & QC")), class = "home-btn"),
           actionButton("goLab", tagList(bs_icon("bullseye"), div("Diversity Lab"), tags$small("every plot, pinnable")), class = "home-btn"),
           actionButton("goPlot", tagList(bs_icon("flower1"), div("Plot Profile"), tags$small("drill into one plot")), class = "home-btn"),
           actionButton("goMap", tagList(bs_icon("map-fill"), div("Map"), tags$small("plots across the site")), class = "home-btn")),
@@ -166,6 +167,65 @@ ui <- bslib::page_sidebar(
                 p("A NEONize original. Because richness is measured at every nested scale, we can ask: how many introduced species are already detectable at the ", tags$b("smallest (1 m²)"), " scale, where they're cheap to catch but scary to a manager?"),
                 p("Each dot is a plot: introduced species found at 1 m² (x) vs across the whole 400 m² plot (y). Plots high on x have invaders established right down to the finest grain."))),
             spin(plotlyOutput("pressurePlot", height = "360px")))) ),
+
+      nav_panel(title = tagList(bs_icon("clipboard-check"), " Expected vs Observed"), value = "expected",
+        div(class = "tab-head", div(class = "tab-head-text",
+          h4("What should grow here — and what did NEON find?",
+            info_pop("Expected vs Observed",
+              p(tags$b("Expected"), " = the plants the NRCS Ecological Site lists for this kind of soil and climate (its reference plant community), resolved from the site's coordinates."),
+              p("NEON samples a small plot area (~400 m² per plot) at peak greenness, so a species ", tags$b("expected but not found"), " usually means it just wasn't in the sampled patch — ", tags$b("not"), " that anything is wrong."),
+              p("The ", tags$b("review"), " list is where a second look pays off: a plant NEON recorded that the reference community doesn't list (a new invader, a range edge, or a possible mis-ID)."))),
+          p(HTML("<b>Expected</b> = what NRCS says this soil &amp; climate can support (its <a href='https://edit.sc.egov.usda.gov/' target='_blank' rel='noopener'>ecological site</a>). NEON samples a small area, so <b>expected-but-absent is about completeness, not error</b> — it's never flagged red. The one lane worth a second look is <b>observed-but-unexpected</b>.")))),
+
+        uiOutput("evoHeader"),
+        uiOutput("evoHeadline"),
+        uiOutput("evoCoarse"),
+
+        # A — confirmation (green)
+        card(full_screen = TRUE, class = "evo-card evo-a",
+          card_head("check2-circle", "Reference flora detected here",
+            info_pop("Bucket A — expected & observed",
+              p("Species the NEON crews recorded that are also on the NRCS reference list for this ecological site — the overlap that confirms the site is what the soil survey says it is."),
+              p("Sorted by the reference community's expected production (the species you'd most expect to dominate float to the top)."))),
+          div(class = "evo-dl-row",
+            downloadButton("evoCsvA", "Download (CSV)", class = "smt-clear-btn")),
+          div(class = "evo-tbl-wrap", DT::DTOutput("evoTableA", width = "100%"))),
+
+        # C — the review lane (clay)
+        card(full_screen = TRUE, class = "evo-card evo-c",
+          card_head("search", "Observed here, not in the reference list — worth a look",
+            info_pop("Bucket C — observed, not expected",
+              p("Plants NEON recorded that the NRCS reference community for this ecological site does not list. Two very different stories live here:"),
+              tags$ul(
+                tags$li(HTML("<b>Introduced</b> — an invasion signal; ties to the Native-vs-Invasive lens.")),
+                tags$li(HTML("<b>Native, not in reference</b> — usually a range edge, a finer ID than the soil survey used, a mapping mismatch, or (rarely) a mis-ID."))),
+              p("Labelled “review”, never “error” — gaps in the reference list are real and common."))),
+          div(class = "evo-dl-row",
+            downloadButton("evoCsvC", "Download (CSV)", class = "smt-clear-btn")),
+          div(class = "evo-tbl-wrap", DT::DTOutput("evoTableC", width = "100%"))),
+
+        # B — completeness (neutral, never red)
+        card(full_screen = TRUE, class = "evo-card evo-b",
+          card_head("clipboard-data", "Expected but not detected — a completeness view",
+            info_pop("Bucket B — expected but absent",
+              p("Reference species NEON did ", tags$b("not"), " detect in its plots. This is overwhelmingly ", tags$b("non-detection"), ": NEON samples ~400 m² per plot, while an ecological site lists the whole site's potential vegetation under reference conditions."),
+              p("It can also be a legitimate ", tags$b("state transition"), " (e.g. a shrub-encroached desert grassland). Read it as completeness or as an ecological pattern — ", tags$b("never as missing data or error.")),
+              p("Sorted by expected production; the ", tags$b("reference dominants"), " not detected are highlighted because they're the most informative gaps."))),
+          div(class = "evo-dl-row",
+            downloadButton("evoCsvB", "Download (CSV)", class = "smt-clear-btn")),
+          div(class = "evo-tbl-wrap", DT::DTOutput("evoTableB", width = "100%"))),
+
+        # data-quality cross-checks (the true-QC lane)
+        card(class = "evo-card",
+          card_head("clipboard-pulse", "Data-quality cross-checks",
+            info_pop("True QC",
+              p("Two genuine data-quality signals, kept separate from the completeness view above:"),
+              tags$ul(
+                tags$li(HTML("<b>Nativity disagreement</b> — NEON's native/introduced label differs from USDA PLANTS for the same species.")),
+                tags$li(HTML("<b>Implausible cover</b> — total cover in one 1 m² quadrat far exceeding what overlapping canopy layers explain (an entry-error backstop).")))),
+            div(class = "evo-dl-row",
+              downloadButton("evoReport", tagList(bs_icon("download"), " Full report (CSV)"), class = "smt-snap-btn"))),
+          uiOutput("evoFlags"))),
 
       nav_panel(title = tagList(bs_icon("cloud-sun"), " Environment"), value = "environment",
         div(class = "tab-head", div(class = "tab-head-text",

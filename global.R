@@ -18,6 +18,12 @@ source("R/site_metadata.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
+source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
+
+# USDA PLANTS nativity + NEON synonym authority (built by scripts/build_plant_authority.R).
+# Optional: the nativity-mismatch flag degrades to "needs authority" when absent, but
+# the three buckets + coarse-rank + cover-sum flags all work without it. Loaded once.
+PLANT_AUTHORITY <- load_plant_authority()
 
 NEON_DPID <- "DP1.10058.001"   # Plant presence and percent cover
 

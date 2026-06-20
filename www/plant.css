@@ -56,3 +56,56 @@
 /* hero count-up uses the shared .count-up engine from app.js */
 [data-bs-theme="dark"] .hero-stat,
 [data-bs-theme="dark"] .site-card { background: var(--paper); }
+
+/* =========================================================================
+   Expected vs Observed (completeness + QC) — buckets, value boxes, flags.
+   All colours read the shared tokens so dark mode flips for free. The hard
+   rule: nothing in the completeness lane is ever red.
+   ========================================================================= */
+.evo-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 2px 0 12px; font-size: 14px; color: var(--ink); }
+.evo-header > .bi { color: var(--pine); font-size: 17px; }
+.evo-header code { background: rgba(31,92,61,.10); color: var(--pine); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+.evo-cite { margin-left: auto; font-size: 12.5px; color: var(--sky); text-decoration: none; white-space: nowrap; }
+.evo-cite:hover { text-decoration: underline; }
+
+/* headline value boxes */
+.evo-boxrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 2px 0 8px; }
+.evo-box { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px;
+  box-shadow: 0 4px 14px var(--shadow); border-top: 3px solid var(--muted); }
+.evo-box-v { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.05; }
+.evo-box-l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 4px; }
+.evo-box-sub { font-size: 12px; color: var(--muted); margin-top: 5px; font-style: italic; }
+.evo-box-green { border-top-color: var(--green); } .evo-box-green .evo-box-v { color: var(--green); }
+.evo-box-navy  { border-top-color: var(--pine); }
+.evo-box-clay  { border-top-color: var(--terra); } .evo-box-clay .evo-box-v { color: var(--terra); }
+.evo-box-amber { border-top-color: var(--gold); } .evo-box-amber .evo-box-v { color: var(--gold-ink); }
+.evo-matchnote { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 2px 2px 14px; display: flex; gap: 7px; }
+.evo-matchnote > .bi { color: var(--sky); flex: none; margin-top: 2px; }
+
+/* bucket cards carry a coloured left rail that names the lane (!important beats
+   the bslib .card border shorthand that loads after this sheet) */
+.evo-card.evo-a { border-left: 4px solid var(--green) !important; }
+.evo-card.evo-c { border-left: 4px solid var(--terra) !important; }
+.evo-card.evo-b { border-left: 4px solid var(--muted) !important; }
+.evo-dl-row { display: flex; justify-content: flex-end; margin: -2px 0 8px; }
+/* anchor DT width so the fill-container flex column can't collapse it to 0
+   (the shinycssloaders spinner-wrapper bug — see map_picker). */
+.evo-tbl-wrap { width: 100%; min-width: 0; }
+.evo-tbl-wrap .dataTables_wrapper { width: 100%; }
+
+/* the true-QC flag blocks */
+.evo-flag { border-radius: 10px; padding: 11px 14px; margin: 8px 0; font-size: 13.5px; line-height: 1.5;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.evo-flag > .bi { margin-right: 6px; }
+.evo-flag-clean { border-left: 4px solid var(--green); }
+.evo-flag-clean > .bi { color: var(--green); }
+.evo-flag-muted { border-left: 4px solid var(--muted); color: var(--muted); }
+.evo-flag-warn  { border-left: 4px solid var(--terra); }
+.evo-flag-h { font-weight: 700; color: var(--terra); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.evo-flag-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.evo-flag-tbl th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 4px 8px; }
+.evo-flag-tbl td { padding: 4px 8px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.evo-flag-more { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic; }
+.evo-flag-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+@media (max-width: 560px) { .evo-box-v { font-size: 22px; } .evo-header { font-size: 13px; } }
