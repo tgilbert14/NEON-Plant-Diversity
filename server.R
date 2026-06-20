@@ -113,17 +113,32 @@ server <- function(input, output, session) {
   observeEvent(input$demoBtn,  ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
   observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
 
-  # national site-picker map on the splash: dot size = richness, colour = % introduced; tap to load
+  # national site-picker map on the splash: dot size = richness; colour toggles
+  # between invasion (% introduced cover) and completeness (% of the NRCS reference
+  # flora detected — the Expected-vs-Observed spatial read). Tap a dot to load.
   local({
     mx <- suppressWarnings(max(site_table$pct_introduced, na.rm = TRUE)); if (!is.finite(mx)) mx <- 100
-    pip_pal <- leaflet::colorNumeric("YlOrBr", domain = c(0, mx), na.color = "#c9d3bb")
+    pip_pal  <- leaflet::colorNumeric("YlOrBr", domain = c(0, mx), na.color = "#c9d3bb")
+    comp_pal <- leaflet::colorNumeric(c("#E7E0CC", "#7FB07A", "#1F5C3D"), domain = c(0, 100), na.color = "#c9d3bb")
+    color_by <- function() input$splashColorBy %||% "invasion"
     picked_site <- mapPickerServer("picker", site_table = site_table, radius_metric = "richness",
-      color_fn = function(st) pip_pal(st$pct_introduced),
-      label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> species · <b>%s</b> introduced cover · %s plots",
+      color_fn = function(st) if (identical(color_by(), "completeness"))
+          comp_pal(st$pct_detected) else pip_pal(st$pct_introduced),
+      label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> species · <b>%s</b> introduced cover · <b>%s</b> reference flora detected",
         r$site, r$name %||% r$site, r$state %||% "", r$richness %||% "?",
-        if (is.finite(r$pct_introduced)) paste0(round(r$pct_introduced), "%") else "n/a", r$n_plots %||% "?"))
+        if (is.finite(r$pct_introduced)) paste0(round(r$pct_introduced), "%") else "n/a",
+        if (is.finite(r$pct_detected)) paste0(round(r$pct_detected), "%") else "no ref list"))
     # load in the MAIN server context so ingest()'s shinyjs::hide("splash") isn't namespaced
     observeEvent(picked_site(), { s <- picked_site(); if (!is.null(s) && nzchar(s)) load_site(s) }, ignoreInit = TRUE)
+  })
+  output$splashLegend <- renderUI({
+    if (identical(input$splashColorBy %||% "invasion", "completeness"))
+      div(class = "splash-legend",
+        span(class = "sl-ramp sl-comp"), " low → high % of the NRCS reference flora detected",
+        span(class = "sl-na"), " grey = no reference list bundled")
+    else
+      div(class = "splash-legend",
+        span(class = "sl-ramp sl-inv"), " low → high % introduced cover (how invaded)")
   })
 
   # ---- selecting a plot (the funnel) -------------------------------------

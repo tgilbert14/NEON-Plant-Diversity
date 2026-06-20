@@ -59,6 +59,14 @@ site_table <- if (length(BUNDLED)) {
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), c("richness","n_plots","pct_introduced","dominant_family")])
 } else neon_sites[0, ]
 
+# completeness scalar (% of the NRCS reference flora detected) for the splash
+# picker's "colour by" toggle — precomputed by scripts/build_completeness_index.R
+# so boot never reads 46 bundles. NA for sites with no bundled reference list.
+COMPLETENESS <- tryCatch(readRDS("data/expected/completeness_index.rds"), error = function(e) NULL)
+if (nrow(site_table) && !is.null(COMPLETENESS) && nrow(COMPLETENESS))
+  site_table$pct_detected <- COMPLETENESS$pct_detected[match(site_table$site, COMPLETENESS$site)]
+if (!"pct_detected" %in% names(site_table)) site_table$pct_detected <- NA_real_
+
 # sidebar picker: only bundled sites
 plant_state_choices <- function() {
   st <- sort(unique(site_table$state))

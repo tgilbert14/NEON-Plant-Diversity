@@ -93,6 +93,16 @@
    (the shinycssloaders spinner-wrapper bug — see map_picker). */
 .evo-tbl-wrap { width: 100%; min-width: 0; }
 .evo-tbl-wrap .dataTables_wrapper { width: 100%; }
+/* splash picker "colour by" toggle + reactive legend */
+.splash-colorby { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 2px 0 8px; }
+.splash-colorby .shiny-options-group { display: inline-flex; gap: 14px; }
+.splash-colorby .radio-inline { font-size: 13.5px; color: var(--ink); }
+.splash-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.sl-ramp { display: inline-block; width: 60px; height: 11px; border-radius: 3px; border: 1px solid var(--line); vertical-align: middle; }
+.sl-inv  { background: linear-gradient(90deg, #FFF7E6, #FE9929, #993404); }
+.sl-comp { background: linear-gradient(90deg, #E7E0CC, #7FB07A, #1F5C3D); }
+.sl-na   { display: inline-block; width: 11px; height: 11px; border-radius: 3px; background: #c9d3bb; border: 1px solid var(--line); vertical-align: middle; margin-left: 8px; }
+
 /* hide the bucket cards (no reference list) without touching inline display, so the
    card keeps display:flex and the DT inside doesn't collapse to 0 width when shown */
 .evo-hidden { display: none !important; }
