@@ -128,6 +128,7 @@ jobs:
       # + the SRER demo sample, then regenerate manifest.json (R 4.3.x here has
       # the full runtime toolchain the manifest scanner needs).
       - name: Bundle the per-site plant data
+        if: ${{ github.event.inputs.skip_download != 'true' }}
         run: |
           Rscript scripts/bundle_plant_data.R
 
