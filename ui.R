@@ -67,7 +67,7 @@ ui <- bslib::page_sidebar(
   # ---- loading overlay ---------------------------------------------------
   div(id = "loadOverlay", class = "load-overlay",
     div(class = "load-card",
-      div(class = "load-spin", "\U0001F33F"),
+      div(class = "load-spin mascot-spin", MASCOT_CRITTER),
       div(class = "load-title", "Loading site data"),
       div(id = "loadSite", class = "load-site"),
       div(class = "load-bar"),
@@ -77,6 +77,9 @@ ui <- bslib::page_sidebar(
 
   # ---- splash ------------------------------------------------------------
   div(id = "splash",
+    div(class = "splash-guide",
+      div(class = "sg-bubble", "Pick a site to start!"),
+      div(class = "sg-mascot", MASCOT_CRITTER)),
     div(class = "splash",
       div(class = "app-hero app-hero-splash",
         h1(class = "app-title", "NEON Plant Diversity Explorer",

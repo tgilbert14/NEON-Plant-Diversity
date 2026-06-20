@@ -99,6 +99,20 @@ DDL <- list(
   introduced = unname(NATIVITY_COLS["Introduced"]),
   unknown = unname(NATIVITY_COLS["Unknown"]))
 
+# The app mascot — a flat (no-gradient, no-id so it's safely reusable) cute
+# seedling-sprout in the desert-green accent. Used as the loading spinner, the
+# splash guide, and the celebration hop. Parts are classed so the CSS can wiggle
+# leaves (mascot-ear-l/r) / blink eyes (mascot-eyes).
+MASCOT_CRITTER <- htmltools::HTML(paste0(
+  '<svg class="mascot" viewBox="0 0 120 120" aria-hidden="true">',
+  '<path d="M60,60 L60,30" stroke="#4aa050" stroke-width="4" stroke-linecap="round"/>',
+  '<g class="mascot-ear-l"><path d="M60,36 C40,24 24,30 22,46 C40,52 56,46 60,36 Z" fill="#5fd16a"/></g>',
+  '<g class="mascot-ear-r"><path d="M60,36 C80,24 96,30 98,46 C80,52 64,46 60,36 Z" fill="#5fd16a"/></g>',
+  '<ellipse cx="60" cy="76" rx="28" ry="26" fill="#d8cf9e"/>',
+  '<g class="mascot-eyes"><circle cx="51" cy="72" r="6" fill="#3a2a12"/><circle cx="69" cy="72" r="6" fill="#3a2a12"/>',
+  '<circle cx="49" cy="69.5" r="2.2" fill="#ffffff"/><circle cx="67" cy="69.5" r="2.2" fill="#ffffff"/></g>',
+  '</svg>'))
+
 # Light desert-DAY hexes for bslib (the app PAGE defaults to light; only the
 # prominent info-boxes go dark via CSS). Keep these readable on the light paper.
 app_theme <- bs_theme(

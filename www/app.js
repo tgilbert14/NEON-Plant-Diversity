@@ -132,3 +132,33 @@ document.addEventListener("DOMContentLoaded", function () {
 document.addEventListener("shown.bs.tab", function () {
   setTimeout(function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }, 60);
 });
+
+// ---- mascot celebration: the sprout hops up + fades on a happy moment -------
+// This app has no confetti (no rarity/legendary find), so mascotCheer is wired
+// to nothing yet; it's exposed on window so a future celebration can call it.
+function mascotCheer(big) {
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var src = document.querySelector("#loadOverlay .mascot");
+    if (!src) return;
+    var wrap = document.createElement("div");
+    wrap.className = "mascot-cheer";
+    wrap.appendChild(src.cloneNode(true));
+    document.body.appendChild(wrap);
+    setTimeout(function () { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 1700);
+  } catch (e) {}
+}
+window.mascotCheer = mascotCheer;
+
+// ---- first-visit: the splash mascot waves hello once (localStorage-gated) ----
+document.addEventListener("DOMContentLoaded", function () {
+  try {
+    if (localStorage.getItem("smtMascotSeen") === "1") return;
+    var g = document.querySelector(".splash-guide");
+    if (g) {
+      g.classList.add("wave");
+      localStorage.setItem("smtMascotSeen", "1");
+      setTimeout(function () { g.classList.remove("wave"); }, 3300);
+    }
+  } catch (e) {}
+});
