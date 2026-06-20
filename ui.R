@@ -96,12 +96,18 @@ ui <- bslib::page_sidebar(
       div(class = "picker-actions", style = "margin:14px 0",
         actionButton("demoBtn2", tagList(bs_icon("stars"), " Open the Santa Rita demo instantly"),
                      class = "btn-primary btn-lg", onclick = "smtLoadStart('Santa Rita — demo dataset')")),
-      # site-card grid stays VISIBLE below the map: it has intrinsic width, so it
-      # keeps the splash column from shrink-wrapping to 0 (the width-less leaflet
-      # alone would collapse it), and doubles as the "pick from a list" path.
-      div(class = "site-list-block",
-        tags$div(class = "site-list-head", bs_icon("list-ul"), " or pick from the full site list"),
-        uiOutput("siteCards")))),
+      # CLOSED-by-default site list (canonical "Browse all 46 sites" disclosure):
+      # the splash stays clean; the full card grid is one tap away and scrolls.
+      # WIDTH GOTCHA: this grid used to be always-visible and was what gave the
+      # splash column intrinsic width (the width-less leaflet alone collapses to
+      # 0). With the list collapsed there's no intrinsic-width content, so the
+      # width floor now lives in CSS — `.splash { width:100% }` +
+      # `.map-picker-wrap { min-width }` keep the picker map full-width when closed.
+      tags$details(class = "site-browse",
+        tags$summary(class = "site-browse-summary",
+          tags$span(class = "sbs-label", bs_icon("list-ul"), " Browse all 46 sites"),
+          tags$span(class = "sbs-chevron", bs_icon("chevron-down"))),
+        div(class = "site-browse-body", uiOutput("siteCards"))))),
 
   # ---- main tabs ---------------------------------------------------------
   div(id = "mainTabsWrap", class = "main-tabs-wrap",

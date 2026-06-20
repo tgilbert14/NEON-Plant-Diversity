@@ -547,6 +547,42 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 @media (max-width: 900px) { .picker-list-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .picker-list-grid { grid-template-columns: 1fr; } }
 
+/* ---- "Browse all 46 sites" disclosure -----------------------------------
+   Canonical CLOSED-by-default <details> under the picker map: a pill-styled
+   summary (list icon + label + chevron that rotates 180° when [open]) with the
+   native disclosure triangle removed; the body scrolls so a 46-row card grid
+   never pushes the page. Leaf-green --pine accent, chartreuse --gold when open. */
+.site-browse { margin: 14px auto 4px; max-width: 920px; text-align: left; }
+.site-browse > summary.site-browse-summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; min-height: 40px; padding: 9px 15px; border-radius: 12px;
+  font-weight: 600; font-size: 13.5px; color: var(--pine);
+  background: var(--paper); border: 1px solid var(--line); border-left: 3px solid var(--pine);
+  box-shadow: 0 4px 14px var(--shadow); transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.site-browse > summary.site-browse-summary::-webkit-details-marker { display: none; }
+.site-browse .sbs-label { display: flex; align-items: center; gap: 8px; }
+.site-browse .sbs-label .bi { color: var(--pine); }
+.site-browse .sbs-chevron { display: inline-flex; color: var(--pine); transition: transform .2s ease; }
+.site-browse > summary.site-browse-summary:hover {
+  background: rgba(47,154,79,0.06); border-color: var(--pine); box-shadow: 0 8px 20px var(--shadow); transform: translateY(-1px);
+}
+.site-browse > summary.site-browse-summary:focus-visible {
+  outline: none; box-shadow: 0 0 0 3px rgba(47,154,79,0.28);
+}
+.site-browse[open] > summary.site-browse-summary { margin-bottom: 10px; border-left-color: var(--gold); }
+.site-browse[open] .sbs-chevron { transform: rotate(180deg); }
+.site-browse-body { max-height: 360px; overflow-y: auto; padding: 2px 4px 2px 2px; }
+[data-bs-theme="dark"] .site-browse > summary.site-browse-summary:hover { background: rgba(95,209,106,0.12); }
+[data-bs-theme="dark"] .site-browse > summary.site-browse-summary:focus-visible { box-shadow: 0 0 0 3px rgba(95,209,106,0.32); }
+
+/* WIDTH FLOOR: with the card grid now collapsed by default, the splash column
+   has no intrinsic-width content, so the width-less picker leaflet (width:100%)
+   could resolve to 0. Claim the full available width on the splash card and put
+   a min-width under the map wrapper so the picker is never 0-width when closed. */
+.splash { width: 100%; }
+.map-picker-wrap { width: 100%; min-width: 280px; }
+
 /* "change site" link in the hero band */
 .hero-change { font-size: 12.5px; font-weight: 700; color: var(--terra); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
