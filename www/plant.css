@@ -93,6 +93,13 @@
    (the shinycssloaders spinner-wrapper bug — see map_picker). */
 .evo-tbl-wrap { width: 100%; min-width: 0; }
 .evo-tbl-wrap .dataTables_wrapper { width: 100%; }
+/* Overview tools-strip (compare / export buttons) + compare modal table */
+.tools-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+.compare-tbl { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.compare-tbl th { text-align: left; color: var(--pine); font-weight: 700; border-bottom: 2px solid var(--line); padding: 7px 10px; }
+.compare-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.compare-tbl .cmp-l { color: var(--muted); }
+
 /* splash picker "colour by" toggle + reactive legend */
 .splash-colorby { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 2px 0 8px; }
 .splash-colorby .shiny-options-group { display: inline-flex; gap: 14px; }

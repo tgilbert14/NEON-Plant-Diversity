@@ -683,6 +683,87 @@ server <- function(input, output, session) {
       utils::write.csv(d[order(d$scientificName, d$scale), ], file, row.names = FALSE, na = "")
     }, contentType = "text/csv")
 
+  # ---- whole-site exports: report PDF, all-data ZIP + codebook -------------
+  output$reportPdf <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_report_%s.pdf", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) { occ <- rv$occ; req(occ)
+      e <- load_expected(rv$site)
+      build_diversity_report(file, occ, rv$ground, label = rv$label %||% (rv$site %||% "Site"), expected = e) },
+    contentType = "application/pdf")
+
+  output$allDataZip <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_data_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    contentType = "application/zip",
+    content = function(file) {
+      occ <- rv$occ; req(occ); site <- rv$site %||% "site"
+      tmp <- tempfile("pdeexport"); dir.create(tmp)
+      keep <- intersect(c("plotID","subplotID","scale","year","bout","taxonID","scientificName",
+        "taxonRank","family","nativity","percentCover","is_species"), names(occ))
+      occ_long <- species_level_only(occ)[, keep, drop = FALSE]
+      names(occ_long)[names(occ_long) == "scale"] <- "scale_m2"
+      pl <- plot_summary(latest_snapshot(occ))
+      gr <- rv$ground
+      readme <- c(
+        sprintf("NEON Plant Diversity Explorer — data export for site %s", site),
+        sprintf("Generated %s by an unofficial Desert Data Labs explorer.", format(Sys.Date(), "%Y-%m-%d")),
+        "Source: NEON Plant presence & percent cover DP1.10058.001 (div_1m2Data + div_10m2Data100m2Data).",
+        "", "FILES",
+        " occ_long.csv          - one row per taxon occurrence at a quadrat scale (the raw record).",
+        " plots.csv             - one row per plot: richness + native/introduced + cover summary.",
+        " ground_cover.csv      - abiotic ground cover (soil/litter/rock/...) at 1 m^2.",
+        " expected_vs_observed.csv - NRCS reference flora vs observed (only if a reference list is bundled).",
+        " data_dictionary.csv   - column definitions, types, units.",
+        "", "NOTES",
+        " * 'snapshot' analyses in the app use each plot's LATEST (year, bout); occ_long gives every record.",
+        " * percentCover is an ocular estimate at 1 m^2 (NA at presence-only 10/100 m^2 scales); layers overlap,",
+        "   so site-summed cover is a relative index, not a share of ground.",
+        " * nativity is NEON's nativeStatusCode collapsed to native/introduced/unknown.")
+      utils::write.csv(occ_long, file.path(tmp, "occ_long.csv"), row.names = FALSE, na = "")
+      if (!is.null(pl)) utils::write.csv(pl, file.path(tmp, "plots.csv"), row.names = FALSE, na = "")
+      if (!is.null(gr) && nrow(gr)) utils::write.csv(gr, file.path(tmp, "ground_cover.csv"), row.names = FALSE, na = "")
+      e <- load_expected(site)
+      if (!is.null(e)) { ev <- tryCatch(expected_vs_observed(occ, e, PLANT_AUTHORITY), error = function(err) NULL)
+        if (!is.null(ev)) utils::write.csv(qc_report_table(ev, site), file.path(tmp, "expected_vs_observed.csv"), row.names = FALSE, na = "") }
+      utils::write.csv(plant_codebook(), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
+      writeLines(readme, file.path(tmp, "README.txt"))
+      fs <- list.files(tmp, full.names = TRUE)
+      old <- setwd(tmp); on.exit(setwd(old), add = TRUE)
+      utils::zip(zipfile = file, files = basename(fs), flags = "-q")
+    })
+
+  # ---- compare two sites (side-by-side headline metrics) ------------------
+  observeEvent(input$compareBtn, {
+    req(rv$site)
+    others <- site_table$site[site_table$site != rv$site]
+    ch <- stats::setNames(others, sprintf("%s — %s", others, site_table$name[match(others, site_table$site)]))
+    showModal(modalDialog(easyClose = TRUE, size = "l",
+      title = tagList(bs_icon("layout-split"), sprintf(" Compare %s with…", rv$site)),
+      selectInput("compareSite2", NULL, choices = c("Pick a site to compare…" = "", ch), width = "100%"),
+      uiOutput("compareOut"),
+      footer = modalButton("Close")))
+  })
+  output$compareOut <- renderUI({
+    s2 <- input$compareSite2 %||% ""; if (!nzchar(s2)) return(NULL)
+    b2 <- load_site_bundle(s2); if (is.null(b2)) return(p(class = "dim", "That site isn't bundled."))
+    snap2 <- latest_snapshot(b2$occ)
+    metrics <- function(snap) { sp <- species_level_only(snap)
+      list(rich = dplyr::n_distinct(sp$scientificName),
+           intro = site_invasion(snap), plots = dplyr::n_distinct(snap$plotID),
+           fam = mode_chr(sp$family),
+           intro_n = dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"])) }
+    a <- metrics(rv$snap); b <- metrics(snap2)
+    pc <- function(v) if (!is.null(v) && is.finite(v)) paste0(v, "%") else "—"
+    row <- function(l, va, vb) tags$tr(tags$td(class = "cmp-l", l), tags$td(va), tags$td(vb))
+    tags$table(class = "compare-tbl",
+      tags$thead(tags$tr(tags$th(""), tags$th(rv$site), tags$th(s2))),
+      tags$tbody(
+        row("Species (snapshot)", a$rich, b$rich),
+        row("Introduced species", a$intro_n, b$intro_n),
+        row("Introduced cover", pc(a$intro), pc(b$intro)),
+        row("Plots sampled", a$plots, b$plots),
+        row("Top family", a$fam %||% "—", b$fam %||% "—")))
+  })
+
   # ---- MAP ----------------------------------------------------------------
   output$map <- leaflet::renderLeaflet({
     lb <- rv$lb; req(lb)

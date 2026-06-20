@@ -373,3 +373,30 @@ mode_chr <- function(x) {
 
 # short, human plot label ("KONZ_001" -> "001")
 short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
+
+# ---------------------------------------------------------------------------
+# Data dictionary for the all-data export — column meanings, types, units. Keeps
+# the downloadable CSVs analysis-ready (FAIR / reproducible), the Quinn standard.
+# ---------------------------------------------------------------------------
+plant_codebook <- function() {
+  data.frame(file = c(
+    rep("occ_long.csv", 12), rep("plots.csv", 8), rep("ground_cover.csv", 5)),
+    column = c(
+      "plotID","subplotID","scale_m2","year","bout","taxonID","scientificName",
+      "taxonRank","family","nativity","percentCover","is_species",
+      "plotID","richness","n_native","n_introduced","total_cover","pct_introduced","plotType","nlcdClass",
+      "plotID","subplotID","year","otherVariables","percentCover"),
+    meaning = c(
+      "NEON plot code","nested subplot code","quadrat scale (1/10/100 m^2; 1 m^2 is the only cover scale)",
+      "survey year","within-year bout (spring/monsoon at some sites)","USDA PLANTS symbol (= NEON taxonID)",
+      "scientific name","taxonomic rank of the ID","plant family","native / introduced / unknown (from NEON nativeStatusCode)",
+      "ocular percent cover at 1 m^2 (NA at presence-only scales)","TRUE if resolved to species level",
+      "NEON plot code","species richness (400 m^2 plot list)","native species count","introduced species count",
+      "summed mean 1 m^2 cover (relative index)","introduced share of total cover (%)","NEON plot type","NLCD land-cover class",
+      "NEON plot code","nested subplot code","survey year","abiotic ground-cover class (soil/litter/rock/...)","ocular percent cover"),
+    type = c(
+      "chr","chr","int","int","int","chr","chr","chr","chr","chr","num","logical",
+      "chr","int","int","int","num","num","chr","chr",
+      "chr","chr","int","chr","num"),
+    stringsAsFactors = FALSE)
+}

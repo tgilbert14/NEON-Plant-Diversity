@@ -19,6 +19,7 @@ source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
 source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
+source("R/report_pdf.R",    local = FALSE)   # one-page site report PDF (base graphics)
 
 # USDA PLANTS nativity + NEON synonym authority (built by scripts/build_plant_authority.R).
 # Optional: the nativity-mismatch flag degrades to "needs authority" when absent, but
