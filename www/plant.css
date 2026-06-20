@@ -93,6 +93,20 @@
    (the shinycssloaders spinner-wrapper bug — see map_picker). */
 .evo-tbl-wrap { width: 100%; min-width: 0; }
 .evo-tbl-wrap .dataTables_wrapper { width: 100%; }
+/* hide the bucket cards (no reference list) without touching inline display, so the
+   card keeps display:flex and the DT inside doesn't collapse to 0 width when shown */
+.evo-hidden { display: none !important; }
+/* the one always-visible completeness reassurance (replaces saying it 3x) */
+.evo-subhead { display: flex; gap: 7px; align-items: baseline; font-size: 13px; color: var(--muted);
+  margin: 0 0 10px; font-style: italic; }
+.evo-subhead > .bi { color: var(--sky); flex: none; }
+/* bigger tap target for the info-dot 'i' (the only path to every explanation) —
+   keep the 20px glyph, expand the hittable area to ~44px for thumbs */
+.info-dot { padding: 12px; margin: -12px; }
+@media (max-width: 560px) {
+  .evo-dl-row { justify-content: stretch; }
+  .evo-dl-row .btn { width: 100%; }
+}
 
 /* the true-QC flag blocks */
 .evo-flag { border-radius: 10px; padding: 11px 14px; margin: 8px 0; font-size: 13.5px; line-height: 1.5;

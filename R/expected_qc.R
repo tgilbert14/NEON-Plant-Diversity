@@ -124,8 +124,11 @@ expected_vs_observed <- function(occ, expected, authority = NULL) {
     overlap_pct = round(100 * nrow(A) / nrow(ref), 1),
     dom_total = sum(ref$is_dominant %in% TRUE),
     dom_obs   = sum(ref$is_dominant %in% TRUE & in_obs),
-    n_review_intro  = sum(C$nativity == "Introduced", na.rm = TRUE),
-    n_review_native = sum(C$nativity == "Native", na.rm = TRUE),
+    n_review_intro   = sum(C$nativity == "Introduced", na.rm = TRUE),
+    n_review_native  = sum(C$nativity == "Native", na.rm = TRUE),
+    n_review_unknown = nrow(C) - sum(C$nativity %in% c("Introduced", "Native")),  # residual -> always reconciles
+    dom_basis = expected$dominance_basis %||% (if (sum(ref$is_dominant %in% TRUE) > 0) "rangeland_production" else "none"),
+    dom_rule  = expected$dom_rule %||% NA_character_,
     ecoclassid = expected$ecoclassid, ecosite_name = expected$ecosite_name,
     mlra = expected$mlra, source = expected$source %||% "esd")
 }
@@ -145,12 +148,17 @@ flag_coarse_rank <- function(occ) {
   d <- latest_snapshot(occ)
   if (is.null(d) || !nrow(d)) return(NULL)
   fine <- c("species", "subspecies", "variety", "speciesGroup")
+  # "fine" = species-level via the bundle's is_species flag, so this agrees with
+  # species_level_only() (an NA rank with a clean binomial counts as species, not
+  # coarse) — the two conventions must not disagree.
+  fine_row <- function(x) if ("is_species" %in% names(x)) x$is_species %in% TRUE else
+    (!is.na(x$taxonRank) & x$taxonRank %in% fine)
+  is_coarse <- !fine_row(d)
   rank <- ifelse(is.na(d$taxonRank), "unknown", as.character(d$taxonRank))
-  is_coarse <- !(rank %in% fine)
   n <- nrow(d)
   cov <- d[d$scale == 1 & is.finite(d$percentCover) & d$percentCover > 0, , drop = FALSE]
   cov_coarse <- if (nrow(cov)) {
-    cr <- !(ifelse(is.na(cov$taxonRank), "unknown", as.character(cov$taxonRank)) %in% fine)
+    cr <- !fine_row(cov)
     100 * sum(cov$percentCover[cr]) / sum(cov$percentCover)
   } else NA_real_
   by_rank <- as.data.frame(table(rank[is_coarse]), stringsAsFactors = FALSE)
@@ -186,20 +194,21 @@ flag_nativity_mismatch <- function(occ, authority = NULL) {
 }
 
 # Flag 4 — cover summing implausibly. Multi-layer canopy legitimately exceeds
-# 100%, so flag only EXTREME outliers (a sanity backstop for entry error), per
-# (plot, subplot, scale, year, bout) at the 1 m^2 cover scale.
-flag_cover_sum <- function(occ, ceiling_pct = 300) {
+# 100% (a tallgrass 1 m^2 can hit ~200%), so flag only EXTREME outliers — a sanity
+# backstop for entry error — per (plot, subplot, year, bout) at the 1 m^2 scale.
+# Typed group-aggregate (no paste/strsplit, so an NA/absent bout can't crash it).
+flag_cover_sum <- function(occ, ceiling_pct = 250) {
+  empty <- data.frame(plotID = character(), subplotID = character(), year = integer(),
+                      bout = character(), total_cover = numeric(), stringsAsFactors = FALSE)
   d <- occ[occ$scale == 1 & is.finite(occ$percentCover) & occ$percentCover > 0, , drop = FALSE]
-  if (is.null(d) || !nrow(d)) return(list(rows = d[0, , drop = FALSE], n = 0L, ceiling = ceiling_pct))
-  bcol <- if ("bout" %in% names(d)) ifelse(is.na(d$bout), "", as.character(d$bout)) else ""
-  key <- paste(d$plotID, d$subplotID, d$year, bcol, sep = "|")
-  tot <- tapply(d$percentCover, key, sum)
-  bad <- names(tot)[is.finite(tot) & tot > ceiling_pct]
-  if (!length(bad)) return(list(rows = data.frame(), n = 0L, ceiling = ceiling_pct))
-  parts <- do.call(rbind, strsplit(bad, "|", fixed = TRUE))
-  out <- data.frame(plotID = parts[,1], subplotID = parts[,2], year = as.integer(parts[,3]),
-                    bout = parts[,4], total_cover = round(as.numeric(tot[bad]), 1),
-                    stringsAsFactors = FALSE)
+  if (is.null(d) || !nrow(d)) return(list(rows = empty, n = 0L, ceiling = ceiling_pct))
+  d$.bout <- if ("bout" %in% names(d)) ifelse(is.na(d$bout), "—", as.character(d$bout)) else "—"
+  agg <- d %>% dplyr::group_by(.data$plotID, .data$subplotID, .data$year, .data$.bout) %>%
+    dplyr::summarise(total_cover = sum(.data$percentCover), .groups = "drop")
+  bad <- agg[is.finite(agg$total_cover) & agg$total_cover > ceiling_pct, , drop = FALSE]
+  if (!nrow(bad)) return(list(rows = empty, n = 0L, ceiling = ceiling_pct))
+  out <- data.frame(plotID = bad$plotID, subplotID = bad$subplotID, year = as.integer(bad$year),
+                    bout = bad$.bout, total_cover = round(bad$total_cover, 1), stringsAsFactors = FALSE)
   out <- out[order(-out$total_cover), , drop = FALSE]
   list(rows = out, n = nrow(out), ceiling = ceiling_pct)
 }

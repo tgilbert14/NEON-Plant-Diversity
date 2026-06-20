@@ -19,8 +19,9 @@ setwd("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Diversity")
 dir.create("data/authority", showWarnings = FALSE, recursive = TRUE)
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || (length(a) == 1 && is.na(a))) b else a
 
-# all expected sites by default; optional CLI subset
-SITES <- if (length(commandArgs(TRUE))) commandArgs(TRUE) else c("SRER","JORN","KONZ","CPER","HARV")
+# every bundled site by default (the authority is shared suite-wide); optional CLI subset
+.bundled <- sort(sub("\\.rds$", "", list.files("data/sites", pattern = "\\.rds$")))
+SITES <- if (length(commandArgs(TRUE))) commandArgs(TRUE) else .bundled
 
 # union of observed species-level symbols + non-aggregate reference symbols
 syms <- character(0)

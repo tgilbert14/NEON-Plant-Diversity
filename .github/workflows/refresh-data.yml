@@ -33,7 +33,16 @@ name: Refresh NEON plant data bundle
 # present into data/sites/*.rds + indexes → regenerate manifest.json → guarded
 # commit + push to master (no-ops cleanly when nothing changed). The raw dumps
 # live OUTSIDE the repo (../plant-data-fetch is gitignored), so CI re-pulls from
-# scratch each run — expected.
+# scratch each run.
+#
+# NOT refreshed here (deliberately): the STATIC reference data behind the
+# "Expected vs Observed" tab -- data/expected/*.rds (NRCS Ecological Site flora)
+# and data/authority/plants_lookup.rds (USDA PLANTS nativity + synonyms). Those
+# are public-domain reference layers that change ~never, so they ship committed
+# and are rebuilt only on demand (scripts/build_expected_lists.R +
+# scripts/build_plant_authority.R) -- e.g. when NEON adds a site. A new site with
+# no expected list degrades gracefully (the tab shows an honest "not bundled yet"
+# state), so the monthly NEON refresh never needs to touch SDA/USDA.
 
 on:
   schedule:

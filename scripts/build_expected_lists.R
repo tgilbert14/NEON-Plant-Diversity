@@ -36,22 +36,49 @@ expected_for_site <- function(lng, lat) {
     WHERE ce.ecoclassid='%s' AND cp.plantsym IS NOT NULL", eco))
   if (is.null(pl) || !nrow(pl)) return(list(status = "no_plants", ecoclassid = eco, ecosite_name = ec$ecoclassname[1]))
   pl$rangeprod <- suppressWarnings(as.numeric(pl$rangeprod))
-  # dedupe to one row per symbol (max production), tag aggregates vs real species
+  # dedupe to one row per symbol (keep the max-production row), tag aggregate/genus codes
   pl <- pl[order(-ifelse(is.finite(pl$rangeprod), pl$rangeprod, -1)), ]
   pl <- pl[!duplicated(pl$plantsym), ]
   agg <- grepl("^[0-9]", pl$plantsym) | is.na(pl$plantsciname) | !grepl("[A-Za-z]+ [a-z]", pl$plantsciname %||% "")
-  cut <- suppressWarnings(stats::quantile(pl$rangeprod[!agg], 0.8, na.rm = TRUE))
+  # DOMINANCE — the core species that make up the top HALF of the reference
+  # community's production (a cumulative-share rule, list-length-invariant: adding
+  # trace associates never changes the set, unlike a raw percentile). This is the
+  # "dominant core", the few heavy-hitters that define the site. rangeprod is NRCS
+  # air-dry production (lb/ac) at normal precip (NRPH basis). FOREST ESDs carry no
+  # per-species production in coeplants (canopy dominants are trees, scored by site
+  # index / canopy, not lb/ac) — so we honestly record dominance_basis="none"
+  # rather than mislabel an understory associate as dominant. (Per-species forest
+  # canopy dominants are a documented fast-follow.)
+  fin <- !agg & is.finite(pl$rangeprod) & pl$rangeprod > 0
+  is_dom <- rep(FALSE, nrow(pl)); dom_basis <- "none"; dom_cut <- NA_real_
+  dom_rule <- "the core species comprising the top 50% of reference-community production (NRCS air-dry lb/ac, normal precip)"
+  if (any(fin)) {
+    dom_basis <- "rangeland_production"
+    tot <- sum(pl$rangeprod[fin])
+    cum <- cumsum(ifelse(fin, pl$rangeprod, 0)) / tot     # pl is production-desc -> finite rows contiguous at top
+    crossed <- which(fin & cum >= 0.5)[1]; if (is.na(crossed)) crossed <- which(fin)[1]
+    is_dom <- fin & seq_len(nrow(pl)) <= crossed
+    dom_cut <- pl$rangeprod[crossed]
+  }
   ref <- data.frame(plantsym = toupper(trimws(pl$plantsym)), sciname = pl$plantsciname,
     comname = pl$plantcomname, rangeprod = pl$rangeprod,
-    is_aggregate = agg, is_dominant = !agg & is.finite(pl$rangeprod) & pl$rangeprod >= (if (is.finite(cut)) cut else Inf),
-    stringsAsFactors = FALSE)
+    is_aggregate = agg, is_dominant = is_dom, stringsAsFactors = FALSE)
+  # MLRA / geoUnit = the 4-char block after the R/F/any single-letter prefix
+  # ("R041XC318AZ" -> "041X", "F144BY501ME" -> "144B"); leave non-standard codes
+  # (e.g. alpine "G2401x") as-is, the UI just won't deep-link those.
+  mlra <- sub("^[A-Z]?([0-9]{3}[A-Z]).*", "\\1", eco)
   list(status = "ok", ecoclassid = eco, ecosite_name = ec$ecoclassname[1],
-       mlra = sub("^R?([0-9]{3}[A-Z]).*", "\\1", eco), source = "esd", reference_species = ref)
+       mlra = mlra, source = "esd",
+       dominance_basis = dom_basis, dom_rule = dom_rule, dom_cut = dom_cut,
+       reference_species = ref)
 }
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0 || (length(a)==1 && is.na(a))) b else a
 
-# MVP set first (SRER first, AZ + a desert/grassland/forest spread to prove the pattern)
-SITES <- if (length(commandArgs(TRUE))) commandArgs(TRUE) else c("SRER","JORN","KONZ","CPER","HARV")
+# Default: fan out to every bundled site (data/sites/*.rds). SRER first (house default).
+# Optional CLI subset: Rscript scripts/build_expected_lists.R SRER JORN ...
+.bundled <- sort(sub("\\.rds$", "", list.files("data/sites", pattern = "\\.rds$")))
+.bundled <- c("SRER", setdiff(.bundled, "SRER"))
+SITES <- if (length(commandArgs(TRUE))) commandArgs(TRUE) else .bundled
 prov <- list()
 for (s in SITES) {
   row <- neon_sites[neon_sites$site == s, ]; if (!nrow(row)) { cat(s, "no coords\n"); next }
