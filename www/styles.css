@@ -607,6 +607,17 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 @media (max-width: 640px) {
   .compare-pickers, .compare-species { grid-template-columns: 1fr; }
 }
+/* headline-metric table rendered by output$compareOut (class compare-tbl) */
+.compare-tbl { width: 100%; border-collapse: collapse; margin: 8px 0 2px; }
+.compare-tbl th, .compare-tbl td { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+.compare-tbl thead th { text-align: center; background: #f5f8fc; border-bottom: 2px solid var(--line);
+  color: var(--pine); font-weight: 800; }
+.compare-tbl td { text-align: center; font-variant-numeric: tabular-nums; font-size: 15px; color: var(--ink); }
+.compare-tbl td.cmp-l { text-align: left; font-weight: 600; font-size: 13px; color: var(--ink); white-space: nowrap; }
+/* keep the caveat dot legible + next to its label (override the white, auto-margin base) */
+.compare-tbl .cmp-l .info-dot { color: var(--muted); width: 18px; height: 18px; margin: 0 0 0 4px;
+  vertical-align: middle; font-size: 13px; }
+.compare-tbl .cmp-l .info-dot:hover { color: var(--pine); background: var(--bg); }
 
 /* ---- dossier trading card (shareable, html-to-image export) ----------- */
 .tradingcard-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 6px 0 18px; }

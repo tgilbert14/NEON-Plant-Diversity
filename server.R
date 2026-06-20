@@ -781,17 +781,28 @@ server <- function(input, output, session) {
     b2 <- load_site_bundle(s2); if (is.null(b2)) return(p(class = "dim", "That site isn't bundled."))
     snap2 <- latest_snapshot(b2$occ)
     metrics <- function(snap) { sp <- species_level_only(snap)
+      ch <- chao2(snap)
       list(rich = dplyr::n_distinct(sp$scientificName),
            intro = site_invasion(snap), plots = dplyr::n_distinct(snap$plotID),
            fam = mode_chr(sp$family),
-           intro_n = dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"])) }
+           intro_n = dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"]),
+           chao = if (!is.null(ch)) sprintf("%.0f%s", ch$chao2, if (ch$unstable) "*" else "") else NULL) }
     a <- metrics(rv$snap); b <- metrics(snap2)
     pc <- function(v) if (!is.null(v) && is.finite(v)) paste0(v, "%") else "—"
     row <- function(l, va, vb) tags$tr(tags$td(class = "cmp-l", l), tags$td(va), tags$td(vb))
+    # Raw observed richness is effort-dependent (sites differ in plots/years/bouts);
+    # the caveat is clickable (ⓘ) so the default table stays clean. Chao2 — the
+    # comparable, effort-corrected estimate — is surfaced as its own row.
     tags$table(class = "compare-tbl",
       tags$thead(tags$tr(tags$th(""), tags$th(rv$site), tags$th(s2))),
       tags$tbody(
-        row("Species (snapshot)", a$rich, b$rich),
+        tags$tr(
+          tags$td(class = "cmp-l", "Species (snapshot)",
+            info_pop("Comparing richness fairly",
+              p("This row is ", tags$b("raw observed richness"), " (S_obs) at each site's own sampling effort — plots, survey years and bouts differ between sites, and more effort finds more species."),
+              p("For a fair side-by-side, read the ", tags$b("Chao2"), " row below: it estimates total richness from the incidence data and is the effort-corrected, comparable number. An asterisk flags a rough lower bound (few doubletons)."))),
+          tags$td(a$rich), tags$td(b$rich)),
+        row("Chao2 (estimated)", a$chao %||% "—", b$chao %||% "—"),
         row("Introduced species", a$intro_n, b$intro_n),
         row("Introduced cover", pc(a$intro), pc(b$intro)),
         row("Plots sampled", a$plots, b$plots),
