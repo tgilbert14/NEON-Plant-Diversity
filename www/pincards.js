@@ -28,14 +28,14 @@
     var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return v || fallback;
   };
-  var LINE_STROKE = cssVar("--gold", "#C99A2E");   // ochre highlight
-  var DOT_STROKE = cssVar("--pine", "#1F5C3D");    // leaf-green primary
+  var LINE_STROKE = cssVar("--gold", "#ffd24a");   // desert gold leader line
+  var DOT_STROKE = cssVar("--pine", "#2dd4bf");    // teal primary
 
   function boxOf(node) { return node ? node.closest(".smt-pinnable") : null; }
   function bgColor() {
     var dark = document.documentElement.getAttribute("data-bs-theme") === "dark" ||
                document.body.getAttribute("data-bs-theme") === "dark";
-    return cssVar("--paper", dark ? "#18271E" : "#ffffff");
+    return cssVar("--paper", dark ? "#0e1d40" : "#ffffff");
   }
 
   /* map a data point (dx, dy) to box-relative pixels via plotly's live axes, so

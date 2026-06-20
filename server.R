@@ -20,7 +20,9 @@ server <- function(input, output, session) {
       yaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
       legend = list(bgcolor = "rgba(0,0,0,0)", orientation = "h", y = -0.2, font = list(color = legc)),
       margin = list(l = 55, r = 30, t = 48, b = 44),
-      hoverlabel = list(bgcolor = "rgba(31,92,61,0.96)", bordercolor = DDL$gold,
+      hoverlabel = list(
+        bgcolor = if (dark) "rgba(14,29,64,0.96)" else "rgba(20,144,134,0.96)",
+        bordercolor = if (dark) "#2dd4bf" else DDL$gold,
         font = list(color = "#ffffff", family = "Rubik", size = 13))) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   }

@@ -90,18 +90,21 @@ plant_sites_in_state <- function(stt) {
 # corr_pos / corr_neg are a CVD-safe (blue/vermillion) correlation-sign axis kept
 # OFF the nativity green/clay poles, ready for the Environment tab.
 DDL <- list(
-  navy = "#1F5C3D", navy2 = "#2E7D52", cardinal = "#C56A3A", gold = "#C99A2E",
-  gold2 = "#B07E1C", sky = "#2F7D9E", green = "#2E7D32", green2 = "#1E5C24",
-  ink = "#232B22", muted = "#6B7468", bg = "#F5F1E6", paper = "#ffffff", line = "#E2DCCB",
+  navy = "#0e1d40", navy2 = "#1b2e5c", cardinal = "#fb8a7e", gold = "#ffd24a",
+  gold2 = "#e0b43a", sky = "#43b8e8", green = "#5fb56a", green2 = "#3f9a52",
+  ink = "#eaf2ff", muted = "#9fb0cf", bg = "#070d1f", paper = "#0e1d40",
+  line = "rgba(255,255,255,0.12)",
   corr_pos = "#0072B2", corr_neg = "#D55E00",
   native = unname(NATIVITY_COLS["Native"]),
   introduced = unname(NATIVITY_COLS["Introduced"]),
   unknown = unname(NATIVITY_COLS["Unknown"]))
 
+# Light desert-DAY hexes for bslib (the app PAGE defaults to light; only the
+# prominent info-boxes go dark via CSS). Keep these readable on the light paper.
 app_theme <- bs_theme(
-  version = 5, bg = "#ffffff", fg = DDL$ink,
-  primary = DDL$navy, secondary = DDL$cardinal,
-  success = DDL$green, info = DDL$sky, warning = DDL$gold, danger = DDL$cardinal,
+  version = 5, bg = "#ffffff", fg = "#16243a",
+  primary = "#149086", secondary = "#e0685a",
+  success = "#3f9a52", info = "#2f8fc4", warning = "#d6a31c", danger = "#e0685a",
   base_font = font_google("Rubik"),
   heading_font = font_google("Fraunces"),   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
   "border-radius" = "10px")
@@ -125,9 +128,17 @@ insight_banner <- function(icon, ..., tone = "navy")
   div(class = paste("chart-insight", paste0("ci-", tone)),
       bsicons::bs_icon(icon), div(class = "ci-text", ...))
 
-glow_badge <- function(label, color = DDL$navy, glow = color)
+# auto-pick readable text: dark ink on a bright fill, white on a dark fill
+.lum <- function(hex) {
+  hex <- gsub("#", "", hex); if (nchar(hex) != 6) return(0)
+  rgb <- c(strtoi(substr(hex,1,2),16L), strtoi(substr(hex,3,4),16L), strtoi(substr(hex,5,6),16L))
+  (0.299*rgb[1] + 0.587*rgb[2] + 0.114*rgb[3]) / 255
+}
+glow_badge <- function(label, color = DDL$navy, glow = color) {
+  txt <- if (.lum(color) > 0.6) "#16243a" else "#fff"
   span(class = "glow-badge",
-       style = sprintf("color:#fff; background:%s; border-color:%s;", color, color), label)
+       style = sprintf("color:%s; background:%s; border-color:%s;", txt, color, color), label)
+}
 
 card_head <- function(icon, title, ...)
   bslib::card_header(class = "with-info", bsicons::bs_icon(icon),

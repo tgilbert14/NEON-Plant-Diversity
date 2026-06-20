@@ -54,7 +54,8 @@
 .lab-sel .btn { margin-left: auto; }
 
 /* hero count-up uses the shared .count-up engine from app.js */
-[data-bs-theme="dark"] .hero-stat,
+/* .hero-stat is forced to the dark navy info-box scheme in styles.css (both modes);
+   only the splash .site-card follows the page paper in dark mode. */
 [data-bs-theme="dark"] .site-card { background: var(--paper); }
 
 /* =========================================================================
