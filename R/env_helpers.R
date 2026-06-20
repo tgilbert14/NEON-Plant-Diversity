@@ -40,10 +40,11 @@ ENV_LAYERS <- list(
                  desc = "Peak monthly share of monitored plants in flower that year."),
   greenup = list(col = "greenup_pct",   label = "Green-up",          unit = "% peak", agg = "max",
                  color = "#2E7D32", lead = TRUE,  dig = 0,
-                 desc = "Peak monthly share leafing out (early-season green-up)."),
-  fruit   = list(col = "fruiting_pct",  label = "Plants fruiting",   unit = "% peak", agg = "max",
-                 color = "#8A6D4B", lead = TRUE,  dig = 0,
-                 desc = "Peak monthly share in fruit that year.")
+                 desc = "Peak monthly share leafing out (early-season green-up).")
+  # NOTE: `fruiting_pct` is deliberately NOT registered as a driver. It is a max
+  # of binned ORDINAL phenophase-intensity (not a measured seed crop) and is
+  # sparse (e.g. 15/121 SRER monthly rows), so a max-over-search r off it would
+  # be a misleading headline. Gated out of the driver x lag scan per expert review.
 )
 
 # the plant-side response metrics the user can correlate against the drivers
@@ -202,8 +203,8 @@ EC_CORR_POLES <- list(
   precip  = list(pos = c("#1f6fb2", "#5aa9e6"), neg = c("#b07a35", "#d8a85a")),
   temp    = list(pos = c("#C56A3A", "#e08a52"), neg = c("#2f7fb5", "#6cc4ec")),
   flower  = list(pos = c("#C2426E", "#e06a95"), neg = c("#7a8a99", "#9aa7b5")),
-  greenup = list(pos = c("#2b8a3e", "#69db7c"), neg = c("#9c6644", "#c08457")),
-  fruit   = list(pos = c("#8A6D4B", "#c08457"), neg = c("#2f7fb5", "#6cc4ec"))
+  greenup = list(pos = c("#2b8a3e", "#69db7c"), neg = c("#9c6644", "#c08457"))
+  # fruit poles dropped with the fruiting_pct driver (see ENV_LAYERS note above)
 )
 blend_hex <- function(a, b, w) {
   ca <- grDevices::col2rgb(a); cb <- grDevices::col2rgb(b)

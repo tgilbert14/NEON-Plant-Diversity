@@ -81,7 +81,9 @@ build_site <- function(site) {
   meta <- list(site = site,
                lat = stats::median(occ$lat, na.rm = TRUE),
                lng = stats::median(occ$lng, na.rm = TRUE),
-               years = sort(unique(occ$year)))
+               years = sort(unique(occ$year)),
+               built_at = format(Sys.Date(), "%Y-%m-%d"),   # provenance: when this bundle was built
+               neon_release = Sys.getenv("NEON_RELEASE", unset = NA_character_))
   list(occ = occ, ground = ground, meta = meta)
 }
 

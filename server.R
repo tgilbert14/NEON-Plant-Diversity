@@ -87,6 +87,14 @@ server <- function(input, output, session) {
     rv$label  <- label
     rv$site   <- b$meta$site
     rv$is_demo <- is_demo
+    # export provenance: prefer the bundle's own build stamp; fall back to the
+    # site .rds mtime (= the build vintage on already-shipped bundles, so this
+    # works with no rebuild). neon_release is NA until a release-tagged refresh.
+    rv$built_at <- b$meta$built_at %||% {
+      f <- file.path(SITE_DIR, paste0(b$meta$site, ".rds"))
+      if (file.exists(f)) format(as.Date(file.info(f)$mtime), "%Y-%m-%d") else NA_character_
+    }
+    rv$neon_release <- b$meta$neon_release %||% NA_character_
     rv$plot   <- NULL
     yrs <- range(b$occ$year, na.rm = TRUE)
     rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1] == yrs[2]) yrs[1] else paste0(yrs[1], "–", yrs[2]))
@@ -456,7 +464,12 @@ server <- function(input, output, session) {
       marker = list(size = 12, color = meta$color, opacity = 0.85, line = list(color = "#fff", width = 1)),
       hovertemplate = paste0("year %{text}<br>", meta$label, ": %{x:.", (meta$dig %||% 0), "f} ", meta$unit,
                              "<br>", metricLab, ": %{y:.", mdig, "f}<extra></extra>"))
-    if (stats::sd(pts$driver) > 0) {
+    # Draw the OLS fit line ONLY when the permutation test clears significance.
+    # On 6-10 survey years a visually authoritative line can otherwise sit
+    # directly under a "no clear link / p=0.76" banner (e.g. SRER green-up
+    # r=-0.67, p=0.758) and overclaim. Gate on pm$p — no line when chance can
+    # explain it. (Across 46 sites only 1 clears p<0.05, the null rate.)
+    if (!is.na(pm$p) && pm$p < 0.05 && stats::sd(pts$driver) > 0) {
       fit <- stats::lm(metric ~ driver, data = pts); xs <- range(pts$driver)
       yh <- stats::predict(fit, newdata = data.frame(driver = xs))
       p <- p %>% add_trace(x = xs, y = yh, type = "scatter", mode = "lines", inherit = FALSE,
@@ -567,10 +580,10 @@ server <- function(input, output, session) {
       list(text = "each dot is a plot · richness × how invaded its cover is",
         x = 0, y = 1.07, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
         font = list(color = if (is_dark()) "#9fb0c4" else "#6b7a85", size = 11)),
-      qlab(xr[1]+padx, yr[2]-pady, "SPARSE & INVADED", "left", "top"),
-      qlab(xr[2]-padx, yr[2]-pady, "RICH BUT INVADED", "right", "top"),
-      qlab(xr[1]+padx, yr[1]+pady, "SPARSE NATIVE", "left", "bottom"),
-      qlab(xr[2]-padx, yr[1]+pady, "RICH & NATIVE \U0001F3C6", "right", "bottom"))
+      qlab(xr[1]+padx, yr[2]-pady, "FEW SPECIES \U00B7 INVADED", "left", "top"),
+      qlab(xr[2]-padx, yr[2]-pady, "MANY SPECIES \U00B7 INVADED", "right", "top"),
+      qlab(xr[1]+padx, yr[1]+pady, "FEW SPECIES \U00B7 NATIVE COVER", "left", "bottom"),
+      qlab(xr[2]-padx, yr[1]+pady, "MANY SPECIES \U00B7 NATIVE COVER", "right", "bottom"))
     # gold diamond for the selected plot
     if (!is.null(rv$plot)) {
       ir <- pts[pts$plotID == rv$plot, ]
@@ -705,28 +718,47 @@ server <- function(input, output, session) {
       names(occ_long)[names(occ_long) == "scale"] <- "scale_m2"
       pl <- plot_summary(latest_snapshot(occ))
       gr <- rv$ground
+      # provenance stamp — when this bundle was built + (if tagged) the NEON release
+      built_at <- rv$built_at %||% format(Sys.Date(), "%Y-%m-%d")
+      neon_rel <- rv$neon_release %||% NA_character_
+      prov <- data.frame(
+        site = site, builtAt = built_at, neonRelease = neon_rel,
+        dpid = "DP1.10058.001", exportedAt = format(Sys.Date(), "%Y-%m-%d"),
+        stringsAsFactors = FALSE)
       readme <- c(
         sprintf("NEON Plant Diversity Explorer — data export for site %s", site),
         sprintf("Generated %s by an unofficial Desert Data Labs explorer.", format(Sys.Date(), "%Y-%m-%d")),
         "Source: NEON Plant presence & percent cover DP1.10058.001 (div_1m2Data + div_10m2Data100m2Data).",
+        sprintf("Bundle built: %s%s", built_at,
+                if (!is.na(neon_rel) && nzchar(neon_rel)) sprintf(" | NEON release %s", neon_rel) else " | NEON release not tagged"),
         "", "FILES",
         " occ_long.csv          - one row per taxon occurrence at a quadrat scale (the raw record).",
         " plots.csv             - one row per plot: richness + native/introduced + cover summary.",
         " ground_cover.csv      - abiotic ground cover (soil/litter/rock/...) at 1 m^2.",
         " expected_vs_observed.csv - NRCS reference flora vs observed (only if a reference list is bundled).",
-        " data_dictionary.csv   - column definitions, types, units.",
+        " provenance.csv        - build/vintage stamp (site, builtAt, neonRelease, dpid) so you can cite the exact source.",
+        " data_dictionary.csv   - column definitions, types, units (derived from the actual exported frames).",
         "", "NOTES",
         " * 'snapshot' analyses in the app use each plot's LATEST (year, bout); occ_long gives every record.",
-        " * percentCover is an ocular estimate at 1 m^2 (NA at presence-only 10/100 m^2 scales); layers overlap,",
-        "   so site-summed cover is a relative index, not a share of ground.",
+        " * percentCover is an ocular estimate at 1 m^2 (bin midpoint/ocular, NA at presence-only 10/100 m^2 scales);",
+        "   layers overlap, so site-summed cover is a relative index, not a share of ground.",
         " * nativity is NEON's nativeStatusCode collapsed to native/introduced/unknown.")
       utils::write.csv(occ_long, file.path(tmp, "occ_long.csv"), row.names = FALSE, na = "")
       if (!is.null(pl)) utils::write.csv(pl, file.path(tmp, "plots.csv"), row.names = FALSE, na = "")
       if (!is.null(gr) && nrow(gr)) utils::write.csv(gr, file.path(tmp, "ground_cover.csv"), row.names = FALSE, na = "")
+      utils::write.csv(prov, file.path(tmp, "provenance.csv"), row.names = FALSE, na = "")
       e <- load_expected(site)
+      ev_tbl <- NULL
       if (!is.null(e)) { ev <- tryCatch(expected_vs_observed(occ, e, PLANT_AUTHORITY), error = function(err) NULL)
-        if (!is.null(ev)) utils::write.csv(qc_report_table(ev, site), file.path(tmp, "expected_vs_observed.csv"), row.names = FALSE, na = "") }
-      utils::write.csv(plant_codebook(), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
+        if (!is.null(ev)) { ev_tbl <- qc_report_table(ev, site)
+          utils::write.csv(ev_tbl, file.path(tmp, "expected_vs_observed.csv"), row.names = FALSE, na = "") } }
+      # codebook DERIVED from exactly the frames shipped, so it can never drift
+      frames <- list("occ_long.csv" = occ_long)
+      if (!is.null(pl)) frames[["plots.csv"]] <- pl
+      if (!is.null(gr) && nrow(gr)) frames[["ground_cover.csv"]] <- gr
+      frames[["provenance.csv"]] <- prov
+      if (!is.null(ev_tbl)) frames[["expected_vs_observed.csv"]] <- ev_tbl
+      utils::write.csv(plant_codebook(frames), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
       writeLines(readme, file.path(tmp, "README.txt"))
       fs <- list.files(tmp, full.names = TRUE)
       old <- setwd(tmp); on.exit(setwd(old), add = TRUE)

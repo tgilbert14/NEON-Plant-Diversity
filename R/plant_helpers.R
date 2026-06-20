@@ -377,26 +377,89 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
 # ---------------------------------------------------------------------------
 # Data dictionary for the all-data export — column meanings, types, units. Keeps
 # the downloadable CSVs analysis-ready (FAIR / reproducible), the Quinn standard.
+#
+# Derived PROGRAMMATICALLY from the actual exported frames so every shipped
+# column is documented and the codebook can never drift from the export. Pass
+# `frames` = a named list (file name -> data.frame) of exactly what gets zipped;
+# meanings come from a known-column lookup, types are read off the real columns.
+# Called with no args it falls back to the canonical column set for safety.
 # ---------------------------------------------------------------------------
-plant_codebook <- function() {
-  data.frame(file = c(
-    rep("occ_long.csv", 12), rep("plots.csv", 8), rep("ground_cover.csv", 5)),
-    column = c(
-      "plotID","subplotID","scale_m2","year","bout","taxonID","scientificName",
-      "taxonRank","family","nativity","percentCover","is_species",
-      "plotID","richness","n_native","n_introduced","total_cover","pct_introduced","plotType","nlcdClass",
-      "plotID","subplotID","year","otherVariables","percentCover"),
-    meaning = c(
-      "NEON plot code","nested subplot code","quadrat scale (1/10/100 m^2; 1 m^2 is the only cover scale)",
-      "survey year","within-year bout (spring/monsoon at some sites)","USDA PLANTS symbol (= NEON taxonID)",
-      "scientific name","taxonomic rank of the ID","plant family","native / introduced / unknown (from NEON nativeStatusCode)",
-      "ocular percent cover at 1 m^2 (NA at presence-only scales)","TRUE if resolved to species level",
-      "NEON plot code","species richness (400 m^2 plot list)","native species count","introduced species count",
-      "summed mean 1 m^2 cover (relative index)","introduced share of total cover (%)","NEON plot type","NLCD land-cover class",
-      "NEON plot code","nested subplot code","survey year","abiotic ground-cover class (soil/litter/rock/...)","ocular percent cover"),
-    type = c(
-      "chr","chr","int","int","int","chr","chr","chr","chr","chr","num","logical",
-      "chr","int","int","int","num","num","chr","chr",
-      "chr","chr","int","chr","num"),
-    stringsAsFactors = FALSE)
+
+# known-column meaning lookup (one source of truth for descriptions)
+.PLANT_COL_MEANING <- c(
+  plotID         = "NEON plot code",
+  subplotID      = "nested subplot code",
+  scale_m2       = "quadrat scale (1/10/100 m^2; 1 m^2 is the only cover scale)",
+  scale          = "quadrat scale (1/10/100 m^2; exported as scale_m2)",
+  year           = "survey year",
+  bout           = "within-year bout (spring/monsoon at some sites)",
+  taxonID        = "USDA PLANTS symbol (= NEON taxonID)",
+  scientificName = "scientific name",
+  taxonRank      = "taxonomic rank of the ID",
+  family         = "plant family",
+  nativity       = "native / introduced / unknown (from NEON nativeStatusCode)",
+  percentCover   = "ocular percent cover at 1 m^2 (bin midpoint/ocular, NA at presence-only scales)",
+  is_species     = "TRUE if resolved to species level",
+  richness       = "species richness (400 m^2 plot list)",
+  n_native       = "native species count",
+  n_introduced   = "introduced species count",
+  n_unknown      = "unknown-status species count",
+  total_cover    = "summed mean 1 m^2 cover (relative index)",
+  intro_cover    = "summed mean 1 m^2 cover of introduced species (relative index)",
+  native_cover   = "summed mean 1 m^2 cover of native species (relative index)",
+  dominant       = "highest-cover species in the plot",
+  dominant_cover = "mean 1 m^2 cover of the dominant species",
+  pct_introduced = "introduced share of total cover (%)",
+  plotType       = "NEON plot type",
+  nlcdClass      = "NLCD land-cover class",
+  lat            = "plot latitude (decimal degrees)",
+  lng            = "plot longitude (decimal degrees)",
+  otherVariables = "abiotic ground-cover class (soil/litter/rock/...)",
+  # provenance.csv
+  builtAt        = "build provenance: date this bundle was built",
+  exportedAt     = "date this CSV export was generated",
+  neonRelease    = "build provenance: NEON release tag for the source product (NA if untagged)",
+  dpid           = "NEON data product id (DP1.10058.001)",
+  fetchedAt      = "build provenance: date this bundle was fetched/built",
+  # expected_vs_observed.csv
+  bucket               = "A = expected & observed, B = expected not detected, C = observed not in reference",
+  symbol               = "USDA PLANTS symbol",
+  reference_production = "NRCS reference-community expected production for the species",
+  is_dominant          = "TRUE if in the top 50% of reference production (app-defined dominance convention)",
+  observed_cover       = "mean 1 m^2 observed cover (relative index; NA where not observed)")
+
+# r class -> short codebook type
+.plant_col_type <- function(x) {
+  if (is.logical(x))   return("logical")
+  if (is.integer(x))   return("int")
+  if (is.numeric(x))   return("num")
+  "chr"
+}
+
+plant_codebook <- function(frames = NULL) {
+  # canonical fallback (used when no frames are supplied) — mirrors the export
+  if (is.null(frames)) {
+    frames <- list(
+      "occ_long.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 12)),
+        c("plotID","subplotID","scale_m2","year","bout","taxonID","scientificName",
+          "taxonRank","family","nativity","percentCover","is_species")),
+      "plots.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 15)),
+        c("plotID","richness","n_native","n_introduced","n_unknown","plotType","nlcdClass",
+          "lat","lng","total_cover","intro_cover","native_cover","dominant","dominant_cover","pct_introduced")),
+      "ground_cover.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 5)),
+        c("plotID","subplotID","year","otherVariables","percentCover")))
+  }
+  rows <- lapply(names(frames), function(fn) {
+    df <- frames[[fn]]; if (is.null(df)) return(NULL)
+    cols <- names(df)
+    data.frame(
+      file    = fn,
+      column  = cols,
+      meaning = ifelse(cols %in% names(.PLANT_COL_MEANING),
+                       unname(.PLANT_COL_MEANING[cols]), "(see app docs)"),
+      type    = vapply(df, .plant_col_type, character(1), USE.NAMES = FALSE),
+      stringsAsFactors = FALSE)
+  })
+  rows <- rows[!vapply(rows, is.null, logical(1))]
+  do.call(rbind, rows)
 }
