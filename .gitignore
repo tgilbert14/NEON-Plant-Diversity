@@ -15,3 +15,6 @@ Thumbs.db
 
 # transient data-fetch staging (raw NEON pulls live outside the repo)
 /plant-data-fetch/
+
+# build-only USDA profile cache (re-run scaffolding; not shipped)
+data/authority/_profile_cache.rds
