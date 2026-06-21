@@ -79,7 +79,7 @@ text(68, 396, "Explorer",             col = cream, cex = 3.5, font = 2, adj = 0)
 leaf_glyph(388, 402, 70, grDevices::adjustcolor(ochre, .95))
 
 # subtitle
-text(70, 322, "Explore plant communities across 46 NEON sites — cover composition,",
+text(70, 322, "Explore plant communities across 46 NEON sites: cover composition,",
      col = grDevices::adjustcolor(cream, .93), cex = 1.12, adj = 0)
 text(70, 292, "diversity, and where introduced plants are gaining ground, on real data.",
      col = grDevices::adjustcolor(cream, .93), cex = 1.12, adj = 0)

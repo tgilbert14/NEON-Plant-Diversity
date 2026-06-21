@@ -37,7 +37,7 @@ LIVE_FETCH <- (Sys.getenv("PDE_LIVE", "0") != "0") && requireNamespace(.NEON_PKG
 # ---- bundled per-site data ------------------------------------------------
 SITE_DIR  <- "data/sites"
 DEMO_PATH <- "data-sample/demo.rds"
-DEMO_META <- list(site = "SRER", label = "SRER · Santa Rita Experimental Range — demo")
+DEMO_META <- list(site = "SRER", label = "SRER · Santa Rita Experimental Range · demo")
 
 # Defensive bundle read: a list(occ, ground, meta) or NULL — never crash boot.
 read_bundle <- function(f) {
@@ -77,7 +77,7 @@ plant_state_choices <- function() {
 plant_sites_in_state <- function(stt) {
   rows <- site_table[site_table$state == stt, ]; rows <- rows[order(rows$name), ]
   if (!nrow(rows)) return(character(0))
-  setNames(rows$site, sprintf("%s — %s", rows$site, rows$name))
+  setNames(rows$site, sprintf("%s · %s", rows$site, rows$name))
 }
 
 # ---- theme (Herbarium — the plant-forward Desert Data Labs identity) ---------

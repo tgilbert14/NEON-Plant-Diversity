@@ -61,7 +61,7 @@ server <- function(input, output, session) {
       lapply(seq_len(nrow(site_table)), function(i) {
         r <- site_table[i, ]
         tags$a(class = "site-card", href = "#",
-          onclick = sprintf("smtLoadStart('%s — loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;",
+          onclick = sprintf("smtLoadStart('%s · loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;",
                             gsub("'", "", r$name), r$site),
           div(class = "sc-emoji", bs_icon("flower1")),
           div(class = "sc-body",
@@ -169,9 +169,9 @@ server <- function(input, output, session) {
     showModal(modalDialog(easyClose = TRUE, title = tagList(bs_icon("question-circle"), " How it works"),
       tags$ul(
         tags$li(HTML("Pick a <b>site</b> (or open the Santa Rita demo). Numbers describe the <b>most recent survey</b> of each plot.")),
-        tags$li(HTML("<b>Diversity</b> — the nested species-area curve (1→400 m²), the Hill profile, and a Chao2 estimate of undetected species.")),
-        tags$li(HTML("<b>Native vs Invasive</b> — how much cover is introduced, which species, and where invasion has a foothold at the finest scale.")),
-        tags$li(HTML("<b>Diversity Lab</b> — every plot as a dot; <b>tap one</b> to pin its card, then “Open plot profile” for the full, downloadable drill-down.")),
+        tags$li(HTML("<b>Diversity</b>: the nested species-area curve (1→400 m²), the Hill profile, and a Chao2 estimate of undetected species.")),
+        tags$li(HTML("<b>Native vs Invasive</b>: how much cover is introduced, which species, and where invasion has a foothold at the finest scale.")),
+        tags$li(HTML("<b>Diversity Lab</b>: every plot as a dot; <b>tap one</b> to pin its card, then “Open plot profile” for the full, downloadable drill-down.")),
         tags$li(HTML("Cover is an <b>ocular estimate</b> and layers overlap, so cover figures are a relative index, not a share of ground."))),
       footer = modalButton("Got it")))
   })
@@ -210,7 +210,7 @@ server <- function(input, output, session) {
         hero(n_sp, "species", icon = "flower3", tone = "navy", nav = "diversity"),
         hero(nrow(lb), "plots", icon = "grid-3x3", tone = "pine", nav = "map"),
         hero(if (is.na(site_intro)) 0 else site_intro, "% introduced cover", icon = "shield-exclamation", tone = "terra", nav = "invasive",
-             ttl = "Share of vegetative cover that is introduced. Cover is an ocular estimate and plant layers overlap, so this is a relative index — not a percent of ground.",
+             ttl = "Share of vegetative cover that is introduced. Cover is an ocular estimate and plant layers overlap, so this is a relative index, not a percent of ground.",
              sub = if (!is.na(ucs)) sprintf("%.0f%% of cover is unknown status", ucs)),
         hero(n_intro, "introduced species", icon = "exclamation-triangle", tone = "gold", nav = "invasive")))
   })
@@ -250,7 +250,7 @@ server <- function(input, output, session) {
     if (!is.null(sa)) pts <- c(pts, sprintf("In the latest survey, a 1 m² quadrat holds about <b>%.0f</b> species; the full 400 m² plot reaches <b>%.0f</b>.", sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400]))
     if (!is.null(ch)) pts <- c(pts, sprintf("Across the plots, <b>%d</b> species were recorded; Chao2 estimates at least <b>%.0f</b> are present%s.", ch$S_obs, ch$chao2, if (ch$unstable) " (a rough floor)" else ""))
     if (!is.null(wl) && nrow(wl)) pts <- c(pts, sprintf("The most widespread introduced plant is <b><i>%s</i></b>, in <b>%d</b> of %d plots.", wl$scientificName[1], wl$n_plots[1], nrow(lb)))
-    pts <- c(pts, sprintf("Native status is unknown for %.0f%% of species — read the native/invasive numbers with that in mind.", ur))
+    pts <- c(pts, sprintf("Native status is unknown for %.0f%% of species; read the native/invasive numbers with that in mind.", ur))
     div(class = "insight-list", lapply(pts, function(t) div(class = "il-item", bs_icon("dot"), HTML(t))))
   })
   output$groundBar <- renderPlotly({
@@ -288,8 +288,8 @@ server <- function(input, output, session) {
     n400 <- sa$n[sa$area_m2==400]; if (!length(n400) || !is.finite(n400)) n400 <- 0
     shape <- if (n400 < 5)
         sprintf(" Based on just <b>%.0f</b> plot%s, so read the shape as a rough floor, not a firm curve.", n400, ifelse(n400 == 1, "", "s"))
-      else if (slope > 15) " Still rising steeply at 400 m² — the site is undersampled, there's more out there."
-      else " The curve is flattening — most species are being caught."
+      else if (slope > 15) " Still rising steeply at 400 m²; the site is undersampled, there's more out there."
+      else " The curve is flattening; most species are being caught."
     insight_banner("graph-up", tone = "pine",
       HTML(sprintf("Richness climbs from <b>%.0f</b> species/m² to <span class='ci-hero'>%.0f</span> per 400 m² plot.%s",
         sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400], shape)))
@@ -312,15 +312,15 @@ server <- function(input, output, session) {
     even <- round(h["q1"] / h["q0"], 2)
     tagList(
       insight_banner("diagram-2", tone = "navy",
-        HTML(sprintf("Of <b>%.0f</b> species, only <span class='ci-hero'>%.0f</span> are effectively common (q1). Evenness ≈ <b>%.2f</b> — %s.",
+        HTML(sprintf("Of <b>%.0f</b> species, only <span class='ci-hero'>%.0f</span> are effectively common (q1). Evenness ≈ <b>%.2f</b>: %s.",
           h["q0"], h["q1"], even, if (even < 0.25) "a few species dominate the cover" else "cover is fairly spread"))),
       p(class = "hill-foot", bsicons::bs_icon("info-circle"),
-        " q1/q2 weight species by cover — an ocular index whose overlapping layers make it a relative measure, not a share of ground."))
+        " q1/q2 weight species by cover, an ocular index whose overlapping layers make it a relative measure, not a share of ground."))
   })
   output$chaoBanner <- renderUI({
     occ <- rv$snap; req(occ); ch <- chao2(occ); req(!is.null(ch))
     insight_banner("calculator", tone = "gold",
-      HTML(sprintf("In the latest survey, <b>%d</b> species were seen across %d 1 m² quadrats. <b>Chao2</b> estimates <span class='ci-hero'>%.0f</span> species present%s (95%% CI %s–%s) — so roughly <b>%.0f</b> remain undetected.",
+      HTML(sprintf("In the latest survey, <b>%d</b> species were seen across %d 1 m² quadrats. <b>Chao2</b> estimates <span class='ci-hero'>%.0f</span> species present%s (95%% CI %s–%s), so roughly <b>%.0f</b> remain undetected.",
         ch$S_obs, ch$m, ch$chao2, if (ch$unstable) ", a lower bound (few doubletons)" else "",
         ifelse(is.na(ch$lo),"—",ch$lo), ifelse(is.na(ch$hi),"—",ch$hi), max(0, round(ch$chao2 - ch$S_obs)))))
   })
@@ -342,7 +342,7 @@ server <- function(input, output, session) {
     dir <- if (nrow(fin) < 2 || last$pct_introduced == first$pct_introduced) "about the same as"
            else if (last$pct_introduced > first$pct_introduced) "up from" else "down from"
     insight_banner("shield-exclamation", tone = "terra",
-      HTML(sprintf("Introduced plants make up <span class='ci-hero'>%.1f%%</span> of cover in %d — %s %.1f%% in %d. Native status is unknown for %.0f%% of species.",
+      HTML(sprintf("Introduced plants make up <span class='ci-hero'>%.1f%%</span> of cover in %d, %s %.1f%% in %d. Native status is unknown for %.0f%% of species.",
         last$pct_introduced, last$year, dir, first$pct_introduced, first$year, ur)))
   })
   output$invTable <- DT::renderDT({
@@ -401,7 +401,7 @@ server <- function(input, output, session) {
   output$envSourceNote <- renderUI({
     if (is.null(cur_env())) return(NULL)
     div(class = "env-source env-real", bs_icon("patch-check-fill"),
-        tags$span(HTML(sprintf(" Live from co-located NEON sensors at <b>%s</b> — precipitation, air temperature, and plant phenology, aggregated to one value per year.",
+        tags$span(HTML(sprintf(" Live from co-located NEON sensors at <b>%s</b>: precipitation, air temperature, and plant phenology, aggregated to one value per year.",
                                rv$site %||% "this site"))))
   })
 
@@ -411,7 +411,7 @@ server <- function(input, output, session) {
       div(class = "ci-text", "No co-located environmental data is bundled for this site yet.")))
     if (is.null(ms) || nrow(ms) < MIN_ENV_YEARS)
       return(div(class = "chart-insight ci-muted", bs_icon("hourglass-split"),
-        div(class = "ci-text", HTML(sprintf("Only <b>%d</b> survey year%s here — too few to test a climate link (need %d+). The series below still show the raw context.",
+        div(class = "ci-text", HTML(sprintf("Only <b>%d</b> survey year%s here, too few to test a climate link (need %d+). The series below still show the raw context.",
           if (is.null(ms)) 0L else nrow(ms), if (!is.null(ms) && nrow(ms) == 1) "" else "s", MIN_ENV_YEARS)))))
     pm <- env_perm(); if (is.null(pm)) return(NULL); pk <- pm$top
     v <- env_verdict(pk$r, pm$p, pk$n); pos <- pk$r >= 0
@@ -424,7 +424,7 @@ server <- function(input, output, session) {
           tags$span(class = "ec-demo", "exploratory")),
       div(class = "ec-hero",
         div(class = "ec-hero-text",
-          tags$span(class = "ec-strength", tools::toTitleCase(v$word)), " — ", tolower(metricLab), " vs ",
+          tags$span(class = "ec-strength", tools::toTitleCase(v$word)), " · ", tolower(metricLab), " vs ",
           tags$span(class = "ec-driver", tolower(pk$label))),
         div(class = paste("ec-rvalue", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
           title = "Spearman rank-correlation, -1 to +1, at the best lag",
@@ -493,7 +493,7 @@ server <- function(input, output, session) {
       hovertemplate = ~paste0("<b>", label, "</b><br>r %{x:+.2f} at ", lab, " \U00B7 n=", n, "<extra></extra>")) %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(
-        xaxis = list(title = "Spearman r with the plant signal — left of 0 = inverse",
+        xaxis = list(title = "Spearman r with the plant signal · left of 0 = inverse",
                      range = c(-1, 1), zeroline = TRUE, zerolinecolor = "rgba(31,42,48,0.30)"),
         yaxis = list(title = ""), margin = list(b = 72),
         annotations = list(list(
@@ -613,7 +613,7 @@ server <- function(input, output, session) {
       span(class = "ls-emoji", "\U0001F33E"),
       div(class = "ls-body",
         div(class = "ls-id", tags$b(short_plot(rv$plot)),
-          sprintf(" — %d species · %d native · %d introduced", row$richness, row$n_native, row$n_introduced),
+          sprintf(" · %d species · %d native · %d introduced", row$richness, row$n_native, row$n_introduced),
           if (!is.na(row$pct_introduced)) sprintf(" · %s%% introduced cover", row$pct_introduced)),
         div(class = "ls-dom", "dominant: ", em(ifelse(is.na(row$dominant), "—", row$dominant)))),
       actionButton("goPlotFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"),
@@ -726,7 +726,7 @@ server <- function(input, output, session) {
         dpid = "DP1.10058.001", exportedAt = format(Sys.Date(), "%Y-%m-%d"),
         stringsAsFactors = FALSE)
       readme <- c(
-        sprintf("NEON Plant Diversity Explorer — data export for site %s", site),
+        sprintf("NEON Plant Diversity Explorer · data export for site %s", site),
         sprintf("Generated %s by an unofficial Desert Data Labs explorer.", format(Sys.Date(), "%Y-%m-%d")),
         "Source: NEON Plant presence & percent cover DP1.10058.001 (div_1m2Data + div_10m2Data100m2Data).",
         sprintf("Bundle built: %s%s", built_at,
@@ -769,7 +769,7 @@ server <- function(input, output, session) {
   observeEvent(input$compareBtn, {
     req(rv$site)
     others <- site_table$site[site_table$site != rv$site]
-    ch <- stats::setNames(others, sprintf("%s — %s", others, site_table$name[match(others, site_table$site)]))
+    ch <- stats::setNames(others, sprintf("%s · %s", others, site_table$name[match(others, site_table$site)]))
     showModal(modalDialog(easyClose = TRUE, size = "l",
       title = tagList(bs_icon("layout-split"), sprintf(" Compare %s with…", rv$site)),
       selectInput("compareSite2", NULL, choices = c("Pick a site to compare…" = "", ch), width = "100%"),
@@ -799,7 +799,7 @@ server <- function(input, output, session) {
         tags$tr(
           tags$td(class = "cmp-l", "Species (snapshot)",
             info_pop("Comparing richness fairly",
-              p("This row is ", tags$b("raw observed richness"), " (S_obs) at each site's own sampling effort — plots, survey years and bouts differ between sites, and more effort finds more species."),
+              p("This row is ", tags$b("raw observed richness"), " (S_obs) at each site's own sampling effort; plots, survey years and bouts differ between sites, and more effort finds more species."),
               p("For a fair side-by-side, read the ", tags$b("Chao2"), " row below: it estimates total richness from the incidence data and is the effort-corrected, comparable number. An asterisk flags a rough lower bound (few doubletons)."))),
           tags$td(a$rich), tags$td(b$rich)),
         row("Chao2 (estimated)", a$chao %||% "—", b$chao %||% "—"),
@@ -866,7 +866,7 @@ server <- function(input, output, session) {
     req(rv$occ)
     e <- expected_for_site()
     if (is.null(e)) return(insight_banner("info-circle", tone = "navy",
-      HTML("No NRCS ecological-site reference list is bundled for this site <i>yet</i> — the completeness comparison is live for Santa Rita (SRER) and a growing set of sites. Everything else on this page still works.")))
+      HTML("No NRCS ecological-site reference list is bundled for this site <i>yet</i>. The completeness comparison is live for Santa Rita (SRER) and a growing set of sites. Everything else on this page still works.")))
     src <- e$source %||% "esd"
     badge <- if (identical(src, "esd")) glow_badge("ecological site", DDL$navy) else glow_badge("MLRA union", DDL$gold)
     # only link to EDIT for a standard rangeland/forest ecoclassid that will resolve
@@ -896,7 +896,7 @@ server <- function(input, output, session) {
       box("—", "reference dominants", "navy", "not production-ranked for this ecological site")
     else
       box(sprintf("%d / %d", ev$dom_obs, ev$dom_total), "reference dominants observed", "navy",
-          "the core species — top 50% of reference production")
+          "the core species, top 50% of reference production")
     rev_sub <- sprintf("%d introduced · %d native%s", ev$n_review_intro, ev$n_review_native,
       if (ev$n_review_unknown > 0) sprintf(" · %d unknown", ev$n_review_unknown) else "")
     div(
@@ -917,7 +917,7 @@ server <- function(input, output, session) {
   output$evoCoarse <- renderUI({
     cr <- coarse_flag(); if (is.null(cr) || !is.finite(cr$pct_records) || cr$pct_records < 1) return(NULL)
     insight_banner("info-circle", tone = "navy",
-      HTML(sprintf("<b>%.0f%%</b> of records here are identified coarser than species — genus, family, or just “plant”%s. These can't be matched to a species-level reference list, so read the comparisons below as a floor, not a census.",
+      HTML(sprintf("<b>%.0f%%</b> of records here are identified coarser than species: genus, family, or just “plant”%s. These can't be matched to a species-level reference list, so read the comparisons below as a floor, not a census.",
         cr$pct_records,
         if (is.finite(cr$pct_cover)) sprintf(", carrying <b>%.0f%%</b> of measured cover", cr$pct_cover) else "")))
   })
@@ -939,7 +939,7 @@ server <- function(input, output, session) {
   # Bucket C — observed, not in reference (clay; the review lane)
   output$evoTableC <- DT::renderDT({
     ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
-    C <- ev$C; if (!nrow(C)) return(evo_empty_dt("Every observed species is on the reference list — nothing to review."))
+    C <- ev$C; if (!nrow(C)) return(evo_empty_dt("Every observed species is on the reference list; nothing to review."))
     df <- data.frame(Symbol = C$sym, Species = C$scientificName, Family = C$family,
       Nativity = C$nativity, `Mean cover %` = ifelse(is.finite(C$mean_cover), C$mean_cover, NA),
       `# plots` = C$n_plots, check.names = FALSE)
@@ -953,7 +953,7 @@ server <- function(input, output, session) {
   # Bucket B — expected but not detected (neutral completeness; dominants highlighted)
   output$evoTableB <- DT::renderDT({
     ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
-    B <- ev$B; if (!nrow(B)) return(evo_empty_dt("Every reference species was detected — a complete sample of the reference flora."))
+    B <- ev$B; if (!nrow(B)) return(evo_empty_dt("Every reference species was detected: a complete sample of the reference flora."))
     df <- data.frame(Symbol = B$plantsym, Species = B$sciname, `Common name` = B$comname,
       Role = ifelse(B$is_dominant %in% TRUE, "dominant", "associated"),
       `Ref. production (lb/ac)` = ifelse(is.finite(B$rangeprod), B$rangeprod, NA), check.names = FALSE)
@@ -969,10 +969,10 @@ server <- function(input, output, session) {
     cs <- tryCatch(flag_cover_sum(occ), error = function(e) list(rows = data.frame(), n = 0L, ceiling = 250))
     nm_ui <- if (is.null(nm)) {
       div(class = "evo-flag evo-flag-muted", bs_icon("hourglass-split"),
-        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> needs the USDA PLANTS authority file — being added in a follow-up build. NEON's own native/introduced labels are used everywhere else on the page."))
+        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> needs the USDA PLANTS authority file, being added in a follow-up build. NEON's own native/introduced labels are used everywhere else on the page."))
     } else if (nm$n == 0) {
       div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
-        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> no disagreements — every species' native/introduced label matches USDA PLANTS."))
+        HTML(" <b>Nativity cross-check (NEON vs USDA):</b> no disagreements; every species' native/introduced label matches USDA PLANTS."))
     } else {
       rows <- utils::head(nm$rows, 12)
       div(class = "evo-flag evo-flag-warn",
@@ -984,11 +984,11 @@ server <- function(input, output, session) {
             tags$td(tags$i(rows$scientificName[i])), tags$td(rows$nativity[i]),
             tags$td(rows$usda_nativity[i]), tags$td(rows$n_plots[i]))))),
         if (nm$n > 12) div(class = "evo-flag-more", sprintf("+ %d more in the full report (CSV)", nm$n - 12)),
-        div(class = "evo-flag-note", "Nativity is regional — USDA's lower-48 label and NEON's site label can legitimately differ at a range edge. Worth a look, not necessarily an error."))
+        div(class = "evo-flag-note", "Nativity is regional; USDA's lower-48 label and NEON's site label can legitimately differ at a range edge. Worth a look, not necessarily an error."))
     }
     cs_ui <- if (cs$n == 0) {
       div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
-        HTML(sprintf(" <b>Cover sanity:</b> no 1 m² quadrat sums above %d%% — within what overlapping canopy layers explain.", cs$ceiling)))
+        HTML(sprintf(" <b>Cover sanity:</b> no 1 m² quadrat sums above %d%%, within what overlapping canopy layers explain.", cs$ceiling)))
     } else {
       div(class = "evo-flag evo-flag-warn",
         div(class = "evo-flag-h", bs_icon("exclamation-triangle-fill"),
@@ -1028,7 +1028,7 @@ server <- function(input, output, session) {
     content = function(file) {
       ev <- evo(); tbl <- qc_report_table(ev, site = rv$site %||% NA_character_)
       if (is.null(tbl) || !nrow(tbl))
-        tbl <- data.frame(note = sprintf("No NRCS ecological-site reference list is bundled for %s — completeness comparison unavailable.",
+        tbl <- data.frame(note = sprintf("No NRCS ecological-site reference list is bundled for %s; completeness comparison unavailable.",
                                           rv$site %||% "this site"))
       utils::write.csv(tbl, file, row.names = FALSE, na = "")
     }, contentType = "text/csv")
@@ -1038,24 +1038,24 @@ server <- function(input, output, session) {
     div(class = "about-wrap",
       div(class = "about-card", h4("\U0001F33F What this is"),
         p("An (unofficial) explorer for NEON's ", tags$b("Plant presence & percent cover"), " product (", tags$code("DP1.10058.001"),
-          "). NEON surveys plants in nested quadrats — 1 m² subplots (presence + percent cover), 10 m² and 100 m² subplots (presence), combined into a 400 m² plot list — at peak greenness each year.")),
+          "). NEON surveys plants in nested quadrats: 1 m² subplots (presence + percent cover), 10 m² and 100 m² subplots (presence), combined into a 400 m² plot list, at peak greenness each year.")),
       div(class = "about-card", h4(bs_icon("rulers"), " How richness is measured"),
         p("Species–area curves come straight from the nested design: a 1 m² quadrat, a 10 m² subplot, a 100 m² corner, the whole 400 m² plot. ",
-          tags$b("Chao2"), " (incidence-based) estimates how many species remain undetected — the right estimator for presence/quadrat data."),
+          tags$b("Chao2"), " (incidence-based) estimates how many species remain undetected, the right estimator for presence/quadrat data."),
         p(class = "caveat", bs_icon("exclamation-triangle"), " Cover is an ocular estimate and vegetation layers overlap, so site-summed cover is relative, not a share of ground.")),
       div(class = "about-card", h4(bs_icon("shield-exclamation"), " Native vs invasive"),
         p("Status is NEON's ", tags$code("nativeStatusCode"), " (N native / I introduced / others → unknown). We publish the ", tags$b("unknown rate"),
           " so the invasion numbers are read honestly. The ", tags$b("invasion-pressure"), " index uses the nested scales to flag invaders established at the finest grain.")),
       div(class = "about-card", h4(bs_icon("clipboard-check"), " Expected vs Observed"),
         p("We resolve each site's coordinates to its NRCS ", tags$b("Ecological Site"), " and pull that site's ",
-          tags$b("reference plant community"), " (the plants the soil and climate can support), then compare it to what NEON actually recorded — the ", tags$b("EcoPlot"), " recipe."),
+          tags$b("reference plant community"), " (the plants the soil and climate can support), then compare it to what NEON actually recorded, the ", tags$b("EcoPlot"), " recipe."),
         p("Because NEON samples ~400 m² per plot at peak greenness, a reference species not detected is read as ",
           tags$b("completeness"), " (or a real state-transition), ", tags$b("never as error"), ". Only two lanes are true data-quality signals: coarse IDs and nativity disagreements with USDA PLANTS."),
-        p(tags$b("Dominant"), " = the core species making up the top 50% of the ecological site's reference production (NRCS air-dry lb/ac at normal precipitation) — an app-defined, list-length-invariant convention, not an official NRCS designation. Forest ecological sites carry no per-species production (their dominants are canopy trees, scored by site index), so dominance isn't ranked there."),
+        p(tags$b("Dominant"), " = the core species making up the top 50% of the ecological site's reference production (NRCS air-dry lb/ac at normal precipitation), an app-defined, list-length-invariant convention, not an official NRCS designation. Forest ecological sites carry no per-species production (their dominants are canopy trees, scored by site index), so dominance isn't ranked there."),
         p(class = "caveat", bs_icon("info-circle"), " Reference flora: USDA-NRCS Soil Data Access / Ecological Site Descriptions (public domain). Nativity authority: USDA, NRCS, ",
           tags$a(href = "https://plants.usda.gov", target = "_blank", "The PLANTS Database"), ". NEON taxonomy follows USDA PLANTS symbols, so the match is an exact symbol join.")),
       div(class = "about-card", h4(bs_icon("diagram-3"), " A NEONize sibling"),
-        p("Built to the NEON Small Mammal Tracker quality bar — same Desert Data Labs design system, bundling, and pin-card interaction — but the analyses are plant-native (there are no individuals to track in cover data). See the NEONize playbook."),
+        p("Built to the NEON Small Mammal Tracker quality bar (same Desert Data Labs design system, bundling, and pin-card interaction), but the analyses are plant-native (there are no individuals to track in cover data). See the NEONize playbook."),
         p(bs_icon("envelope"), " ", tags$a(href = "mailto:desertdatalabs@gmail.com", "desertdatalabs@gmail.com"),
           " · ", tags$a(href = "https://data.neonscience.org/data-products/DP1.10058.001", target = "_blank", "NEON data product"))))
   })

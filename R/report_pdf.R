@@ -20,7 +20,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
 
   # ---- header band -------------------------------------------------------
   graphics::rect(0, 92, 100, 100, col = P$pine, border = NA)
-  graphics::text(3, 96.4, "NEON Plant Diversity — Site Report", col = "#ffffff", cex = 1.5, font = 2, adj = 0)
+  graphics::text(3, 96.4, "NEON Plant Diversity · Site Report", col = "#ffffff", cex = 1.5, font = 2, adj = 0)
   graphics::text(3, 93.6, label, col = P$gold, cex = 1.0, font = 2, adj = 0)
   graphics::text(97, 93.6, format(Sys.Date(), "%Y-%m-%d  ·  DP1.10058.001"), col = "#dfeee4", cex = 0.7, adj = 1)
 
@@ -43,7 +43,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
   chip(75, if (is.finite(n_plots)) format(n_plots, big.mark = ",") else "—", "PLOTS SAMPLED")
 
   # ---- composition: top species by mean cover ----------------------------
-  graphics::text(3, 80, "Most abundant plants — by mean cover", col = P$pine2, cex = 1.0, font = 2, adj = 0)
+  graphics::text(3, 80, "Most abundant plants · by mean cover", col = P$pine2, cex = 1.0, font = 2, adj = 0)
   if (!is.null(sp) && nrow(sp)) {
     topn <- sp[is.finite(sp$mean_cover) & sp$mean_cover > 0, ]
     topn <- utils::head(topn[order(-topn$mean_cover), ], 8)
@@ -84,7 +84,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
     graphics::text(3, 24.5, sprintf("Reference flora detected: %.0f%%  (%d of %d species)", evo$overlap_pct, evo$n_overlap, evo$n_ref), col = P$ink, cex = 0.72, adj = 0)
     dom <- if (evo$dom_total > 0) sprintf("%d of %d reference dominants observed", evo$dom_obs, evo$dom_total) else "dominants not production-ranked for this ecological site"
     graphics::text(3, 22.4, dom, col = P$ink, cex = 0.72, adj = 0)
-    graphics::text(3, 20.3, sprintf("%d observed but not in the reference list (%d introduced · %d native) — review lane.", nrow(evo$C), evo$n_review_intro, evo$n_review_native), col = P$muted, cex = 0.62, adj = 0)
+    graphics::text(3, 20.3, sprintf("%d observed but not in the reference list (%d introduced · %d native), the review lane.", nrow(evo$C), evo$n_review_intro, evo$n_review_native), col = P$muted, cex = 0.62, adj = 0)
     graphics::text(3, 18.4, sprintf("Reference community: %s (%s).", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.6, adj = 0)
   } else graphics::text(3, 23, "No NRCS reference list bundled for this site.", col = P$muted, cex = 0.7, adj = 0)
 
