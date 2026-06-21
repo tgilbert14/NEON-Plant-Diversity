@@ -6,20 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>NEON Plant Diversity · the Explorer Suite by Desert Data Labs</title>
   <meta name="description"
-    content="See which plants grow at NEON research sites across the United States and how varied each place is. Count the species at a site, see how much is native versus introduced, and compare plant life across the country. Free, no account, pick a site and start." />
+    content="See which plants grow at NEON research sites across the United States and how varied each place is. Count the species at a site, see how much is native versus introduced, and compare plant life across the country." />
   <meta name="theme-color" content="#08140d" />
 
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Diversity/" />
   <meta property="og:title" content="NEON Plant Diversity · Desert Data Labs" />
   <meta property="og:description"
-    content="See which plants grow at NEON research sites across the United States, how much is native versus introduced, and how plant diversity changes across the country. Free, no account, pick a site and start." />
+    content="See which plants grow at NEON research sites across the United States, how much is native versus introduced, and how plant diversity changes across the country." />
   <meta property="og:image"
     content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="NEON Plant Diversity · Desert Data Labs" />
   <meta name="twitter:description"
-    content="See which plants grow at NEON research sites across the United States, and how varied each place is. Free, pick a site and start." />
+    content="See which plants grow at NEON research sites across the United States, and how varied each place is." />
   <meta name="twitter:image"
     content="https://tgilbert14.github.io/NEON-Plant-Diversity/og-image.png" />
 
@@ -311,9 +311,9 @@
       <p class="lead">See which plants grow at research sites all over the country, and how varied each
         place is. <b>NEON</b>, the National Ecological Observatory Network, is a set of research sites
         across the United States, funded by the National Science Foundation, that measure plants, animals,
-        water, and climate the same way everywhere, year after year. This free app lets you pick a site
+        water, and climate the same way everywhere, year after year. This app lets you pick a site
         and see its plants: how many species live there, how much is native versus introduced, and how
-        plant life changes from place to place. No account, no setup. Pick a site and start.</p>
+        plant life changes from place to place.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/">
@@ -368,13 +368,13 @@
         <div class="stat"><div class="n">46</div><div class="l">research sites</div></div>
         <div class="stat"><div class="n">1&rarr;400 m&sup2;</div><div class="l">plot sizes surveyed</div></div>
         <div class="stat"><div class="n">real</div><div class="l">public data</div></div>
-        <div class="stat"><div class="n">instant</div><div class="l">no loading waits</div></div>
+        <div class="stat"><div class="n">23</div><div class="l">states</div></div>
       </div>
 
       <details class="more">
         <summary>How we keep it honest</summary>
         <div class="mbody">
-          The app uses real NEON data, saved ahead of time so pages open right away, and it is upfront about
+          The app uses real NEON data, saved ahead of time, and it is upfront about
           what the numbers can and cannot say. <b>Cover is an estimate, not an exact measurement.</b> In the
           field a person eyes how much ground each plant covers, and plants overlap, so we treat cover as a
           rough sense of what is common, never as an exact area. <b>Counting variety.</b> A short visit
@@ -392,7 +392,7 @@
 
   <footer>
     <div class="wrap">
-      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer">Want a custom data app like this for your project?</a><br>
+      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer">Get in touch with Desert Data Labs →</a><br>
       Built on the NEON <a href="https://data.neonscience.org/data-products/DP1.10058.001" target="_blank" rel="noopener">Plant Presence &amp; Percent Cover</a>
       dataset by <b>Desert Data Labs</b> &middot; Tucson, AZ. Data comes from the National Ecological Observatory Network
       (run by Battelle, funded by the NSF). These are educational tools, not affiliated with NEON, Battelle, or the NSF.
@@ -411,7 +411,7 @@
         var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
         var killer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
         fetch(APP_URL, { mode: "no-cors", cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
-          .then(function () { if (warm) warm.textContent = "Ready when you are."; })
+          .then(function () { if (warm) warm.textContent = "The app is ready."; })
           .catch(function () { if (warm) warm.textContent = ""; })
           .finally(function () { if (killer) clearTimeout(killer); });
       } catch (e) {}

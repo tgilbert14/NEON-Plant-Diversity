@@ -86,7 +86,7 @@ text(70, 292, "diversity, and where introduced plants are gaining ground, on rea
 
 # stat chips
 chips <- list(c("46", "field sites"), c("23", "states"),
-              c("1→400 m²", "nested"), c("instant", "no API waits"))
+              c("1→400 m²", "nested"), c("real", "public data"))
 x0 <- 70; gap <- 14; w <- 250; h <- 96; y1 <- 64
 chipfill <- grDevices::adjustcolor(cream, .10)
 for (i in seq_along(chips)) {
