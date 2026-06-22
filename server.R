@@ -364,8 +364,11 @@ server <- function(input, output, session) {
   output$groundBar <- renderPlotly({
     g <- ground_summary(rv$ground); if (is.null(g)) return(note_plot("No ground-cover data"))
     g <- head(g, 10); g$otherVariables <- factor(g$otherVariables, levels = rev(g$otherVariables))
+    # ground-cover bars are NOT a data-encoded palette (one decorative earth tone) -
+    # so brighten it on the dark theme; the light brown is muddy on the dark paper.
+    gcol <- if (is_dark()) "#c79a6e" else "#8a6d4b"
     plot_ly(g, x = ~mean_cover, y = ~otherVariables, type = "bar", orientation = "h",
-      marker = list(color = "#8a6d4b"),
+      marker = list(color = gcol),
       hovertemplate = "%{y}<br>%{x:.0f}% mean cover<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(showlegend = FALSE, xaxis = list(title = "Mean 1 m² cover (%)"),
@@ -408,8 +411,11 @@ server <- function(input, output, session) {
     df$q <- factor(df$q, levels = df$q)
     # q0 ≥ q1 ≥ q2 is ONE ordered quantity, not three categories — paint it a
     # single-hue lightness ramp of the primary so the colour can't imply types.
+    # On the dark theme the dark pole (#1F5C3D) all but vanishes on the dark
+    # paper, so use a brightened green ramp that keeps the dark->light ordering.
+    hill_ramp <- if (is_dark()) c("#4FA877", "#86C2A1", "#C7E8D4") else c("#1F5C3D", "#3E8B5E", "#86C2A1")
     plot_ly(df, x = ~q, y = ~v, type = "bar",
-      marker = list(color = c("#1F5C3D", "#3E8B5E", "#86C2A1")),
+      marker = list(color = hill_ramp),
       text = ~round(v), textposition = "outside",
       hovertemplate = "%{x}<br>%{y:.1f} effective species<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
@@ -505,6 +511,66 @@ server <- function(input, output, session) {
   })
   env_metric_lab <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$label)
   env_metric_dig <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$dig %||% 1)
+
+  # ---- Environment exports (matched annual series + driver-rank w/ perm p) ---
+  # The matched series and the driver-rank table are the two frames behind the
+  # Environment tab; export them so a reader can replay the correlation by hand.
+  output$envSeriesCsv <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_env-matched-series_%s.csv",
+                                  rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      ms <- env_series(); e <- cur_env(); pm <- env_perm()
+      # build the year-matched (driver lagged to its best lag) frame the scatter draws
+      out <- data.frame()
+      if (!is.null(ms) && !is.null(e) && !is.null(pm) && !is.null(pm$top)) {
+        pk <- pm$top
+        ea <- env_annual(e, pk$layer)
+        if (!is.null(ea) && nrow(ea)) {
+          ea2 <- ea; ea2$year <- ea2$year + pk$lag       # driver from (Y - lag) -> response year Y
+          j <- merge(ms, ea2, by = "year")
+          if (nrow(j)) out <- data.frame(
+            year         = j$year,
+            plant_metric = env_metric_lab(),
+            metric_value = round(j$value.x, env_metric_dig()),
+            driver       = pk$layer,
+            driver_label = pk$label,
+            driver_value = round(j$value.y, 2),
+            lag_years    = pk$lag,
+            stringsAsFactors = FALSE)
+        }
+      }
+      if (!nrow(out))
+        out <- data.frame(note = "Too few year-matched survey years to build a climate-vs-vegetation series for this site.")
+      utils::write.csv(out, file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
+
+  output$envRankCsv <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_env-driver-rank_%s.csv",
+                                  rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      rk <- env_rank(); ms <- env_series(); e <- cur_env()
+      out <- data.frame()
+      if (!is.null(rk) && nrow(rk) && !is.null(ms) && !is.null(e)) {
+        # per-driver permutation p: correct each driver for ITS OWN lag search
+        pvals <- vapply(rk$layer, function(L) {
+          pp <- tryCatch(plant_env_perm(ms, e, B = 499, only = L), error = function(err) NULL)
+          if (is.null(pp) || is.null(pp$p)) NA_real_ else as.numeric(pp$p)
+        }, numeric(1))
+        out <- data.frame(
+          plant_metric   = env_metric_lab(),
+          driver         = rk$layer,
+          driver_label   = rk$label,
+          spearman_r     = rk$r,
+          best_lag_years = rk$lag,
+          matched_years  = rk$n,
+          permutation_p  = round(pvals, 3),
+          stringsAsFactors = FALSE)
+        out <- out[order(-abs(out$spearman_r)), , drop = FALSE]
+      }
+      if (!nrow(out))
+        out <- data.frame(note = "No co-located environmental data, or too few survey years, to rank drivers for this site.")
+      utils::write.csv(out, file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
 
   output$envSourceNote <- renderUI({
     if (is.null(cur_env())) return(NULL)
@@ -925,11 +991,29 @@ server <- function(input, output, session) {
     validate(need(nrow(lb) > 0, "No plots have mappable coordinates for this site."))
     metric <- input$mapMetric %||% "pct_introduced"
     val <- if (metric == "pct_introduced") ifelse(is.na(lb$pct_introduced), 0, lb$pct_introduced) else lb$richness
-    # guard a degenerate (all-equal) domain so colorNumeric doesn't error
-    dom <- if (diff(range(val, na.rm = TRUE)) > 0) range(val, na.rm = TRUE) else c(val[1] - 1, val[1] + 1)
-    # % introduced is a one-ended magnitude, not a diverging metric — a SEQUENTIAL
-    # single-hue sand→clay ramp (no false midpoint, no native-green reuse).
-    pal <- leaflet::colorNumeric(if (metric == "pct_introduced") c("#F3E9D8","#D9A066","#B85C38") else "viridis", domain = dom)
+    if (metric == "pct_introduced") {
+      # % introduced is a BOUNDED one-ended magnitude (0-100), not heavy-tailed
+      # and not diverging -> a linear SEQUENTIAL single-hue sand->clay ramp is
+      # honest (no false midpoint, no native-green reuse). Bounded metrics stay
+      # linear per the suite colour-scale standard.
+      dom <- if (diff(range(val, na.rm = TRUE)) > 0) range(val, na.rm = TRUE) else c(val[1] - 1, val[1] + 1)
+      pal <- leaflet::colorNumeric(c("#F3E9D8","#D9A066","#B85C38"), domain = dom)
+    } else {
+      # plot richness is an UNBOUNDED count: a single high-diversity plot can wash
+      # the rest of the site out under a raw colorNumeric. Bin on quantile breaks
+      # (~5-7 bins) so each colour step carries a comparable share of plots, with a
+      # clean all-equal fallback. Matches the suite colour-scale standard.
+      uv <- sort(unique(val[is.finite(val)]))
+      pal <- if (length(uv) >= 5) {
+        brks <- unique(stats::quantile(val, probs = seq(0, 1, length.out = 6), na.rm = TRUE, names = FALSE))
+        if (length(brks) >= 3) leaflet::colorBin("viridis", domain = val, bins = brks, na.color = "#cccccc")
+        else leaflet::colorNumeric("viridis", domain = range(val, na.rm = TRUE))
+      } else if (length(uv) >= 2) {
+        leaflet::colorNumeric("viridis", domain = range(val, na.rm = TRUE))
+      } else {
+        leaflet::colorNumeric("viridis", domain = c(uv[1] - 1, uv[1] + 1))
+      }
+    }
     bm <- input$view %||% "Esri.WorldImagery"
     rr <- range(lb$richness, na.rm = TRUE)
     lb$radius <- if (diff(rr) > 0) 6 + 14 * (lb$richness - rr[1]) / diff(rr) else 11
@@ -1110,13 +1194,24 @@ server <- function(input, output, session) {
     tagList(nm_ui, cs_ui)
   })
 
-  # downloads — per bucket + the combined report
+  # downloads — per bucket + the combined report.
+  # Each standalone QC bucket ships as a ZIP that bundles its CSV WITH a
+  # data_dictionary.csv built from plant_codebook() over the EXACT frame
+  # emitted, so the columns can never drift from their documentation.
   .evo_dl <- function(getdf, tag) downloadHandler(
-    filename = function() sprintf("NEON-PlantDiversity_%s_%s_%s.csv", rv$site %||% "site", tag, format(Sys.Date(), "%Y%m%d")),
+    filename = function() sprintf("NEON-PlantDiversity_%s_%s_%s.zip", rv$site %||% "site", tag, format(Sys.Date(), "%Y%m%d")),
     content = function(file) {
       ev <- evo(); df <- if (is.null(ev)) data.frame() else getdf(ev)
-      utils::write.csv(df %||% data.frame(), file, row.names = FALSE, na = "")
-    }, contentType = "text/csv")
+      df <- df %||% data.frame()
+      tmp <- tempfile("evozip"); dir.create(tmp)
+      csv_name <- sprintf("%s.csv", tag)
+      utils::write.csv(df, file.path(tmp, csv_name), row.names = FALSE, na = "")
+      cb <- plant_codebook(stats::setNames(list(df), csv_name))
+      utils::write.csv(cb %||% data.frame(), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
+      fs <- list.files(tmp, full.names = TRUE)
+      owd <- setwd(tmp); on.exit(setwd(owd), add = TRUE)
+      utils::zip(zipfile = file, files = basename(fs), flags = "-q")
+    }, contentType = "application/zip")
   output$evoCsvA <- .evo_dl(function(ev) {
     A <- ev$A; if (is.null(A) || !nrow(A)) return(data.frame())
     data.frame(symbol = A$plantsym, scientificName = A$sciname, commonName = A$comname,
@@ -1132,14 +1227,20 @@ server <- function(input, output, session) {
     data.frame(symbol = C$sym, scientificName = C$scientificName, family = C$family,
       nativity = C$nativity, mean_cover_pct = C$mean_cover, n_plots = C$n_plots) }, "observed-not-expected")
   output$evoReport <- downloadHandler(
-    filename = function() sprintf("NEON-PlantDiversity_%s_completeness-report_%s.csv", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    filename = function() sprintf("NEON-PlantDiversity_%s_completeness-report_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
     content = function(file) {
       ev <- evo(); tbl <- qc_report_table(ev, site = rv$site %||% NA_character_)
       if (is.null(tbl) || !nrow(tbl))
         tbl <- data.frame(note = sprintf("No NRCS ecological-site reference list is bundled for %s; completeness comparison unavailable.",
                                           rv$site %||% "this site"))
-      utils::write.csv(tbl, file, row.names = FALSE, na = "")
-    }, contentType = "text/csv")
+      tmp <- tempfile("evorep"); dir.create(tmp)
+      utils::write.csv(tbl, file.path(tmp, "completeness-report.csv"), row.names = FALSE, na = "")
+      cb <- plant_codebook(list("completeness-report.csv" = tbl))
+      utils::write.csv(cb %||% data.frame(), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
+      fs <- list.files(tmp, full.names = TRUE)
+      owd <- setwd(tmp); on.exit(setwd(owd), add = TRUE)
+      utils::zip(zipfile = file, files = basename(fs), flags = "-q")
+    }, contentType = "application/zip")
 
   # ---- ABOUT --------------------------------------------------------------
   output$aboutPanel <- renderUI({
@@ -1165,6 +1266,12 @@ server <- function(input, output, session) {
       div(class = "about-card", h4(bs_icon("diagram-3"), " A NEONize sibling"),
         p("Built to the NEON Small Mammal Tracker quality bar (same Desert Data Labs design system, bundling, and pin-card interaction), but the analyses are plant-native (there are no individuals to track in cover data). See the NEONize playbook."),
         p(bs_icon("envelope"), " ", tags$a(href = "mailto:desertdatalabs@gmail.com", "desertdatalabs@gmail.com"),
-          " · ", tags$a(href = "https://data.neonscience.org/data-products/DP1.10058.001", target = "_blank", "NEON data product"))))
+          " · ", tags$a(href = "https://data.neonscience.org/data-products/DP1.10058.001", target = "_blank", "NEON data product"))),
+      div(class = "about-card sib-card", h4(bs_icon("compass"), " Explore the NEON series"),
+        p("This is one of a family of small explorers, each built on a different NEON data product. Same look and feel, same honest-numbers approach, different living thing."),
+        div(class = "sib-grid", lapply(.SIBLINGS, function(s)
+          tags$a(class = "sib-link", href = s$url, target = "_blank", rel = "noopener",
+            tags$span(class = "sib-name", s$name),
+            tags$span(class = "sib-prod", s$prod))))))
   })
 }

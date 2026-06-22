@@ -210,7 +210,7 @@ ui <- bslib::page_sidebar(
               p("Species the NEON crews recorded that are also on the NRCS reference list for this ecological site, the overlap that confirms the site is what the soil survey says it is."),
               p("Sorted by the reference community's expected production (the species you'd most expect to dominate float to the top)."))),
           div(class = "evo-dl-row",
-            downloadButton("evoCsvA", "Download (CSV)", class = "smt-clear-btn")),
+            downloadButton("evoCsvA", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableA", width = "100%"))),
 
         # C — the review lane (clay)
@@ -223,7 +223,7 @@ ui <- bslib::page_sidebar(
                 tags$li(HTML("<b>Native, not in reference</b>, most often just a real associate the reference list didn't enumerate (these lists are representative, not exhaustive); sometimes a range edge, a finer ID than the soil survey used, or (rarely) a mis-ID."))),
               p("Labelled “review”, never “error”. Gaps in the reference list are real and common."))),
           div(class = "evo-dl-row",
-            downloadButton("evoCsvC", "Download (CSV)", class = "smt-clear-btn")),
+            downloadButton("evoCsvC", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableC", width = "100%"))),
 
         # B — completeness (neutral, never red)
@@ -236,7 +236,7 @@ ui <- bslib::page_sidebar(
           div(class = "evo-subhead", bs_icon("info-circle"),
             "Not a problem list. NEON samples ~400 m² per plot, so these are mostly species just outside the sampled patch."),
           div(class = "evo-dl-row",
-            downloadButton("evoCsvB", "Download (CSV)", class = "smt-clear-btn")),
+            downloadButton("evoCsvB", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableB", width = "100%"))),
 
         # data-quality cross-checks (the true-QC lane) — needs only occ, so it stays
@@ -249,7 +249,7 @@ ui <- bslib::page_sidebar(
                 tags$li(HTML("<b>Nativity disagreement</b>, NEON's native/introduced label differs from USDA PLANTS for the same species.")),
                 tags$li(HTML("<b>Implausible cover</b>, total cover in one 1 m² quadrat far exceeding what overlapping canopy layers explain (an entry-error backstop)."))))),
           div(class = "evo-dl-row",
-            downloadButton("evoReport", tagList(bs_icon("download"), " Full report (CSV)"), class = "smt-snap-btn")),
+            downloadButton("evoReport", tagList(bs_icon("download"), " Full report (CSV + codebook ZIP)"), class = "smt-snap-btn")),
           uiOutput("evoFlags"))),
 
       nav_panel(title = tagList(bs_icon("cloud-sun"), " Environment"), value = "environment",
@@ -284,7 +284,11 @@ ui <- bslib::page_sidebar(
             spin(plotlyOutput("envDriverRank", height = "360px")))),
         card(card_head("calendar3", "The two series over time",
             info_pop("Context", p("The plant signal (left axis) and the selected driver (right axis) across the years, the raw movement behind the correlation."))),
-          spin(plotlyOutput("envTrend", height = "300px")))),
+          spin(plotlyOutput("envTrend", height = "300px"))),
+        div(class = "env-export-row",
+          tags$span(class = "env-export-lab", bs_icon("download"), " Take the numbers with you:"),
+          downloadButton("envSeriesCsv", "Matched series (CSV)", class = "smt-clear-btn"),
+          downloadButton("envRankCsv", "Driver rank + permutation p (CSV)", class = "smt-clear-btn"))),
 
       nav_panel(title = tagList(bs_icon("bullseye"), " Diversity Lab"), value = "lab",
         div(class = "tab-head",

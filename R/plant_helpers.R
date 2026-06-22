@@ -426,7 +426,26 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   symbol               = "USDA PLANTS symbol",
   reference_production = "NRCS reference-community expected production for the species",
   is_dominant          = "TRUE if in the top 50% of reference production (app-defined dominance convention)",
-  observed_cover       = "mean 1 m^2 observed cover (relative index; NA where not observed)")
+  observed_cover       = "mean 1 m^2 observed cover (relative index; NA where not observed)",
+  reference_role       = "dominant (top 50% of reference production) or associated",
+  reference_production = "NRCS reference-community expected production (air-dry lb/ac at normal precip; NA for forest sites)",
+  observed_cover_pct   = "mean 1 m^2 observed cover, percent (relative index)",
+  n_plots              = "number of plots the species was observed in",
+  common_name          = "USDA PLANTS common name",
+  commonName           = "USDA PLANTS common name",
+  mean_cover_pct       = "mean 1 m^2 cover, percent (relative index)",
+  # environment matched-series export (env_matched.csv)
+  plant_metric         = "the chosen annual plant signal (richness / % introduced cover / total cover)",
+  metric_value         = "the plant signal value for that survey year",
+  driver               = "co-located NEON climate/phenology driver (annual value)",
+  driver_value         = "the driver's annual value for the matched year",
+  driver_label         = "human-readable driver name",
+  lag_years            = "lead in years: driver from year (Y - lag) matched to response year Y",
+  # environment driver-rank export (env_driver_rank.csv)
+  spearman_r           = "Spearman rank-correlation of the plant signal vs this driver at its best lag",
+  best_lag_years       = "the lag (0-2 yr) that maximised |r| for this driver",
+  matched_years        = "number of year-matched points behind the correlation",
+  permutation_p        = "permutation p over the full driver x lag search (fraction of shuffles whose best |r| beats the observed); honest p for a max-over-search statistic")
 
 # r class -> short codebook type
 .plant_col_type <- function(x) {

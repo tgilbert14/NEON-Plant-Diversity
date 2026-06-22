@@ -24,8 +24,17 @@ appFiles <- c(
   Sys.glob("data/*.rds"),                                       # precomputed indexes
   list.files("data/sites", pattern = "\\.rds$", full.names = TRUE),
   list.files("data/env",   pattern = "\\.rds$", full.names = TRUE),   # env overlays
+  # RUNTIME-CRITICAL reference data the app loads on the Expected-vs-Observed
+  # lens (the EcoPlot QC). The top-level data/*.rds glob does NOT reach these
+  # subfolders, so list them explicitly or a CI regen silently drops them and
+  # the QC buckets go dark in production.
+  list.files("data/expected", pattern = "\\.rds$", full.names = TRUE),   # per-site NRCS reference lists + completeness index + provenance
+  "data/authority/plants_lookup.rds",                                    # USDA PLANTS nativity + NEON synonym authority
   list.files("data-sample", pattern = "\\.rds$", full.names = TRUE)
 )
+# NOTE: data/authority/_profile_cache.rds is a BUILD-TIME artifact only (used by
+# scripts/build_plant_authority.R); the running app never reads it, so it stays
+# out of the bundle deliberately.
 appFiles <- unique(appFiles[file.exists(appFiles)])
 
 cat(sprintf("Writing manifest for %d files (%d site bundles)...\n",
@@ -37,5 +46,29 @@ m <- readLines("manifest.json", warn = FALSE)
 pkgs <- gsub('.*"([^"]+)": \\{', "\\1",
              grep('^\\s*"[A-Za-z0-9.]+": \\{\\s*$', m, value = TRUE))
 cat(sprintf("manifest.json written: %d packages.\n", sum(grepl('"Source"', m))))
-if (any(grepl("neonUtilities", m))) cat("WARNING: neonUtilities leaked into the manifest!\n") else
-  cat("OK: neonUtilities is NOT in the manifest (lean bundle-only build).\n")
+
+# HARD GATE: a leaked NEON-pull dependency must NEVER commit silently. The deploy
+# is bundle-only + lean; neonUtilities is referenced by a computed name so the
+# scanner can't pin it, but a stray library() or a future edit could re-leak it
+# (or arrow, which only the live fetch needs). Parse the written manifest's
+# package KEYS and stop() non-zero if any appear.
+#
+# neonUtilities + arrow are ALWAYS banned (their presence means the heavy live-
+# pull stack leaked into a deploy that is meant to run on bundles only).
+#
+# data.table is conditionally banned: plotly *Imports* it, so a plotly app
+# legitimately carries it (the suite's Mosquito-Pulse reference manifest does
+# too). It is only a leak signal when NO runtime package explains it — i.e. when
+# plotly is absent — which would mean it came in via the NEON fetch chain.
+mj   <- tryCatch(jsonlite::fromJSON("manifest.json", simplifyVector = FALSE),
+                 error = function(e) NULL)
+keys <- if (!is.null(mj) && !is.null(mj$packages)) names(mj$packages) else character(0)
+
+banned <- intersect(c("neonUtilities", "arrow"), keys)
+if ("data.table" %in% keys && !("plotly" %in% keys))
+  banned <- c(banned, "data.table")   # unexplained by plotly -> a real pull leak
+
+if (length(banned))
+  stop(sprintf("LEAKED manifest: NEON-pull package(s) present as keys: %s. Refusing to commit a non-lean manifest.",
+               paste(banned, collapse = ", ")), call. = FALSE)
+cat("OK: no leaked NEON-pull deps in the manifest (neonUtilities/arrow absent; data.table only via plotly). Lean bundle-only build.\n")

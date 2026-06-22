@@ -10,7 +10,7 @@
 :root {                                  /* light "botanical-day" (default) */
   --pine: #2f9a4f;   --pine2: #1f6f37;
   --terra: #7fae2f;  --gold: #c79a1c;  --gold-ink: #8a6c14;
-  --sky: #2f8fc4;    --green: #3f9a52;
+  --sky: #2f8fc4;    --sky2: #1f6f9c;   --green: #3f9a52;
   --cardinal: #e0685a;
   --accent: #e0685a;
   --native: #2E7D32; --introduced: #B85C38; --unknown: #9AA39A;
@@ -30,7 +30,7 @@
 [data-bs-theme="dark"] {                  /* botanical-NIGHT — leaf/chartreuse/bloom on a dark sky */
   --pine: #5fd16a;   --pine2: #9be67a;
   --terra: #fb8a7e;  --gold: #b4d84a;  --gold-ink: #b4d84a;
-  --sky: #43b8e8;    --green: #5fd16a;
+  --sky: #43b8e8;    --sky2: #7cc9ed;   --green: #5fd16a;
   --cardinal: #fb8a7e;
   --accent: #fb8a7e;
   --native: #5FB573; --introduced: #E59470; --unknown: #8C9A8C;
@@ -110,6 +110,9 @@ body {
 [data-bs-theme="dark"] .env-pop-bar { background: linear-gradient(180deg, #1b2942 0%, var(--paper) 100%); }
 @media (max-width: 560px) { .env-pop-row { gap: 6px; } }
 .env-lag-hint { font-size: 10.5px; color: var(--muted); line-height: 1.35; margin: -6px 0 4px; }
+.env-export-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 2px 2px; }
+.env-export-lab { font-size: 12.5px; font-weight: 600; color: var(--pine2); }
+.env-export-lab .bi { vertical-align: -2px; margin-right: 3px; }
 /* pointer from the driver-ranking card down to the env picker + trend overlay */
 .env-pick-hint { font-size: 12.5px; color: var(--pine); font-weight: 600; text-align: center;
   margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--line); }
@@ -301,7 +304,7 @@ body {
 .stat-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-top: 3px; font-weight: 600; }
 .stat-q { font-size: 10px; margin-left: 4px; opacity: .5; vertical-align: 1px; color: var(--accent); }
 .stat-card:hover .stat-q { opacity: 1; }
-.stat-sub { font-size: 11px; color: var(--pine); }
+.stat-sub { font-size: 11px; color: var(--pine2); }  /* darker leaf -> AA on light paper */
 
 /* ---- cards (Girth recipe) --------------------------------------------- */
 .card, .bslib-card {
@@ -311,7 +314,9 @@ body {
 }
 .card:hover { box-shadow: 0 6px 20px -6px var(--shadow) !important; }
 .card-header {
-  background: var(--pine) !important; color: #fff !important; font-weight: 700;
+  /* --pine2 (darker leaf) so white header text clears WCAG AA: #1f6f37 on
+     white is ~5.8:1, vs --pine #2f9a4f at only ~3.6:1. Same green identity. */
+  background: var(--pine2) !important; color: #fff !important; font-weight: 700;
   border-bottom: none !important; font-size: 14px; letter-spacing: .2px;
 }
 .card-header .bi { color: #fff; }
@@ -479,7 +484,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .pm-pop-s { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
 .pm-pop-n { font-size: 12px; color: var(--ink); margin-top: 5px; }
 .pm-pop-sp { font-size: 12px; color: var(--pine); margin-top: 2px; }
-.pm-pop-hint { font-size: 11px; font-weight: 700; color: var(--sky); margin-top: 6px;
+.pm-pop-hint { font-size: 11px; font-weight: 700; color: var(--sky2); margin-top: 6px;
   text-transform: uppercase; letter-spacing: .4px; }
 
 /* ---- site-choice popup (tap a dot -> Explore | About) ----------------- */
@@ -520,7 +525,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .picker-actions { display: flex; flex-wrap: wrap; justify-content: center;
   gap: 12px; margin: 16px 0 6px; }
 .picker-tour { text-align: center; margin: 2px 0 4px; }
-.picker-tour a { font-size: 12.5px; font-weight: 600; color: var(--sky); text-decoration: none; }
+.picker-tour a { font-size: 12.5px; font-weight: 600; color: var(--sky2); text-decoration: none; }
 .picker-tour a:hover { color: var(--pine); text-decoration: underline; }
 
 /* driver.js popover -> DDL house style */
@@ -695,7 +700,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .tc-foot-app { font-weight: 700; }
 
 /* "report card" link in the hero band */
-.hero-report { font-size: 12.5px; font-weight: 700; color: var(--sky); text-decoration: none;
+.hero-report { font-size: 12.5px; font-weight: 700; color: var(--sky2); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
 .hero-report:hover { color: var(--pine); text-decoration: underline; }
 
@@ -720,7 +725,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 }
 .ds-left { display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; min-width: 130px; border-right: 1px solid var(--line); padding-right: 20px; }
 .ds-emoji { font-size: 64px; animation: float 4s ease-in-out infinite; }
-.ds-chonk { font-size: 12px; color: var(--pine); font-weight: 700; }
+.ds-chonk { font-size: 12px; color: var(--pine2); font-weight: 700; }  /* darker leaf -> AA */
 .ds-main { flex: 1; }
 .ds-id { font-weight: 800; font-size: 32px; color: var(--ink); line-height: 1.1; }
 .ds-nick { font-size: 14px; color: var(--muted); font-weight: 400; margin-left: 10px; text-transform: lowercase; }
@@ -760,7 +765,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .insights-list { list-style: none; padding: 0; margin: 0; }
 .insights-list li { font-size: 15px; font-weight: 450; color: var(--ink); line-height: 1.6; padding: 9px 0 9px 26px; position: relative; border-bottom: 1px dashed var(--line); }
 .insights-list li:last-child { border-bottom: none; }
-.insights-list li::before { content: "\1F43E"; position: absolute; left: 0; top: 8px; font-size: 13px; }
+.insights-list li::before { content: "\1F33F"; position: absolute; left: 0; top: 8px; font-size: 13px; }  /* seedling, not the Small-Mammal paw-print */
 .insights-list li b { color: var(--pine); }
 .insights-list li i { color: var(--pine); font-style: italic; }
 
@@ -814,6 +819,16 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .about-card .caveat { color: var(--pine); font-size: 12.5px; }
 .about-card code { color: var(--pine); background: var(--bg); padding: 1px 5px; border-radius: 5px; }
 .about-card a { color: var(--pine); font-weight: 600; }
+
+/* the in-app NEON-series sibling grid (About panel) */
+.sib-card { grid-column: 1 / -1; }
+.sib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 6px; }
+.sib-link { display: flex; flex-direction: column; gap: 1px; padding: 9px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); text-decoration: none; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.sib-link:hover { border-color: var(--pine); transform: translateY(-2px); box-shadow: 0 6px 16px -8px var(--shadow); }
+.sib-name { font-weight: 700; font-size: 13.5px; color: var(--pine2); }
+.sib-prod { font-size: 11px; color: var(--muted); }
+[data-bs-theme="dark"] .sib-name { color: #9be67a; }
 
 /* ---- overview: meet the locals ---------------------------------------- */
 .section-title { font-weight: 800; color: var(--pine); font-size: 18px; margin: 20px 4px 12px; display: flex; align-items: center; gap: 8px; }

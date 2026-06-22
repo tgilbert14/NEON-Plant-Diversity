@@ -161,3 +161,17 @@ card_head <- function(icon, title, ...)
 fmt_int <- function(x) format(round(as.numeric(x)), big.mark = ",", trim = TRUE)
 fmt_range <- function(a, b) if (is.null(a) || is.null(b) || is.na(a) || is.na(b)) "" else
   sprintf("%s–%s", a, b)
+
+# ---- the NEON-series sibling registry (in-app cross-promo) ------------------
+# Mirrors the constellation in docs/index.html so the About panel can link the
+# WHOLE suite. Landing covers (github.io) front each live app; kept here as a
+# plain list so the block can't drift from the chrome.
+.SIBLINGS <- list(
+  list(name = "Driver Cascade",   prod = "cross-product synthesis", url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
+  list(name = "Small Mammals",    prod = "DP1.10072.001",           url = "https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/"),
+  list(name = "Breeding Birds",   prod = "DP1.10003.001",           url = "https://tgilbert14.github.io/NEON-Breeding-Birds/"),
+  list(name = "Ground Beetles",   prod = "DP1.10022.001",           url = "https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/"),
+  list(name = "Plant Phenology",  prod = "DP1.10055.001",           url = "https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/"),
+  list(name = "Veg Structure",    prod = "DP1.10098.001",           url = "https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"),
+  list(name = "Water Chemistry",  prod = "DP1.20093.001",           url = "https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"),
+  list(name = "Mosquito Pulse",   prod = "DP1.10043.001",           url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/"))
