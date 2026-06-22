@@ -172,7 +172,7 @@
     .frung + .frung { margin-top:10px }
     .frung::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.0;
       background:linear-gradient(100deg, transparent, rgba(var(--lrgb),.16), transparent); }
-    .frung.pip-on::before { animation: pip 2.4s ease-in-out; }     /* energy pulse sweeps each rung in turn */
+    .frung.pip-on::before { animation: pip 3.2s ease-in-out; }     /* energy pulse sweeps each rung in turn (slowed) */
     @keyframes pip { 0%{opacity:0; transform:translateX(-30%)} 40%{opacity:1} 100%{opacity:0; transform:translateX(30%)} }
     .frung .fmark { width:34px; height:34px; flex:0 0 auto; border-radius:9px; position:relative;
       background:rgba(var(--lrgb),.16); border:1px solid rgba(var(--lrgb),.5) }
@@ -180,10 +180,14 @@
       background:var(--lc); box-shadow:0 0 12px var(--lc) }
     .frung .ftxt b { font-weight:800; font-size:1rem } .frung .ftxt span { color:var(--dim); font-size:.86rem }
     .frung.r1 { --lc:var(--clim); --lrgb:70,176,106 }
-    .frung.r2 { --lc:var(--phen); --lrgb:127,208,106; margin-left:14px }
-    .frung.r3 { --lc:var(--prod); --lrgb:155,230,122; margin-left:28px }
-    .frung.r4 { --lc:var(--cons); --lrgb:180,216,74; margin-left:42px }
-    .farrow { color:rgba(255,255,255,.32); text-align:center; margin:2px 0 2px 17px; font-size:1.05rem }
+    .frung.r2 { --lc:var(--phen); --lrgb:127,208,106 }
+    .frung.r3 { --lc:var(--prod); --lrgb:155,230,122 }
+    .frung.r4 { --lc:var(--cons); --lrgb:180,216,74 }
+    .frung.r5 { --lc:var(--phen); --lrgb:127,208,106 }
+    .frung.r6 { --lc:var(--clim); --lrgb:70,176,106 }
+    .frung.r7 { --lc:var(--cons); --lrgb:180,216,74 }
+    .cascade-band .hl-head { margin-top:30px }
+    .lead a { color:var(--bright); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1px }
 
     /* ---------- stats + about ---------- */
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:26px 0 0; position:relative; z-index:2 }
@@ -308,12 +312,7 @@
 
       <div class="eyebrow">Part of the NEON Explorer Suite · Plants</div>
       <h1>NEON Plant Diversity</h1>
-      <p class="lead">See which plants grow at research sites all over the country, and how varied each
-        place is. <b>NEON</b>, the National Ecological Observatory Network, is a set of research sites
-        across the United States, funded by the National Science Foundation, that measure plants, animals,
-        water, and climate the same way everywhere, year after year. This app lets you pick a site
-        and see its plants: how many species live there, how much is native versus introduced, and how
-        plant life changes from place to place.</p>
+      <p class="lead">A Shiny web app for exploring the <a href="https://www.neonscience.org/" target="_blank" rel="noopener">National Ecological Observatory Network</a>'s plant presence and percent cover data. It turns crews walking marked plots at 46 field sites, from Arctic tundra to Puerto Rico dry forest, into maps, diversity profiles, and per-plot cards, with cover shown honestly as a field estimate (a rough sense of what is common), not an exact area.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/">
@@ -349,19 +348,19 @@
   <!-- how the survey reads: plot survey -> identify -> richness -> compare -->
   <section class="cascade-band">
     <div class="wrap">
-      <span class="kick">What this shows you</span>
-      <h2>From a field survey to a picture of plant life.</h2>
-      <p>Every number here starts with people in a field. Crews walk marked plots at each site and write
-        down every plant they find. The app turns those notes into something you can read at a glance, on
-        real sites, one step at a time.</p>
+      <span class="kick">What it does</span>
+      <p>The app opens to a national map of NEON sites. Tap one to dive into its plants, or step back and compare the whole network. Each site loads instantly from a per-site data bundle that ships with the app (no network round-trip). From there it shows what grows there and how much ground it covers, counts how many species really use the site (beyond what one survey catches), tracks native versus introduced cover, plots every plot by its richness and invasion, and profiles any single plot on a downloadable card.</p>
+      <p>It is built for two audiences: anyone curious about how NEON surveys plants, and new field technicians getting to know the species at their site.</p>
+
+      <h2 class="hl-head">Highlights</h2>
       <div class="flow" data-flow>
-        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Survey the plots</b> &middot; <span>crews check marked squares of ground, from 1 up to 400 square meters</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Name the plants</b> &middot; <span>each species, whether it is native or introduced, and how much ground it covers</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Count the variety</b> &middot; <span>how many species a site holds, plus an estimate of the ones the crew likely missed</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare places</b> &middot; <span>site against site, and how much pressure introduced plants are putting on natives</span></span></div>
+        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Select-a-site map</b> &middot; <span>A national map of all 46 bundled terrestrial sites. The demo opens Santa Rita (SRER), a Sonoran desert grassland with a textbook Lehmann lovegrass invasion.</span></span></div>
+        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Overview: the story of a site</b> &middot; <span>Cover composition (native versus introduced), an auto-written plain-English summary, and the ground itself: soil, litter, and rock.</span></span></div>
+        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Diversity</b> &middot; <span>A nested species-area curve (1 to 10 to 100 to 400 square meters), the Hill diversity profile, and a Chao2 estimate of how many species the survey likely missed.</span></span></div>
+        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Native vs Invasive</b> &middot; <span>Introduced-cover share over time, an invasive watchlist, and an Invasion-Pressure index for introduced species already showing up at the smallest 1 square meter scale.</span></span></div>
+        <div class="frung r5"><span class="fmark"></span><span class="ftxt"><b>Diversity Lab</b> &middot; <span>Every plot as a dot, richness against percent introduced cover, with tap-to-pin plot cards, named quadrants, and export-with-pins.</span></span></div>
+        <div class="frung r6"><span class="fmark"></span><span class="ftxt"><b>Plot Profile cards</b> &middot; <span>A downloadable card (PNG and CSV) for any plot: richness, the native and introduced split, a species-area sparkline, and its top plants by cover.</span></span></div>
+        <div class="frung r7"><span class="fmark"></span><span class="ftxt"><b>Map</b> &middot; <span>Plot markers sized by richness and coloured by richness or percent introduced, so you can see how a site varies across its ground.</span></span></div>
       </div>
 
       <div class="stats">
@@ -478,7 +477,7 @@
         // force reflow so the animation restarts each cycle
         void el.offsetWidth; el.classList.add("pip-on");
         i++;
-      }, 900);
+      }, 1800);
     })();
   </script>
   <script>
