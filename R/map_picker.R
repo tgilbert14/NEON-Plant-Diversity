@@ -32,23 +32,35 @@ mapPickerUI <- function(id, height = "560px", spinner = "#2f7fb5") {
 # radius_metric : column name driving dot size
 # color_fn  : function(site_table) -> vector of fill colours (length = nrow)
 # label_fn  : function(one-row df) -> HTML string for the hover label
+# popup_fn  : OPTIONAL function(one-row df) -> HTML string for a CLICK popup. When
+#   supplied, a marker click OPENS this popup (an Explore | About choice card)
+#   instead of auto-selecting the site — the load then comes from the popup's
+#   Explore button (which sets input$siteExplore). picked() is NOT fired in that
+#   mode, so a tap can't silently load behind the popup.
 # RETURNS a reactiveVal of the tapped site code. The CALLER observes it and loads
 # the site IN THE MAIN SERVER — do NOT load inside the module: shinyjs::hide("splash")
 # called from a module session namespaces the id ("picker-splash") and silently no-ops.
-mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn) {
+mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, popup_fn = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     output$map <- leaflet::renderLeaflet({
       st <- site_table[is.finite(site_table$lat) & is.finite(site_table$lng), , drop = FALSE]
       shiny::validate(shiny::need(nrow(st) > 0,
         "The national site map couldn't load its data. Use the site list below, or the demo."))
       labs <- lapply(seq_len(nrow(st)), function(i) htmltools::HTML(label_fn(st[i, , drop = FALSE])))
+      pops <- if (!is.null(popup_fn))
+        vapply(seq_len(nrow(st)), function(i) as.character(popup_fn(st[i, , drop = FALSE])), character(1))
+        else NULL
+      pop_opts <- if (!is.null(popup_fn)) leaflet::popupOptions(maxWidth = 300, minWidth = 230,
+        autoPan = TRUE, autoPanPadding = c(40, 55), keepInView = TRUE,
+        closeButton = TRUE, closeOnClick = FALSE, className = "pm-pop-card") else NULL
       leaflet::leaflet(st, options = leaflet::leafletOptions(minZoom = 2, worldCopyJump = TRUE)) %>%
         leaflet::addProviderTiles("CartoDB.Positron", options = leaflet::providerTileOptions(noWrap = TRUE)) %>%
         leaflet::setView(lng = -96, lat = 41, zoom = 4) %>%
         leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, layerId = ~site,
           radius = picker_radius(st[[radius_metric]]), stroke = TRUE, color = "#ffffff",
           weight = 1.4, opacity = 1, fillColor = color_fn(st), fillOpacity = 0.85,
-          label = labs, labelOptions = leaflet::labelOptions(direction = "auto", textsize = "13px",
+          label = labs, popup = pops, popupOptions = pop_opts,
+          labelOptions = leaflet::labelOptions(direction = "auto", textsize = "13px",
             style = list("font-family" = "Rubik, sans-serif", "box-shadow" = "0 3px 12px rgba(0,0,0,.18)")),
           options = leaflet::markerOptions(riseOnHover = TRUE)) %>%
         # Self-fix sizing: the splash leaflet binds before its container has a width
@@ -65,12 +77,18 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn) {
     })
     # keep the map bound after the splash hides, so leafletProxy stays valid
     shiny::outputOptions(output, "map", suspendWhenHidden = FALSE)
-    # expose the tapped site; the main server observes this and loads it
+    # expose the tapped site; the main server observes this and loads it. BUT when
+    # popup_fn is supplied the click OPENS the popup (the user chooses Explore /
+    # About there), so we must NOT also fire picked() — otherwise the tap would
+    # silently load the site behind the popup. The load then comes from the
+    # popup's Explore button via input$siteExplore in the main server.
     picked <- shiny::reactiveVal(NULL)
-    shiny::observeEvent(input$map_marker_click, {
-      s <- input$map_marker_click$id
-      if (!is.null(s) && nzchar(s)) picked(s)
-    }, ignoreInit = TRUE)
+    if (is.null(popup_fn)) {
+      shiny::observeEvent(input$map_marker_click, {
+        s <- input$map_marker_click$id
+        if (!is.null(s) && nzchar(s)) picked(s)
+      }, ignoreInit = TRUE)
+    }
     picked
   })
 }

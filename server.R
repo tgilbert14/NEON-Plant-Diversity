@@ -37,8 +37,12 @@ server <- function(input, output, session) {
   ctx_for <- function() rv$ctx %||% ""
 
   # ---- core reactive state -----------------------------------------------
+  # pendingSite carries a site picked on the map (or in the browse list) THROUGH
+  # the state cascade so the sidebar dropdowns land on THAT site instead of
+  # snapping back to the first site in the newly selected state.
   rv <- reactiveValues(occ = NULL, snap = NULL, ground = NULL, lb = NULL, pal = NULL,
-                       label = NULL, site = NULL, plot = NULL, ctx = NULL, is_demo = FALSE)
+                       label = NULL, site = NULL, plot = NULL, ctx = NULL, is_demo = FALSE,
+                       pendingSite = NULL)
 
   # ---- pickers ------------------------------------------------------------
   observe({
@@ -46,9 +50,16 @@ server <- function(input, output, session) {
     sel <- if ("AZ" %in% ch) "AZ" else NULL
     updateSelectInput(session, "stateSel", choices = ch, selected = sel)
   })
+  # When the state changes, repopulate the site dropdown. Honour a pendingSite
+  # (set by a map pick or a browse-list pick) so the sidebar reflects the site the
+  # user chose; otherwise fall back to the first site in the state.
   observeEvent(input$stateSel, {
-    updateSelectInput(session, "site", choices = plant_sites_in_state(input$stateSel))
-  }, ignoreInit = FALSE)
+    sites <- plant_sites_in_state(input$stateSel)
+    sel <- if (!is.null(rv$pendingSite) && rv$pendingSite %in% sites) rv$pendingSite
+           else if (length(sites)) sites[[1]] else NULL
+    rv$pendingSite <- NULL
+    updateSelectInput(session, "site", choices = sites, selected = sel)
+  }, ignoreNULL = TRUE)
 
   output$siteBio <- renderUI({
     req(input$site); b <- site_bio(input$site); if (is.null(b)) return(NULL)
@@ -118,29 +129,126 @@ server <- function(input, output, session) {
     row <- site_table[site_table$site == site, ]
     ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site))
   }
+  # Picking a site somewhere OTHER than the sidebar (the map's Explore button, or
+  # the browse list): first sync the sidebar dropdowns to THAT site (set
+  # pendingSite, then cascade the state selector so the site dropdown lands on it),
+  # then load it. The stateSel observer updates the dropdown choices only — it does
+  # not load — so there is no double load.
+  load_site_full <- function(site) {
+    if (is.null(site) || !nzchar(site)) { session$sendCustomMessage("loadDone", list()); return() }
+    m <- site_table[site_table$site == site, ]
+    if (nrow(m)) {
+      rv$pendingSite <- site
+      if (identical(input$stateSel, m$state[1])) {
+        rv$pendingSite <- NULL
+        updateSelectInput(session, "site", selected = site)
+      } else {
+        updateSelectInput(session, "stateSel", selected = m$state[1])
+      }
+    }
+    load_site(site)
+  }
   observeEvent(input$loadBtn, load_site(input$site))
-  observeEvent(input$pickSite, load_site(input$pickSite))
+  observeEvent(input$pickSite, load_site_full(input$pickSite))
   observeEvent(input$demoBtn,  ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
   observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
 
+  # The map dot popup: a clear two-choice card (Explore loads the site, About
+  # opens an instant info modal). Mirrors the flagship Small Mammal / Ground Beetle
+  # picker. Explore raises the loading overlay client-side, then fires siteExplore;
+  # About fires siteInfo (no load). Both run the SAME load path the sidebar uses.
+  site_popup_html <- function(row) {
+    code <- row$site[1]
+    nm   <- row$name[1] %||% code
+    where <- paste(stats::na.omit(c(as.character(row$state[1]),
+      if (!is.na(row$domain[1])) paste("NEON", row$domain[1]) else NA)), collapse = " · ")
+    pir <- if (is.finite(row$pct_introduced[1])) paste0(round(row$pct_introduced[1]), "%") else "n/a"
+    fam <- if (!is.na(row$dominant_family[1]) && nzchar(as.character(row$dominant_family[1])))
+      sprintf("<div class='pm-pop-sp'>Top family: %s</div>", row$dominant_family[1]) else ""
+    htmltools::HTML(sprintf(
+      "<div class='pm-pop site-pop'>
+         <div class='pm-pop-t'>\U0001F33F %s <span class='sp-code'>(%s)</span></div>
+         <div class='pm-pop-s'>%s</div>
+         <div class='pm-pop-n'><b>%s</b> species &middot; <b>%s</b> introduced cover</div>
+         %s
+         <div class='sp-actions'>
+           <button type='button' class='sp-btn sp-go' onclick=\"smtLoadStart('%s · loading');Shiny.setInputValue('siteExplore','%s',{priority:'event'});\">Explore this site &rarr;</button>
+           <button type='button' class='sp-btn sp-info' onclick=\"Shiny.setInputValue('siteInfo','%s',{priority:'event'});\">About this site</button>
+         </div>
+       </div>",
+      nm, code, where, row$richness[1] %||% "?", pir, fam,
+      gsub("'", "", nm), code, code))
+  }
+
+  # "About this site" -> an instant info modal (no bundle load). Its footer also
+  # offers Explore, so the modal is a second door into the same load path.
+  site_info_modal <- function(code) {
+    row <- site_table[site_table$site == code, ]
+    m   <- neon_sites[neon_sites$site == code, ]
+    if (!nrow(row))
+      return(modalDialog(title = "Site info", easyClose = TRUE, footer = modalButton("Close"),
+                         p("No details are available for this site.")))
+    dash <- function(x) if (length(x) == 0 || is.na(x) || !nzchar(as.character(x))) "—" else as.character(x)
+    coords <- if (nrow(m) && !is.na(m$lat[1]) && !is.na(m$lng[1]))
+      sprintf("%.3f, %.3f", m$lat[1], m$lng[1]) else "—"
+    stat <- function(v, lab) div(class = "si-stat",
+      div(class = "si-stat-n", if (is.null(v) || is.na(v)) "—" else format(v, big.mark = ",")),
+      div(class = "si-stat-l", lab))
+    pir <- if (is.finite(row$pct_introduced[1])) paste0(round(row$pct_introduced[1]), "%") else "—"
+    modalDialog(
+      title = HTML(sprintf("\U0001F33F %s <span class='si-code'>(%s)</span>", row$name[1] %||% code, code)),
+      easyClose = TRUE, size = "m",
+      footer = tagList(
+        modalButton("Close"),
+        tags$button(type = "button", class = "btn btn-primary",
+          onclick = sprintf("smtLoadStart('%s · loading');Shiny.setInputValue('siteExplore','%s',{priority:'event'});",
+                            gsub("'", "", row$name[1] %||% code), code),
+          HTML("Explore this site &rarr;"))),
+      div(class = "site-info",
+        div(class = "si-sec",
+          div(class = "si-h", "Where"),
+          div(class = "si-row", dash(row$state[1]),
+              if (nrow(m)) HTML(sprintf(" · NEON %s", dash(m$domain[1]))) else NULL),
+          if (nrow(m) && !is.na(m$bio[1])) div(class = "si-row si-bio", m$bio[1]),
+          div(class = "si-coords", "\U0001F4CD ", coords)),
+        div(class = "si-sec",
+          div(class = "si-h", "What's been collected"),
+          div(class = "si-stats",
+            stat(row$richness[1], "species"),
+            stat(row$n_plots[1], "plots")),
+          div(class = "si-row si-star", "Introduced cover: ", tags$b(pir)),
+          if (!is.na(row$dominant_family[1]) && nzchar(as.character(row$dominant_family[1])))
+            div(class = "si-row si-star", "Top family: ", tags$i(row$dominant_family[1])) else NULL)))
+  }
+
   # national site-picker map on the splash: dot size = richness; colour toggles
   # between invasion (% introduced cover) and completeness (% of the NRCS reference
-  # flora detected — the Expected-vs-Observed spatial read). Tap a dot to load.
+  # flora detected — the Expected-vs-Observed spatial read). Tap a dot for the
+  # Explore | About choice popup; the load comes from the popup's Explore button.
   local({
     mx <- suppressWarnings(max(site_table$pct_introduced, na.rm = TRUE)); if (!is.finite(mx)) mx <- 100
     pip_pal  <- leaflet::colorNumeric("YlOrBr", domain = c(0, mx), na.color = "#c9d3bb")
     comp_pal <- leaflet::colorNumeric(c("#E7E0CC", "#7FB07A", "#1F5C3D"), domain = c(0, 100), na.color = "#c9d3bb")
     color_by <- function() input$splashColorBy %||% "invasion"
-    picked_site <- mapPickerServer("picker", site_table = site_table, radius_metric = "richness",
+    mapPickerServer("picker", site_table = site_table, radius_metric = "richness",
       color_fn = function(st) if (identical(color_by(), "completeness"))
           comp_pal(st$pct_detected) else pip_pal(st$pct_introduced),
       label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> species · <b>%s</b> introduced cover · <b>%s</b> reference flora detected",
         r$site, r$name %||% r$site, r$state %||% "", r$richness %||% "?",
         if (is.finite(r$pct_introduced)) paste0(round(r$pct_introduced), "%") else "n/a",
-        if (is.finite(r$pct_detected)) paste0(round(r$pct_detected), "%") else "no ref list"))
-    # load in the MAIN server context so ingest()'s shinyjs::hide("splash") isn't namespaced
-    observeEvent(picked_site(), { s <- picked_site(); if (!is.null(s) && nzchar(s)) load_site(s) }, ignoreInit = TRUE)
+        if (is.finite(r$pct_detected)) paste0(round(r$pct_detected), "%") else "no ref list"),
+      popup_fn = site_popup_html)
   })
+  # "Explore this site" (map popup OR About-modal footer) -> sync the sidebar to
+  # this site, then load it. load_site_full() runs in the MAIN server context so
+  # ingest()'s shinyjs::hide("splash") isn't namespaced to the picker module.
+  observeEvent(input$siteExplore, {
+    removeModal()
+    s <- input$siteExplore; if (is.null(s) || !nzchar(s)) { session$sendCustomMessage("loadDone", list()); return() }
+    load_site_full(s)
+  })
+  # "About this site" -> instant info modal (no bundle load)
+  observeEvent(input$siteInfo, showModal(site_info_modal(input$siteInfo)))
   output$splashLegend <- renderUI({
     if (identical(input$splashColorBy %||% "invasion", "completeness"))
       div(class = "splash-legend",

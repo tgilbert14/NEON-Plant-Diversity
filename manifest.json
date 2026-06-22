@@ -4088,7 +4088,7 @@
       "checksum": "de06d00379549fa5a010bf6262d1d563"
     },
     "R/map_picker.R": {
-      "checksum": "e4059f00ae43cf2a3e584ba7b1d985d6"
+      "checksum": "0963262ca7c0e7aeb692f1ffb4f0f932"
     },
     "R/plant_helpers.R": {
       "checksum": "708f723185ecc0ccef506eb0efece42a"
@@ -4133,7 +4133,7 @@
       "checksum": "fd6bb29e6a8fb3f7b588ae94bf772ffd"
     },
     "server.R": {
-      "checksum": "cad97b5544f4ee9b5fcb62b456977e76"
+      "checksum": "c33a42601a78e10b99ee42794ad17c5a"
     },
     "ui.R": {
       "checksum": "99109b75a194387317228a0e18214561"
