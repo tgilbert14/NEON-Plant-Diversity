@@ -103,11 +103,36 @@ seasonal_biome <- function(site, bio = NULL) {
   "temperature-limited"
 }
 
-# which seasonal driver LEADS at this biome (reuses the cascade's swap logic).
-.seas_expected <- function(driver, biome) {
+# which seasonal driver LEADS, given the biome AND the response being explained.
+# RESPONSE-AWARE: the cascade only sanctions a (driver, biome, response) prior, not
+# a (driver, biome) pair. A water-limited site has TWO rain seasons, but only ONE of
+# them is the cascade's stated plant prior — cool-season (winter) rain germinates the
+# spring forbs that carry RICHNESS. So expected=TRUE only when the (driver, response)
+# pair is on the allow-list for this biome; monsoon and spring temp are still COMPUTED
+# and SHOWN for richness, but expected=FALSE ("tested, no plant prior") — the cascade's
+# "computed everywhere, only the tally respects expected" rule. We do NOT invent a
+# monsoon->richness prior. When `to` is NULL the call is response-agnostic and we fall
+# back to the old biome-only behaviour (so non-plant callers are unaffected).
+#
+# Allow-list (cascade-sanctioned plant priors only):
+#   water-limited  : precip_winter -> richness
+#   temperature-lim: (none stated for plant richness here; temp_spring is the green-up
+#                     onset prior, not a richness prior, so richness leads on |r|)
+.SEAS_PRIORS <- list(
+  "water-limited" = list(richness = c("precip_winter")))
+.seas_expected <- function(driver, biome, to = NULL) {
   if (is.null(biome) || is.na(biome) || !nzchar(biome)) return(TRUE)
-  if (grepl("water",  biome, ignore.case = TRUE)) return(driver %in% c("precip_monsoon", "precip_winter"))
-  if (grepl("temp",   biome, ignore.case = TRUE)) return(driver %in% c("temp_spring"))
+  bkey <- if (grepl("water", biome, ignore.case = TRUE)) "water-limited"
+          else if (grepl("temp", biome, ignore.case = TRUE)) "temperature-limited" else NA_character_
+  # response-aware path: gate to the (biome, response) allow-list
+  if (!is.null(to) && nzchar(to)) {
+    allow <- .SEAS_PRIORS[[bkey]][[to]]
+    if (is.null(allow)) return(FALSE)          # no cascade-sanctioned prior for this response/biome
+    return(driver %in% allow)
+  }
+  # legacy response-agnostic path (non-plant callers): biome-only swap logic
+  if (identical(bkey, "water-limited")) return(driver %in% c("precip_monsoon", "precip_winter"))
+  if (identical(bkey, "temperature-limited")) return(driver %in% c("temp_spring"))
   TRUE
 }
 
@@ -115,11 +140,15 @@ seasonal_biome <- function(site, bio = NULL) {
 # env      : the site's monthly env bundle (data/env/<SITE>.rds)
 # response : data.frame(year=<int>, value=<num>) — the APP's own annual metric
 # biome    : "water-limited" | "temperature-limited" (NULL => all expected)
+# to       : the RESPONSE NAME the metric encodes (e.g. "richness"). Passed to
+#            .seas_expected() so `expected` honours the cascade's (driver, biome,
+#            response) allow-list, not just (driver, biome). NULL => response-agnostic
+#            (legacy biome-only behaviour, for non-plant callers).
 # lags     : stated prior lag per driver (monsoon=1 for mammals; the caller may
 #            override e.g. monsoon=0 for a fast within-season responder like beetles)
 # Returns a data.frame ranked (expected first, then |r|): driver,label,lag,r,n,p,
 # sign,expected.  n-gate: n<3 dropped; n in 3-5 => r but p=NA (exploratory).
-seasonal_driver_links <- function(env, response, biome = NULL,
+seasonal_driver_links <- function(env, response, biome = NULL, to = NULL,
                                   lags = c(precip_monsoon = 1L, precip_winter = 0L, temp_spring = 0L),
                                   nperm = 2000) {
   agg <- seasonal_aggregates(env); if (is.null(agg) || !nrow(agg)) return(NULL)
@@ -140,7 +169,7 @@ seasonal_driver_links <- function(env, response, biome = NULL,
     p_adj <- if (n >= 6) .seas_adj_p(ann, combos, r, nperm) else NA_real_
     data.frame(driver = d, label = unname(SEASON_LABELS[d]) %||% d, lag = L,
                r = round(r, 2), n = n, p = p, p_adj = p_adj, sign = sign(r),
-               expected = .seas_expected(d, biome), stringsAsFactors = FALSE)
+               expected = .seas_expected(d, biome, to), stringsAsFactors = FALSE)
   })
   out <- do.call(rbind, Filter(Negate(is.null), rows)); if (is.null(out) || !nrow(out)) return(NULL)
   out[order(!out$expected, -abs(out$r)), , drop = FALSE]

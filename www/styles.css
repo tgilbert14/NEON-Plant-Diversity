@@ -212,6 +212,20 @@ body {
 .ec-seasonal-caveat .bi { font-size: 12px; margin-right: 3px; opacity: .85; }
 .ec-seasonal-note a, .ec-seasonal-caveat a { color: var(--ec-rail); font-weight: 700; text-decoration: underline; }
 
+/* "computed everywhere, only the tally respects expected": the other seasons are
+   shown but greyed + tagged so they can never headline the card */
+.ec-seasonal-others { margin-top: 10px; }
+.ec-seasonal-others-h { font-size: 11px; color: var(--muted); opacity: .85; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+.ec-seasonal-others-h .bi { font-size: 12px; }
+.ec-seasonal-others-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.ec-seasonal-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px;
+  color: var(--muted); background: rgba(127,127,127,.10); border: 1px solid rgba(127,127,127,.22);
+  border-radius: 999px; padding: 3px 10px; opacity: .82; }
+.ec-seasonal-chip b { color: var(--ink); font-weight: 700; opacity: .9; }
+.ec-seasonal-chip .ec-chip-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .03em;
+  opacity: .7; border-left: 1px solid rgba(127,127,127,.3); padding-left: 6px; }
+[data-bs-theme="dark"] .ec-seasonal-chip { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+
 /* ---- dark mode (mirrors the app-wide [data-bs-theme="dark"] pattern) ---- */
 [data-bs-theme="dark"] .ec {
   background: linear-gradient(180deg, #1b2942 0%, var(--paper) 100%);

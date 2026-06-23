@@ -134,6 +134,10 @@
 .evo-flag-clean > .bi { color: var(--green); }
 .evo-flag-muted { border-left: 4px solid var(--muted); color: var(--muted); }
 .evo-flag-warn  { border-left: 4px solid var(--terra); }
+/* neutral, informational (not a problem) — the "set aside as regional associate" note */
+.evo-flag-info  { border-left: 4px solid var(--pine); }
+.evo-flag-info > .bi { color: var(--pine); }
+.evo-flag-info .evo-flag-h { color: var(--pine); }
 .evo-flag-h { font-weight: 700; color: var(--terra); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .evo-flag-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .evo-flag-tbl th { text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 4px 8px; }

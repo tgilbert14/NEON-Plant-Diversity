@@ -90,3 +90,13 @@ site_label <- function(code) {
   if (nrow(row) == 0) return(code)
   sprintf("%s · %s, %s · NEON %s", row$name[1], row$site[1], row$state[1], row$domain[1])
 }
+
+# the site's USPS state code (used by the Expected-vs-Observed QC for state-level
+# plausibility of an observed species). NA for an unknown code. PR/AK are valid codes
+# but carry no L48 state distribution, so the plausibility check there is a no-op.
+site_state <- function(code) {
+  if (is.null(code) || !nzchar(code)) return(NA_character_)
+  row <- neon_sites[neon_sites$site == toupper(code), ]
+  if (nrow(row) == 0) return(NA_character_)
+  row$state[1]
+}

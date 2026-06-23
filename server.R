@@ -871,8 +871,12 @@ server <- function(input, output, session) {
     if (is.null(resp) || nrow(resp) < 3) return(NULL)
     site_code <- rv$site %||% (if (!is.null(rv$occ) && "siteID" %in% names(rv$occ)) mode_chr(rv$occ$siteID) else NULL)
     biome <- seasonal_biome(site_code)
-    # plants respond SAME-year -> lag 0 for every seasonal driver (NOT the mammal monsoon lag-1)
-    links <- tryCatch(seasonal_driver_links(e, resp, biome = biome,
+    # plants respond SAME-year -> lag 0 for every seasonal driver (NOT the mammal monsoon lag-1).
+    # to = "richness" makes `expected` honour the cascade's (driver, biome, RESPONSE) allow-list:
+    # the ONLY sanctioned plant prior is precip_winter -> richness in water-limited biomes. Monsoon
+    # and spring temp are still computed + shown for richness, but expected=FALSE ("tested, no plant
+    # prior") so the lead can never headline a monsoon->richness link the cascade never sanctioned.
+    links <- tryCatch(seasonal_driver_links(e, resp, biome = biome, to = "richness",
                lags = c(precip_winter = 0L, precip_monsoon = 0L, temp_spring = 0L)),
                error = function(err) NULL)
     eyebrow <- div(class = "ec-eyebrow", bs_icon("calendar-range"),
@@ -914,6 +918,26 @@ server <- function(input, output, session) {
         HTML(paste0(
           "In drylands the cool-season (Oct-Mar) rain germinates the spring forbs, so winter rain tracks plant diversity better than the annual total, which averages winter and monsoon rain together even though they feed different plants.",
           if (is.finite(mr)) sprintf(" The annual rain total shows only about <b>r %+.2f</b> for richness here.", mr) else ""))),
+      # the OTHER seasons: computed + shown, but greyed and labelled "tested, no plant
+      # prior" — the cascade's "computed everywhere, only the tally respects expected"
+      # rule. The summer monsoon and spring temperature carry no sanctioned richness
+      # prior, so they never get to headline the card even when |r| is larger.
+      local({
+        others <- links[!(links$driver %in% L$driver), , drop = FALSE]
+        if (!nrow(others)) return(NULL)
+        others <- others[order(-abs(others$r)), , drop = FALSE]
+        div(class = "ec-seasonal-others",
+          div(class = "ec-seasonal-others-h", bs_icon("dot"),
+              "Also tested here, but with no cascade plant prior for richness:"),
+          tags$div(class = "ec-seasonal-others-row",
+            lapply(seq_len(nrow(others)), function(i) {
+              o <- others[i, ]
+              tags$span(class = "ec-seasonal-chip", title = "computed for completeness; not a sanctioned plant prior, so it is excluded from the lead",
+                tags$span(class = "ec-chip-label", o$label),
+                HTML(sprintf(" <b>r&nbsp;%+.2f</b>", o$r)),
+                tags$span(class = "ec-chip-tag", "tested, no plant prior"))
+            })))
+      }),
       div(class = "ec-seasonal-caveat", bs_icon("info-circle"),
         HTML(" One site, a handful of years, so suggestive not settled. The cross-site test that pools many sites is in the "),
         tags$a(href = "https://tgilbert14.github.io/NEON-Driver-Cascade/", target = "_blank", "Driver Cascade app"), "."))
@@ -1370,10 +1394,43 @@ server <- function(input, output, session) {
       DT::formatStyle("Role", target = "row", fontWeight = DT::styleEqual("dominant", "700"))
   })
 
+  # the state-plausibility note: how many natives were set aside as regional
+  # associates (on the state flora, not this soil unit), or why the check didn't run.
+  output$evoRegionalNote <- renderUI({
+    ev <- evo(); if (is.null(ev)) return(NULL)
+    if (!isTRUE(ev$state_covered)) {
+      st <- ev$state %||% NA
+      msg <- if (is.na(st) || !nzchar(st))
+        "State-level plausibility check unavailable for this site, so every unexpected species below stays in the review lane (today's behaviour)."
+      else sprintf("State-level plausibility check not yet available for %s, so every unexpected species below stays in the review lane.", state_names[st] %||% st)
+      return(div(class = "evo-flag evo-flag-muted", bs_icon("hourglass-split"), HTML(paste0(" ", msg))))
+    }
+    n <- ev$n_regional %||% 0L
+    if (n == 0) return(div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
+      HTML(sprintf(" Every unexpected species here is either introduced or a native not recorded for %s, so none were set aside. The list below is the genuine review lane.",
+                   state_names[ev$state] %||% ev$state))))
+    cr <- ev$C_regional
+    rows <- utils::head(cr[order(-cr$n_plots), , drop = FALSE], 12)
+    div(class = "evo-flag evo-flag-info",
+      div(class = "evo-flag-h", bs_icon("geo-alt-fill"),
+        sprintf(" %d native species set aside: on the %s state flora, just not this soil unit's reference list", n, state_names[ev$state] %||% ev$state)),
+      tags$table(class = "evo-flag-tbl",
+        tags$thead(tags$tr(tags$th("Species"), tags$th("Symbol"), tags$th("# plots"))),
+        tags$tbody(lapply(seq_len(nrow(rows)), function(i) tags$tr(
+          tags$td(tags$i(rows$scientificName[i])), tags$td(rows$sym[i]), tags$td(rows$n_plots[i]))))),
+      if (n > 12) div(class = "evo-flag-more", sprintf("+ %d more in the full report (CSV)", n - 12)),
+      div(class = "evo-flag-note", "These are regional associates the soil-unit reference list didn't enumerate, not data-quality issues. They're kept in the downloadable report, labelled, but left out of the review lane below."))
+  })
+
   # Bucket C — observed, not in reference (clay; the review lane)
   output$evoTableC <- DT::renderDT({
     ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
-    C <- ev$C; if (!nrow(C)) return(evo_empty_dt("Every observed species is on the reference list; nothing to review."))
+    C <- ev$C; if (!nrow(C)) {
+      msg <- if (isTRUE(ev$state_covered) && (ev$n_regional %||% 0) > 0)
+        sprintf("Nothing to review: the unexpected species here are all natives on the %s state flora (set aside above as regional associates), with no introduced species and no out-of-state records.", state_names[ev$state] %||% ev$state)
+      else "Every observed species is on the reference list; nothing to review."
+      return(evo_empty_dt(msg))
+    }
     df <- data.frame(Symbol = C$sym, Species = C$scientificName, Family = C$family,
       Nativity = C$nativity, `Mean cover %` = ifelse(is.finite(C$mean_cover), C$mean_cover, NA),
       `# plots` = C$n_plots, check.names = FALSE)
@@ -1465,9 +1522,16 @@ server <- function(input, output, session) {
       reference_role = ifelse(B$is_dominant %in% TRUE, "dominant", "associated"),
       reference_production = B$rangeprod) }, "expected-absent")
   output$evoCsvC <- .evo_dl(function(ev) {
-    C <- ev$C; if (is.null(C) || !nrow(C)) return(data.frame())
+    # ship the FULL observed-not-in-reference set, with the state-plausibility class
+    # so review (introduced + native-not-in-state) and the demoted regional associates
+    # (on the state flora, not this soil unit) are both present and labelled.
+    C <- ev$C_all %||% ev$C; if (is.null(C) || !nrow(C)) return(data.frame())
+    cls <- if ("c_class" %in% names(C))
+      ifelse(C$c_class == "regional", "regional associate (state flora, not this soil unit)", "review")
+    else "review"
     data.frame(symbol = C$sym, scientificName = C$scientificName, family = C$family,
-      nativity = C$nativity, mean_cover_pct = C$mean_cover, n_plots = C$n_plots) }, "observed-not-expected")
+      nativity = C$nativity, classification = cls,
+      mean_cover_pct = C$mean_cover, n_plots = C$n_plots) }, "observed-not-expected")
   output$evoReport <- downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_completeness-report_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
     content = function(file) {

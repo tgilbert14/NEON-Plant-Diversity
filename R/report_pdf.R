@@ -85,7 +85,9 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
     dom <- if (evo$dom_total > 0) sprintf("%d of %d reference dominants observed", evo$dom_obs, evo$dom_total) else "dominants not production-ranked for this ecological site"
     graphics::text(3, 22.4, dom, col = P$ink, cex = 0.72, adj = 0)
     graphics::text(3, 20.3, sprintf("%d observed but not in the reference list (%d introduced · %d native), the review lane.", nrow(evo$C), evo$n_review_intro, evo$n_review_native), col = P$muted, cex = 0.62, adj = 0)
-    graphics::text(3, 18.4, sprintf("Reference community: %s (%s).", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.6, adj = 0)
+    if (isTRUE(evo$state_covered) && (evo$n_regional %||% 0) > 0)
+      graphics::text(3, 19.0, sprintf("+ %d native(s) on the %s state flora but not this soil unit (regional associate, set aside).", evo$n_regional, evo$state %||% ""), col = P$muted, cex = 0.58, adj = 0)
+    graphics::text(3, 17.6, sprintf("Reference community: %s (%s).", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.6, adj = 0)
   } else graphics::text(3, 23, "No NRCS reference list bundled for this site.", col = P$muted, cex = 0.7, adj = 0)
 
   # ---- honesty footer ----------------------------------------------------

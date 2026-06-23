@@ -117,20 +117,68 @@ expected_vs_observed <- function(occ, expected, authority = NULL) {
   # C — observed but not in the reference list
   C <- obs[!(obs$sym %in% ref$plantsym), , drop = FALSE]
 
+  # STATE-LEVEL PLAUSIBILITY (owner steer): the reference list is ONE NRCS soil-unit
+  # ESD associate list, far narrower than the site's real STATE flora, so a native
+  # genuinely recorded for the state lands in C only because the soil unit didn't
+  # enumerate it. We DEMOTE those to a neutral "regional associate" note (not review),
+  # and keep flagging only (a) the introduced sublane and (b) natives NOT recorded
+  # for the site's state (the obvious errors). Degrades gracefully: when there is no
+  # state distribution (no authority, state not covered, or unknown site state) every
+  # row stays in "review" — exactly today's behaviour, no crash.
+  C$c_class <- "review"; c_state <- NA_character_; c_state_covered <- FALSE
+  if (nrow(C)) {
+    c_state <- tryCatch(site_state(site_of_occ(occ)), error = function(e) NA_character_)
+    auth_tbl <- if (!is.null(authority)) authority$authority else NULL
+    covered  <- if (!is.null(authority)) authority$states_covered else NULL
+    have_states <- !is.null(auth_tbl) && "states_l48" %in% names(auth_tbl) &&
+                   !is.na(c_state) && nzchar(c_state) &&
+                   (is.null(covered) || c_state %in% covered)   # only run where this state is covered
+    c_state_covered <- isTRUE(have_states)
+    if (have_states) {
+      j  <- match(C$sym, auth_tbl$accepted_symbol)
+      sl <- auth_tbl$states_l48[j]
+      in_state <- !is.na(sl) & vapply(sl, function(s) c_state %in% strsplit(s, ";", fixed = TRUE)[[1]], logical(1))
+      is_native <- C$nativity == "Native" & !is.na(C$nativity)
+      # native + recorded for this state  -> regional associate (neutral, NOT review)
+      C$c_class[is_native & in_state] <- "regional"
+      # everything else stays "review": introduced (any state) + natives NOT recorded
+      # for the state + unknown-nativity. (We never demote an introduced species.)
+    }
+  }
+  C_review   <- C[C$c_class != "regional", , drop = FALSE]
+  C_regional <- C[C$c_class == "regional", , drop = FALSE]
+
   list(
-    A = A, B = B, C = C,
+    A = A, B = B, C = C_review, C_regional = C_regional, C_all = C,
+    state = c_state, state_covered = c_state_covered,
     n_ref = nrow(ref), n_obs = nrow(obs),
     n_overlap = nrow(A),
     overlap_pct = round(100 * nrow(A) / nrow(ref), 1),
     dom_total = sum(ref$is_dominant %in% TRUE),
     dom_obs   = sum(ref$is_dominant %in% TRUE & in_obs),
-    n_review_intro   = sum(C$nativity == "Introduced", na.rm = TRUE),
-    n_review_native  = sum(C$nativity == "Native", na.rm = TRUE),
-    n_review_unknown = nrow(C) - sum(C$nativity %in% c("Introduced", "Native")),  # residual -> always reconciles
+    n_review_intro   = sum(C_review$nativity == "Introduced", na.rm = TRUE),
+    n_review_native  = sum(C_review$nativity == "Native", na.rm = TRUE),
+    n_review_unknown = nrow(C_review) - sum(C_review$nativity %in% c("Introduced", "Native")),  # residual -> always reconciles
+    n_regional = nrow(C_regional),   # natives demoted to "on the state flora, not this soil unit"
     dom_basis = expected$dominance_basis %||% (if (sum(ref$is_dominant %in% TRUE) > 0) "rangeland_production" else "none"),
     dom_rule  = expected$dom_rule %||% NA_character_,
     ecoclassid = expected$ecoclassid, ecosite_name = expected$ecosite_name,
     mlra = expected$mlra, source = expected$source %||% "esd")
+}
+
+# the site code carried on the occ table (one survey, one site) — for the state lookup.
+# The bundle's occ has no siteID column; the NEON plotID is "<SITE>_<plot>" (e.g.
+# "SRER_001"), so the 4-char prefix is the site code. Fall back to siteID if present.
+site_of_occ <- function(occ) {
+  if (is.null(occ) || !nrow(occ)) return(NA_character_)
+  if ("siteID" %in% names(occ)) {
+    s <- mode_chr(occ$siteID); if (!is.na(s) && nzchar(s)) return(toupper(s))
+  }
+  if ("plotID" %in% names(occ)) {
+    pid <- mode_chr(occ$plotID)
+    if (!is.na(pid) && nzchar(pid)) return(toupper(sub("[_-].*$", "", pid)))
+  }
+  NA_character_
 }
 
 # the dominants-absent subset of bucket B (the completeness headline driver)
@@ -252,9 +300,13 @@ qc_report_table <- function(evo, site = NA_character_) {
   B <- mk(evo$B, "B · expected but not detected",
           \(d) d$plantsym, \(d) d$sciname, \(d) NA_character_, \(d) NA_character_,
           \(d) d$rangeprod, \(d) d$is_dominant, \(d) NA_real_)
-  C <- mk(evo$C, "C · observed, not in reference",
+  C <- mk(evo$C, "C · observed, not in reference (review)",
           \(d) d$sym, \(d) d$scientificName, \(d) d$family, \(d) d$nativity,
           \(d) NA_real_, \(d) NA, \(d) d$mean_cover)
-  out <- do.call(rbind, Filter(Negate(is.null), list(A, B, C)))
+  # the state-plausible natives demoted out of review (kept in the report, labelled)
+  Cr <- mk(evo$C_regional, "C · regional associate (on state flora, not this soil unit)",
+          \(d) d$sym, \(d) d$scientificName, \(d) d$family, \(d) d$nativity,
+          \(d) NA_real_, \(d) NA, \(d) d$mean_cover)
+  out <- do.call(rbind, Filter(Negate(is.null), list(A, B, C, Cr)))
   if (is.null(out)) data.frame() else out
 }

@@ -184,8 +184,24 @@ community (offline via Soil Data Access), then compare it to what NEON observed.
   difference between an honest empty state and a fake "0% detected"). Every name-join ships its rate.
 - **Three clickable + downloadable bucket tables + a combined report CSV**, info-dot on every card,
   plain-English framing literally on the page, EDIT citation deep-link (the canonical worked example
-  is **SRER** → `R041XC318AZ`). Fast-follows: out-of-range flag once USDA's distribution endpoint is
-  pinned; fan-out to all sites; colour the picker markers by MLRA / `% detected`.
+  is **SRER** → `R041XC318AZ`). Fast-follows: fan-out to all sites; colour the picker markers by MLRA / `% detected`.
+- **STATE-LEVEL plausibility, not soil-unit truth (owner steer, shipped).** The bucket-C "not in
+  reference list" lane is one NRCS *soil-unit* associate list, far narrower than the real state flora,
+  so a native genuinely in-state (e.g. SRER's TILA2 *Tidestromia lanuginosa*, in AZ) falsely lands in
+  review. Fix: a per-symbol **`states_l48`** field on the authority artifact, sourced **build-only** from
+  USDA PLANTS public-domain per-state lists, then in `expected_vs_observed()` **demote** native-in-C
+  species recorded for the site's state to a neutral "regional associate (state flora, not this soil
+  unit)" note — NOT a review item — while keeping the introduced sublane and natives NOT recorded for
+  the state. **Frame the lane as a state-level plausibility + completeness instrument, not an error
+  detector**, in the caption + info-pop. The USDA endpoint that works: **`GET
+  /api/plantsDownload/GetGSATByState?state=<StateName>`** returns a state's full recorded symbol list as
+  JSON (the per-symbol/per-state `PlantProfile` `PlantsDistributionResults` is always `null`; `MapCoordinates`
+  is only 5 coarse bounding boxes — neither is usable). GSAT covers ~18 states today, so **degrade
+  gracefully**: record `states_covered`, run the demotion only where the site's state is covered, and
+  fall back to today's review-everything behaviour elsewhere (the safe direction). Site state comes off
+  the `plotID` prefix (`SRER_001` → `SRER`), not a `siteID` column the bundle may lack.
+  `scripts/build_plant_states.R` is the cheap no-profile-refetch augmentation path; the same fetch is
+  folded into `build_plant_authority.R` for a full rebuild.
 
 ---
 
