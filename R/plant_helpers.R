@@ -326,6 +326,71 @@ invasion_pressure <- function(occ, year = NULL) {
 }
 
 # ---------------------------------------------------------------------------
+# Per-INTRODUCED-SPECIES foothold detector — the dot-per-species view the
+# Invasion-pressure scatter draws. For each introduced species: how many plots
+# it's detectable in at the smallest (1 m^2) scale (x) vs across the whole
+# 400 m^2 plot (y). A species above the 1:1 line is turning up across plots far
+# more than its 1 m^2 footholds alone would suggest — a real foothold, not a
+# chance toehold. Carries family, mean 1 m^2 cover, and the plot lists at each
+# scale so a clicked dot can reveal exactly where it was found.
+# ---------------------------------------------------------------------------
+species_foothold <- function(occ, year = NULL) {
+  d <- species_level_only(occ)
+  if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
+  intro <- d[d$nativity == "Introduced", , drop = FALSE]
+  if (!nrow(intro)) return(NULL)
+  # per-species mean 1 m^2 cover (structural-zero-correct shares live in the
+  # watchlist; here a simple mean of recorded 1 m^2 cover is enough for the tip)
+  cov1 <- intro[intro$scale == 1 & is.finite(intro$percentCover) & intro$percentCover > 0, , drop = FALSE]
+  mean_cov <- if (nrow(cov1)) tapply(cov1$percentCover, cov1$scientificName, mean) else numeric(0)
+  per_sp <- function(sp) {
+    s  <- intro[intro$scientificName == sp, ]
+    p1 <- sort(unique(s$plotID[s$scale == 1]))            # plots where seen at 1 m^2
+    p4 <- sort(unique(s$plotID))                          # plots where seen anywhere in the 400 m^2 plot
+    data.frame(scientificName = sp,
+               family   = mode_chr(s$family),
+               plots_1m = length(p1),
+               plots_400 = length(p4),
+               mean_cover_1m = round(as.numeric(mean_cov[sp] %||% NA_real_), 2),
+               plotlist_1m  = paste(short_plot(p1), collapse = ", "),
+               plotlist_400 = paste(short_plot(p4), collapse = ", "),
+               stringsAsFactors = FALSE)
+  }
+  out <- do.call(rbind, lapply(sort(unique(intro$scientificName)), per_sp))
+  out[order(-out$plots_400, -out$plots_1m), , drop = FALSE]
+}
+
+# ---------------------------------------------------------------------------
+# Ranked species by abundance (summed 1 m^2 cover) — the honest backing list
+# for the Hill-number "effective common core" reveal. q1 is an evenness-weighted
+# EFFECTIVE number (~N species), not a hand-picked set of exactly N names, so we
+# return the FULL ranked list + a cumulative cover share and a cut at round(q1)
+# so the modal can say "the top ~N is what 'effectively common' describes".
+# ---------------------------------------------------------------------------
+hill_ranked_species <- function(occ, year = NULL) {
+  d <- species_level_only(occ)
+  d <- d[d$scale == 1 & is.finite(d$percentCover) & d$percentCover > 0, , drop = FALSE]
+  if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
+  if (!nrow(d)) return(NULL)
+  ab  <- tapply(d$percentCover, d$scientificName, sum)
+  fam <- tapply(d$family, d$scientificName, mode_chr)
+  nat <- tapply(d$nativity, d$scientificName, mode_chr)
+  sp  <- names(ab)
+  out <- data.frame(scientificName = sp,
+                    family   = as.character(fam[sp]),
+                    nativity = as.character(nat[sp]),
+                    summed_cover = round(as.numeric(ab), 2),
+                    stringsAsFactors = FALSE)
+  out <- out[order(-out$summed_cover), , drop = FALSE]
+  tot <- sum(out$summed_cover)
+  out$cover_share_pct <- if (tot > 0) round(100 * out$summed_cover / tot, 1) else NA_real_
+  out$cum_share_pct   <- if (tot > 0) round(100 * cumsum(out$summed_cover) / tot, 1) else NA_real_
+  out$rank <- seq_len(nrow(out))
+  rownames(out) <- NULL
+  out
+}
+
+# ---------------------------------------------------------------------------
 # One row per SPECIES — the secondary entity (species leaderboard + species card).
 # ---------------------------------------------------------------------------
 species_summary <- function(occ, year = NULL) {

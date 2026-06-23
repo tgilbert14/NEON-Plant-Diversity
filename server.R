@@ -97,6 +97,7 @@ server <- function(input, output, session) {
     rv$pal    <- make_species_pal(b$occ)
     rv$label  <- label
     rv$site   <- b$meta$site
+    session$sendCustomMessage("plantSite", list(site = b$meta$site %||% "site"))  # name the export PNGs by site
     rv$is_demo <- is_demo
     # export provenance: prefer the bundle's own build stamp; fall back to the
     # site .rds mtime (= the build vintage on already-shipped bundles, so this
@@ -562,7 +563,15 @@ server <- function(input, output, session) {
     sa$sd[!is.finite(sa$sd)] <- 0
     sa$n  <- ifelse(is.finite(sa$n), sa$n, 0)
     sa$nlab <- paste0("mean of ", sa$n, " plot", ifelse(sa$n == 1, "", "s"))
+    # per-area pin-card HTML (customdata) — one card per nested quadrat scale
+    sa$tip <- paste0(
+      "<span class='smt-pin-emoji'>\U0001F4D0</span> <b>", sa$area_m2, " m\U00B2</b> ",
+      "<span class='smt-pin-rar'>", round(sa$richness), " species</span><br/>",
+      "<span class='smt-pin-stats'>mean of ", sa$n, " plot", ifelse(sa$n == 1, "", "s"),
+        " \U00B7 \U00B1", round(sa$sd, 1), " sd</span>",
+      "<br/><em class='smt-pin-hint'>Tap a point to pin this card</em>")
     plot_ly(sa, x = ~area_m2, y = ~richness, type = "scatter", mode = "lines+markers",
+      customdata = ~tip,
       line = list(color = DDL$green, width = 3), marker = list(color = DDL$green2, size = 9),
       error_y = list(type = "data", array = sa$sd, color = "rgba(46,125,50,0.35)", thickness = 1.4, width = 4),
       text = sa$nlab,
@@ -593,10 +602,12 @@ server <- function(input, output, session) {
     # On the dark theme the dark pole (#1F5C3D) all but vanishes on the dark
     # paper, so use a brightened green ramp that keeps the dark->light ordering.
     hill_ramp <- if (is_dark()) c("#4FA877", "#86C2A1", "#C7E8D4") else c("#1F5C3D", "#3E8B5E", "#86C2A1")
-    plot_ly(df, x = ~q, y = ~v, type = "bar",
-      marker = list(color = hill_ramp),
+    df$qk <- c("q0", "q1", "q2")   # customdata key -> which bar was clicked
+    plot_ly(df, x = ~q, y = ~v, type = "bar", source = "hillSrc",
+      marker = list(color = hill_ramp), customdata = ~qk,
       text = ~round(v), textposition = "outside",
-      hovertemplate = "%{x}<br>%{y:.1f} effective species<extra></extra>") %>%
+      hovertemplate = "%{x}<br>%{y:.1f} effective species<br><i>click to see the species behind this</i><extra></extra>") %>%
+      plotly::event_register("plotly_click") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(showlegend = FALSE, xaxis = list(title = ""), yaxis = list(title = "Effective # of species"))
   })
@@ -617,6 +628,61 @@ server <- function(input, output, session) {
         ch$S_obs, ch$m, ch$chao2, if (ch$unstable) ", a lower bound (few doubletons)" else "",
         ifelse(is.na(ch$lo),"—",ch$lo), ifelse(is.na(ch$hi),"—",ch$hi), max(0, round(ch$chao2 - ch$S_obs)))))
   })
+
+  # ---- Hill member-reveal: click a q0/q1/q2 bar -> the species behind it ----
+  # q1 (and q2) are evenness-weighted EFFECTIVE numbers (~N species), NOT a
+  # hand-picked set of exactly N names — so the modal shows the FULL ranked-by-
+  # cover list and marks the top round(q1) as the cluster "effectively common ~N"
+  # describes, with that honest caveat in the header. Reuses the QC inspector +
+  # downloadHandler pattern.
+  hill_ranked <- reactive({ occ <- rv$snap; req(occ); hill_ranked_species(occ) })
+  hill_csv_df <- function() {
+    rk <- hill_ranked(); h <- hill_site(rv$snap)
+    if (is.null(rk) || !nrow(rk)) return(data.frame(note = "No cover data to rank species for this site."))
+    ec <- if (!is.null(h)) max(1, round(h["q1"])) else NA_integer_
+    rk$effective_common_core <- if (is.na(ec)) NA else ifelse(rk$rank <= ec, "yes", "no")
+    rk[, c("rank","scientificName","family","nativity","summed_cover","cover_share_pct","cum_share_pct","effective_common_core")]
+  }
+  observeEvent(plotly::event_data("plotly_click", source = "hillSrc"), {
+    occ <- rv$snap; req(occ)
+    h  <- hill_site(occ); rk <- hill_ranked(); req(!is.null(h), !is.null(rk), nrow(rk) > 0)
+    qk <- plotly::event_data("plotly_click", source = "hillSrc")$customdata %||% "q1"
+    ec <- max(1, round(h["q1"]))
+    lab <- switch(qk, q0 = "q0 — richness (every species present)",
+                       q1 = "q1 — effectively common species",
+                       q2 = "q2 — dominant species", "the diversity profile")
+    df <- rk
+    df$is_core <- df$rank <= ec
+    show <- data.frame(
+      `#` = df$rank,
+      Species = df$scientificName,
+      Family = df$family,
+      Status = df$nativity,
+      `Summed cover` = df$summed_cover,
+      `Cover %` = df$cover_share_pct,
+      `Cumulative %` = df$cum_share_pct,
+      check.names = FALSE)
+    dt <- DT::datatable(show, rownames = FALSE,
+            options = list(pageLength = 12, dom = "tp", order = list()),
+            class = "compact stripe") %>%
+          DT::formatStyle("#", target = "row",
+            backgroundColor = DT::styleRow(which(df$is_core), "rgba(95,209,106,0.14)"))
+    showModal(modalDialog(
+      title = tagList(bs_icon("diagram-2"), " Species behind the diversity profile"),
+      size = "l", easyClose = TRUE,
+      footer = tagList(
+        downloadButton("hillCsv", "Download (CSV)", class = "smt-snap-btn"),
+        modalButton("Close")),
+      div(class = "qc-modal-intro",
+        p(HTML(sprintf("You clicked <b>%s</b>. This site holds <b>%.0f</b> species in cover; q1 says about <span class='ci-hero'>%d</span> are <b>effectively common</b> (evenness-weighted).", lab, h["q0"], ec))),
+        p(HTML(sprintf("q1 is an <b>effective number</b>, not a hand-picked list of exactly %d names. The species are ranked by summed 1 m\U00B2 cover below; the <span style='background:rgba(95,209,106,0.30);padding:1px 4px;border-radius:3px'>top %d highlighted</span> are the cluster that &ldquo;effectively common &asymp; %d&rdquo; describes. The long tail of low-cover species is real, just rare.", ec, ec, ec)))),
+      dt))
+  })
+  output$hillCsv <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_hill-ranked-species_%s.csv",
+                                  rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) utils::write.csv(hill_csv_df(), file, row.names = FALSE, na = ""),
+    contentType = "text/csv")
 
   # ---- NATIVE vs INVASIVE -------------------------------------------------
   output$invTrend <- renderPlotly({
@@ -645,30 +711,122 @@ server <- function(input, output, session) {
                      `Mean cover %` = wl$mean_cover, `# plots` = wl$n_plots, check.names = FALSE)
     DT::datatable(df, rownames = FALSE, options = list(pageLength = 8, dom = "tp", order = list(list(2, "desc"))))
   })
+  output$watchlistCsv <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_invasive-watchlist_%s.csv",
+                                  rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      occ <- rv$snap; wl <- if (is.null(occ)) NULL else invasive_watchlist(occ)
+      out <- if (is.null(wl) || !nrow(wl)) data.frame(note = "No introduced species recorded here.")
+             else data.frame(scientificName = wl$scientificName, family = wl$family,
+                             mean_cover_pct = wl$mean_cover, n_plots = wl$n_plots,
+                             stringsAsFactors = FALSE)
+      utils::write.csv(out, file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
   output$pressurePlot <- renderPlotly({
-    occ <- rv$snap; req(occ); ip <- invasion_pressure(occ); if (is.null(ip) || !nrow(ip)) return(note_plot("No invasion-pressure data"))
-    ip$lab <- short_plot(ip$plotID)
-    mx <- max(c(ip$intro_1m, ip$intro_400), 1)
-    # both axes are small integer counts, so ties pile up invisibly at (0,0) and
-    # on the 1:1 line — nudge the DISPLAY positions deterministically while the
-    # hover still reports the TRUE integers (carried in customdata).
+    occ <- rv$snap; req(occ); fh <- species_foothold(occ); if (is.null(fh) || !nrow(fh)) return(note_plot("No introduced species recorded here"))
+    mx <- max(c(fh$plots_1m, fh$plots_400), 1)
+    # both axes are small integer plot-counts, so ties pile up invisibly on the
+    # 1:1 line — nudge the DISPLAY positions deterministically while the hover (and
+    # the click reveal) keep the TRUE integers + the species name (customdata).
     set.seed(1)
-    ip$jx <- ip$intro_1m  + stats::runif(nrow(ip), -0.12, 0.12)
-    ip$jy <- ip$intro_400 + stats::runif(nrow(ip), -0.12, 0.12)
-    ip$cd <- lapply(seq_len(nrow(ip)), function(i) list(ip$lab[i], ip$intro_1m[i], ip$intro_400[i]))
-    plot_ly(ip, x = ~jx, y = ~jy, type = "scatter", mode = "markers",
-      customdata = ~cd, marker = list(color = DDL$introduced, size = 11, opacity = 0.7, line = list(color = "#fff", width = 1)),
-      hovertemplate = "plot %{customdata[0]}<br>%{customdata[1]} introduced at 1 m²<br>%{customdata[2]} introduced in 400 m²<extra></extra>") %>%
+    fh$jx <- fh$plots_1m  + stats::runif(nrow(fh), -0.12, 0.12)
+    fh$jy <- fh$plots_400 + stats::runif(nrow(fh), -0.12, 0.12)
+    # per-species pin-card HTML — the .smt-open chip opens this species in the
+    # foothold reveal modal (same path as a direct click). data-tag = species key.
+    # customdata carries the pin-card HTML (what pincards.js pins on a tap); the
+    # species name rides in its data-tag, which BOTH the .smt-open chip and the
+    # server's direct plotly_click handler read to open the foothold reveal.
+    fh$tip <- paste0(
+      "<span class='smt-pin-emoji'>\U0001F33F</span> <b><i>", fh$scientificName, "</i></b><br/>",
+      "<span class='smt-pin-stats'>", fh$family, " \U00B7 introduced",
+        "<br/>", fh$plots_1m, " plot", ifelse(fh$plots_1m == 1, "", "s"), " at 1 m\U00B2 \U00B7 ",
+        fh$plots_400, " plot", ifelse(fh$plots_400 == 1, "", "s"), " in the 400 m\U00B2 plot",
+        ifelse(is.finite(fh$mean_cover_1m), paste0("<br/>mean ", fh$mean_cover_1m, "% cover at 1 m\U00B2"), ""),
+        "</span>",
+      "<br/><span class='smt-open-foothold' role='button' tabindex='0' data-tag='", fh$scientificName,
+        "'>\U0001F50E Where is it? &rarr;</span>",
+      "<br/><em class='smt-pin-hint'>Tap the dot to pin this card</em>")
+    plot_ly(fh, x = ~jx, y = ~jy, type = "scatter", mode = "markers", source = "footholdSrc",
+      customdata = ~tip, text = ~scientificName,
+      marker = list(color = DDL$introduced, size = 11, opacity = 0.7, line = list(color = "#fff", width = 1)),
+      hovertemplate = "<i>%{text}</i><br>%{x:.0f} plots at 1 m²<br>%{y:.0f} plots in 400 m²<extra></extra>") %>%
+      plotly::event_register("plotly_click") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(showlegend = FALSE,
-        xaxis = list(title = "Introduced species detectable at 1 m²", rangemode = "tozero"),
-        yaxis = list(title = "Introduced species in the whole 400 m² plot", rangemode = "tozero"),
+        xaxis = list(title = "Plots the species reaches at 1 m²", rangemode = "tozero"),
+        yaxis = list(title = "Plots the species reaches in the 400 m² plot", rangemode = "tozero"),
         shapes = list(list(type = "line", x0 = 0, y0 = 0, x1 = mx, y1 = mx,
           line = list(color = "rgba(120,130,140,0.5)", dash = "dot", width = 1))),
-        annotations = list(list(text = "on the 1:1 line = every invader is already at the finest scale (points jittered to separate ties)",
+        annotations = list(list(text = "each dot = one introduced species · above the 1:1 line = spread past its 1 m² footholds (points jittered to separate ties)",
           x = 0, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
           font = list(color = if (is_dark()) "#9fb0c4" else "#6b7a85", size = 11))))
   })
+
+  # ---- Foothold member-reveal: click a dot (or its "Where is it?" chip) ------
+  # reveal ONE introduced species' detail — the plots it reaches at 1 m² vs across
+  # the 400 m² plot, family, mean cover — + a CSV. Two entry points resolve to the
+  # same species name: a direct plotly_click (species rides in the pin-card HTML's
+  # data-tag, inside customdata) and the .smt-open-foothold chip (footballRequest).
+  rv_foothold <- reactiveVal(NULL)
+  show_foothold <- function(sp) {
+    occ <- rv$snap; req(occ); fh <- species_foothold(occ); req(!is.null(fh))
+    row <- fh[fh$scientificName == sp, , drop = FALSE]
+    if (!nrow(row)) return(invisible())
+    rv_foothold(sp)
+    only1m  <- setdiff(strsplit(row$plotlist_400, ", ")[[1]], strsplit(row$plotlist_1m, ", ")[[1]])
+    gap <- row$plots_400 - row$plots_1m
+    reach <- if (gap > 0) sprintf("It turns up in <b>%d</b> more plot%s across the whole 400 m\U00B2 plot than its 1 m\U00B2 footholds alone (%s) — the signature of spread past a chance toehold.",
+                                  gap, ifelse(gap == 1, "", "s"), if (length(only1m)) paste(only1m, collapse = ", ") else "—")
+             else "Every plot it reaches, it's already detectable at the finest 1 m\U00B2 scale — no hidden spread."
+    tile <- function(v, l) div(class = "qc-tile", div(class = "qc-tile-v", v), div(class = "qc-tile-l", l))
+    showModal(modalDialog(
+      title = tagList(bs_icon("search"), HTML(sprintf(" <i>%s</i>", sp))),
+      size = "l", easyClose = TRUE,
+      footer = tagList(downloadButton("footholdCsv", "Download (CSV)", class = "smt-snap-btn"), modalButton("Close")),
+      div(class = "qc-head-badges", style = "margin-bottom:8px",
+        glow_badge(paste0(row$family, " · introduced"), DDL$introduced)),
+      div(class = "qc-tiles",
+        tile(row$plots_1m, "plots at 1 m\U00B2"),
+        tile(row$plots_400, "plots in 400 m\U00B2"),
+        tile(if (is.finite(row$mean_cover_1m)) paste0(row$mean_cover_1m, "%") else "\U2014", "mean 1 m\U00B2 cover")),
+      div(class = "qc-modal-intro", p(HTML(reach))),
+      div(class = "foothold-plots",
+        p(tags$b("At 1 m\U00B2 (finest scale): "), if (nzchar(row$plotlist_1m)) row$plotlist_1m else em("not detected at 1 m\U00B2")),
+        p(tags$b("Across the 400 m\U00B2 plot: "), if (nzchar(row$plotlist_400)) row$plotlist_400 else em("\U2014")))))
+  }
+  observeEvent(plotly::event_data("plotly_click", source = "footholdSrc"), {
+    cd <- plotly::event_data("plotly_click", source = "footholdSrc")$customdata
+    # the customdata is the pin-card HTML; pull the species out of its data-tag.
+    # regmatches (NOT a greedy sub: the class='…' quote upstream makes a greedy
+    # .* capture the wrong quote-pair and return empty).
+    sp <- NA_character_
+    if (length(cd)) {
+      m <- regmatches(as.character(cd)[1], regexpr("data-tag='[^']+'", as.character(cd)[1]))
+      # strip the fixed wrapper by length, not a quote-in-regex sub (the embedded
+      # single-quotes make a sub pattern fragile across engines/escaping)
+      if (length(m) && nchar(m) > 11) sp <- substr(m, 11L, nchar(m) - 1L)
+    }
+    if (!is.na(sp) && nzchar(sp)) show_foothold(sp)
+  })
+  observeEvent(input$footholdRequest, if (nzchar(input$footholdRequest %||% "")) show_foothold(input$footholdRequest), ignoreInit = TRUE)
+  output$footholdCsv <- downloadHandler(
+    filename = function() sprintf("NEON-PlantDiversity_%s_foothold-%s_%s.csv",
+                                  rv$site %||% "site",
+                                  gsub("[^A-Za-z0-9]+", "-", rv_foothold() %||% "species"),
+                                  format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      occ <- rv$snap; sp <- rv_foothold(); fh <- if (is.null(occ)) NULL else species_foothold(occ)
+      row <- if (!is.null(fh)) fh[fh$scientificName == sp, , drop = FALSE] else NULL
+      out <- if (is.null(row) || !nrow(row)) data.frame(note = "No foothold data for this species.")
+             else data.frame(
+               scientificName = row$scientificName, family = row$family, nativity = "Introduced",
+               plots_at_1m2 = row$plots_1m, plots_in_400m2 = row$plots_400,
+               foothold_gap = row$plots_400 - row$plots_1m,
+               mean_cover_pct_1m2 = row$mean_cover_1m,
+               plots_at_1m2_list = row$plotlist_1m, plots_in_400m2_list = row$plotlist_400,
+               stringsAsFactors = FALSE)
+      utils::write.csv(out, file, row.names = FALSE, na = "")
+    }, contentType = "text/csv")
 
   # ---- ENVIRONMENT (climate & phenology vs the plant signal) -------------
   # Env data loads lazily per site (only when something on this tab renders).

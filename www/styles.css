@@ -1186,12 +1186,12 @@ svg.smt-pin-lines {
 .smt-pin-emoji { font-size: 20px; line-height: 1; }
 .smt-pin-rar { font-size: 11px; color: var(--gold); font-weight: 600; }
 .smt-pin-stats { color: #aebfd6; font-size: 11.5px; }
-.smt-pin .smt-open {
+.smt-pin .smt-open, .smt-pin .smt-open-foothold {
   display: inline-block; margin-top: 7px; padding: 2px 9px;
   color: var(--pine); background: var(--gold); border-radius: 6px;
   font-weight: 600; font-size: 11.5px; cursor: pointer;
 }
-.smt-pin .smt-open:hover { background: #E3C56A; }
+.smt-pin .smt-open:hover, .smt-pin .smt-open-foothold:hover { background: #E3C56A; }
 .smt-pin-close {
   position: absolute; top: 1px; right: 6px; background: none; border: none;
   color: #cfd9e8; font-size: 17px; line-height: 1; cursor: pointer; padding: 0;
@@ -1209,6 +1209,13 @@ svg.smt-pin-lines {
   50% { box-shadow: 0 0 0 4px var(--gold), 0 12px 32px rgba(20, 45, 30, 0.5); }
 }
 .smt-pin.smt-pulse { animation: smtPulse 0.5s ease 2; }
+
+/* member-reveal modals (Hill ranked species, foothold "where is it?") */
+.qc-modal-intro { font-size: 13.5px; color: var(--ink, inherit); margin: 4px 0 10px; }
+.qc-modal-intro p { margin-bottom: 8px; }
+.foothold-plots { margin-top: 10px; font-size: 13px; }
+.foothold-plots p { margin-bottom: 6px; }
+.foothold-plots em { color: var(--muted); }
 
 /* tab-head controls + the scatter toolbar */
 .sizelab-controls { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }

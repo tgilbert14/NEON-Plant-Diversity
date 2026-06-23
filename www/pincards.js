@@ -40,13 +40,22 @@
 
   /* map a data point (dx, dy) to box-relative pixels via plotly's live axes, so
      a pin's leader line follows the dot through any resize/relayout. */
+  /* l2p wants the axis's LINEAR coordinate. plotly_click hands x/y back as the raw
+     DATA value, so coerce against the axis type before projecting: log10 it on a log
+     axis (the species-area curve), epoch-ms it on a date axis — else the leader line
+     falls back to box-centre with no anchor. */
+  function l2pVal(ax, v) {
+    if (ax && ax.type === "log" && typeof v === "number" && v > 0) v = Math.log(v) / Math.LN10;
+    else if (ax && ax.type === "date" && typeof v === "string") { var t = Date.parse(v); if (!isNaN(t)) v = t; }
+    return ax.l2p(v);
+  }
   function anchorPx(gd, box, dx, dy) {
     var fl = gd && gd._fullLayout;
     if (!fl || !fl.xaxis || !fl.yaxis || typeof fl.xaxis.l2p !== "function") return null;
     var gdR = gd.getBoundingClientRect(), boxR = box.getBoundingClientRect();
     return {
-      ax: fl.xaxis.l2p(dx) + fl.xaxis._offset + (gdR.left - boxR.left),
-      ay: fl.yaxis.l2p(dy) + fl.yaxis._offset + (gdR.top - boxR.top)
+      ax: l2pVal(fl.xaxis, dx) + fl.xaxis._offset + (gdR.left - boxR.left),
+      ay: l2pVal(fl.yaxis, dy) + fl.yaxis._offset + (gdR.top - boxR.top)
     };
   }
 
@@ -67,9 +76,13 @@
     pin.__line.setAttribute("y2", r.top - b.top + r.height / 2);
   }
 
-  window.smtClearPins = function () {
-    document.querySelectorAll(".smt-pin").forEach(function (p) { p.remove(); });
-    document.querySelectorAll("svg.smt-pin-lines").forEach(function (s) { s.innerHTML = ""; });
+  /* clear pins. With a boxId, scope to that one chart's box (so a multi-chart page
+     can clear one without wiping the others); with no arg, clear every box. */
+  window.smtClearPins = function (boxId) {
+    var root = boxId ? document.getElementById(boxId) : document;
+    if (!root) return;
+    root.querySelectorAll(".smt-pin").forEach(function (p) { p.remove(); });
+    root.querySelectorAll("svg.smt-pin-lines").forEach(function (s) { s.innerHTML = ""; });
   };
 
   /* re-anchor every pin's leader line + dot from its stored DATA coords */
@@ -125,28 +138,41 @@
       ln.remove(); dot.remove(); pin.remove();
     });
 
-    /* drag-to-move (clamped so a fat-thumb drag can't fling the card off-box) */
+    /* drag-to-move (clamped so a fat-thumb drag can't fling the card off-box).
+       A 4px move threshold (S8): a near-miss TAP — e.g. a few px off the QC chip —
+       never engages the drag or preventDefaults, so the intended click still fires.
+       move/up/cancel bound on WINDOW + capture released (S7): a pointerup off the
+       card (scroll-steal, edge swipe, pointercancel) can never leave it stuck. */
     pin.addEventListener("pointerdown", function (ev) {
       if (ev.target.closest("a, .smt-pin-close, .smt-open, .smt-pin-resize")) return;
-      ev.preventDefault();
-      try { pin.setPointerCapture(ev.pointerId); } catch (e) {}
       var sx = ev.clientX - pin.offsetLeft, sy = ev.clientY - pin.offsetTop;
+      var startX = ev.clientX, startY = ev.clientY, dragging = false;
       function mv(em) {
+        if (!dragging) {
+          if (Math.abs(em.clientX - startX) < 4 && Math.abs(em.clientY - startY) < 4) return;
+          dragging = true;
+          try { pin.setPointerCapture(ev.pointerId); } catch (e) {}
+        }
+        em.preventDefault();
         var nb = pin.__box.getBoundingClientRect();
         pin.style.left = Math.max(4, Math.min(em.clientX - sx, nb.width - 40)) + "px";
         pin.style.top = Math.max(4, Math.min(em.clientY - sy, nb.height - 28)) + "px";
         updateLine(pin);
       }
       function up() {
-        pin.removeEventListener("pointermove", mv);
-        pin.removeEventListener("pointerup", up); pin.removeEventListener("pointercancel", up);
+        window.removeEventListener("pointermove", mv);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        try { pin.releasePointerCapture(ev.pointerId); } catch (e) {}
       }
-      pin.addEventListener("pointermove", mv);
-      pin.addEventListener("pointerup", up); pin.addEventListener("pointercancel", up);
+      window.addEventListener("pointermove", mv);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     });
 
     /* grip-to-resize via scale() (clientX throughout, matching drag, so a
-       scrolling mobile viewport can't make the scale jump) */
+       scrolling mobile viewport can't make the scale jump). move/up/cancel on
+       WINDOW + capture released, matching the drag handler (S7). */
     grip.addEventListener("pointerdown", function (ev) {
       ev.preventDefault(); ev.stopPropagation();
       try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
@@ -157,11 +183,14 @@
         pin.__scale = s; pin.style.transform = "scale(" + s + ")"; updateLine(pin);
       }
       function up() {
-        grip.removeEventListener("pointermove", mv);
-        grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up);
+        window.removeEventListener("pointermove", mv);
+        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        try { grip.releasePointerCapture(ev.pointerId); } catch (e) {}
       }
-      grip.addEventListener("pointermove", mv);
-      grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", up);
+      window.addEventListener("pointermove", mv);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     });
     grip.addEventListener("dblclick", function () {
       pin.__scale = 1; pin.style.transform = ""; updateLine(pin);
@@ -265,33 +294,90 @@
     node.querySelectorAll(".smt-pin.smt-pulse").forEach(function (p) { p.classList.remove("smt-pulse"); });
     toastStart("Rendering image…");
     setTimeout(function () {
-      htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: bgColor(), cacheBust: true, skipFonts: true })
+      htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: bgColor(), cacheBust: true, skipFonts: true,
+        filter: function (n) { return !(n.classList && (n.classList.contains("smt-pin-close") ||
+          n.classList.contains("smt-pin-resize") || n.classList.contains("smt-snap-btn") ||
+          n.classList.contains("smt-clear-btn"))); } })   // keep cards + leader lines; drop chrome buttons
         .then(function (url) { downloadUrl(url, name); toastDone("Saved ✓"); })
         .catch(function () { toastDone("Render failed — try again", true); })
         .then(function () { saving = false; });
     }, 90);
   }
-  window.smtSaveScatter = function () { snap(document.querySelector(".smt-pinnable"), "neon-plant-diversity-lab.png"); };
+  function stamp() {
+    var d = new Date();
+    return d.getFullYear() + ("0" + (d.getMonth() + 1)).slice(-2) + ("0" + d.getDate()).slice(-2);
+  }
+  function siteTag() { return (window.__plantSite || "site").replace(/[^A-Za-z0-9]+/g, ""); }
+
+  /* per-box export: snapshot ONE chart's .smt-pinnable box (pins + leader lines
+     baked in) by its id. filename may be a literal or contain "<site>"/"<date>"
+     placeholders the toolbar buttons don't need to compute in R. */
+  window.smtSave = function (boxId, filename) {
+    var node = boxId ? document.getElementById(boxId) : document.querySelector(".smt-pinnable");
+    if (!node) return;
+    var name = String(filename || ("neon-plantdiv-" + (boxId || "chart") + "-" + siteTag() + "_" + stamp()))
+      .replace(/<site>/g, siteTag()).replace(/<date>/g, stamp());
+    if (!/\.png$/i.test(name)) name += ".png";
+    snap(node, name);
+  };
+
+  window.smtSaveScatter = function () {
+    window.smtSave("labScatterBox", "neon-plantdiv-diversity-lab-" + siteTag() + "_" + stamp() + ".png");
+  };
   window.smtSaveQcCard = function () {
     var node = document.getElementById("qcCardNode");
     if (!node) return;
     var short = node.getAttribute("data-short") || "qc";
-    snap(node, "neon-qc-" + short.replace(/[^A-Za-z0-9]+/g, "") + ".png");
+    snap(node, "neon-plantdiv-" + siteTag() + "-qc-" + short.replace(/[^A-Za-z0-9]+/g, "") + "_" + stamp() + ".png");
   };
 
-  /* tap (or keyboard-activate) a highlighted "Open QC history card" chip inside a
-     pinned card -> ask the server to select that individual + render its QC card */
+  /* Scroll the rendered plot/QC card into view once it materialises. Hard-won:
+     • the card re-renders async (uiOutput) after the server selects the plot, so
+       poll for the actual rendered node (#qcCardNode), ~2.5s.
+     • behavior:"auto" (instant), NOT "smooth": the scroll happens inside a nested
+       bslib fill container where smooth scrollIntoView silently no-ops — instant
+       is reliable and respects reduced-motion by definition.
+     Driven client-side from the chip click (below) so it can't depend on a server
+     round-trip message to fire. */
+  function revealQcCard() {
+    var tries = 0;
+    (function go() {
+      var n = document.getElementById("qcCardNode");
+      if (n && n.getBoundingClientRect().height > 1) {
+        n.scrollIntoView({ behavior: "auto", block: "start" });
+        return;
+      }
+      if (++tries < 50) setTimeout(go, 50);
+    })();
+  }
+
+  /* tap (or keyboard-activate) a highlighted "Open plot profile" chip inside a
+     pinned card -> select that plot server-side + scroll its plot card into view */
   function openChip(el) {
     if (!el || !window.Shiny) return;
     var tag = el.getAttribute("data-tag");
-    if (tag) Shiny.setInputValue("qcCardRequest", tag, { priority: "event" });
+    if (!tag) return;
+    Shiny.setInputValue("qcCardRequest", tag, { priority: "event" });
+    revealQcCard();
+  }
+  /* a "Where is it?" chip inside a pinned foothold card -> ask the server to open
+     that introduced species' foothold reveal modal (its own input, distinct from
+     the plot-profile chip above) */
+  function openFoothold(el) {
+    if (!el || !window.Shiny) return;
+    var tag = el.getAttribute("data-tag");
+    if (tag) Shiny.setInputValue("footholdRequest", tag, { priority: "event" });
   }
   document.addEventListener("click", function (e) {
+    var fh = e.target.closest(".smt-open-foothold");
+    if (fh) { openFoothold(fh); return; }
     var el = e.target.closest(".smt-open");
     if (el) openChip(el);
   });
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" && e.key !== " ") return;
+    var fh = e.target.closest && e.target.closest(".smt-open-foothold");
+    if (fh) { e.preventDefault(); openFoothold(fh); return; }
     var el = e.target.closest && e.target.closest(".smt-open");
     if (el) { e.preventDefault(); openChip(el); }
   });
@@ -301,7 +387,27 @@
     mo.observe(document.body, { childList: true, subtree: true });
     scan();
   });
-  /* re-bind/re-fit when the Size Lab tab becomes visible (plotly in a hidden tab
-     can render late, and a tab-show dispatches a resize that relayouts the plot) */
+  /* re-bind/re-fit when a tab becomes visible (plotly in a hidden tab can render
+     late, and a tab-show dispatches a resize that relayouts the plot) */
   document.addEventListener("shown.bs.tab", function () { setTimeout(scan, 80); });
+
+  /* the server may also fire "smtRevealQc" after selecting the plot; bring its
+     card into view (it re-renders async via uiOutput, so a short settle). The chip
+     click (openChip) already scrolls client-side; this is a backup. ALSO carries
+     the loaded site code into window.__plantSite so self-describing export
+     filenames name the site. Registered LAST and fully guarded so a duplicate/late
+     registration can never kill the pin-binding listeners above; self-polls because
+     this IIFE runs at <head> before Shiny exists. */
+  (function registerReveal() {
+    try {
+      if (window.Shiny && Shiny.addCustomMessageHandler) {
+        Shiny.addCustomMessageHandler("smtRevealQc", function () { revealQcCard(); });
+        Shiny.addCustomMessageHandler("plantSite", function (msg) {
+          if (msg && msg.site) window.__plantSite = String(msg.site);
+        });
+        return;
+      }
+    } catch (e) { return; }
+    setTimeout(registerReveal, 60);
+  })();
 })();
