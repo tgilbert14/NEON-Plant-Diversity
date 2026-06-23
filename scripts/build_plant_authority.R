@@ -133,14 +133,13 @@ fetch_state_symbols <- function(state_name) {
   NULL                                   # fetch failed -> uncovered (graceful)
 }
 
-# which states the source can serve right now (so we never silently miss coverage)
-gsat_states <- tryCatch({
-  r <- httr::GET("https://plantsservices.sc.egov.usda.gov/api/plantsDownload/GetGSATStateList", httr::timeout(40))
-  if (httr::status_code(r) == 200) jsonlite::fromJSON(httr::content(r, "text", encoding = "UTF-8"))$State else character(0)
-}, error = function(e) character(0))
-# attempt every L48 state name; only the served ones return symbols (rest -> uncovered)
-state_names_to_try <- if (length(gsat_states)) gsat_states else names(STATE_ABBR)
-state_names_to_try <- intersect(state_names_to_try, names(STATE_ABBR))   # L48 only
+# Per-symbol state distribution is populated SEPARATELY from GBIF occurrence facets
+# (scripts/fetch_gbif_states.py -> scripts/build_plant_states.R), because USDA PLANTS'
+# own state API serves only 18 states and its full-distribution search times out
+# server-side. So this base rebuild leaves states_l48 empty; run build_plant_states.R
+# after it to fill states_l48 / states_covered for the full country from GBIF.
+# (fetch_state_symbols above is retained, unused, only as the legacy GSAT reference.)
+state_names_to_try <- character(0)
 
 cat("\nstate distribution: attempting", length(state_names_to_try), "states ...\n")
 SYM_STATES <- new.env(parent = emptyenv())   # accepted_symbol -> chr() of state abbrs

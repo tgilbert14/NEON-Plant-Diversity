@@ -1,82 +1,70 @@
 # ===========================================================================
 # build_plant_states.R — augment data/authority/plants_lookup.rds with a per-symbol
-# `states_l48` field (the L48 USPS state codes each species is recorded for) WITHOUT
-# re-fetching every plant profile. Build-only (httr/jsonlite never enter global.R /
-# the rsconnect manifest). Source: USDA PLANTS public-domain state plant lists.
+# `states_l48` field (the US state codes each species is recorded for) for the FULL
+# country. USDA PLANTS' own state-checklist API (GetGSATByState) only serves 18
+# states and its full-distribution search times out server-side, so we source the
+# distribution from GBIF occurrence facets instead, which cover every state.
 #
-#   USDA, NRCS. The PLANTS Database (https://plants.usda.gov). National Plant Data
-#   Team, Greensboro, NC. Content is public domain.
+# Two steps (build-only; nothing here enters global.R / the rsconnect manifest):
+#   1. scripts/fetch_gbif_states.py harvests raw (symbol, gbif_key, states) into a
+#      TSV (run after build_plant_authority.R emits the species list).
+#   2. THIS script cleans the raw GBIF state names to USPS codes and merges them.
 #
-# Endpoint: GET /api/plantsDownload/GetGSATByState?state=<StateName> returns a state's
-# full recorded symbol list as JSON. The served set covers 18 states today; states it
-# does NOT serve get NO states_l48 entries and the app DEGRADES GRACEFULLY there. We
-# record the served states in `states_covered` so the app can tell "this state isn't
-# covered (can't run the check)" apart from "covered, but not recorded for this state".
-# Re-runnable. The same fetch logic is folded into build_plant_authority.R for a full
-# rebuild; this script is the cheap, no-profile-refetch path.
+# Permissive by design (owner steer: flag obvious errors only, not range-edge
+# natives): a species is "plausible" in any state GBIF records it in (>=2 records,
+# the python threshold). `states_covered` is the full set of US states/territories,
+# so the app runs the state-plausibility demotion everywhere (no 18-state gap).
+#
+#   Source: GBIF.org occurrence facets (CC-BY). USDA PLANTS nativity is still the
+#   authority for native-vs-introduced; GBIF only supplies WHERE it occurs.
 # ===========================================================================
-suppressWarnings(suppressMessages({ library(httr); library(jsonlite) }))
-setwd("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Diversity")
+suppressWarnings(suppressMessages({ library(dplyr) }))
+ROOT <- "C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Diversity"
+AUTH <- file.path(ROOT, "data/authority/plants_lookup.rds")
+RAW  <- if (length(commandArgs(TRUE))) commandArgs(TRUE)[1] else "C:/temp/gbif/states_raw.tsv"
 
-AUTH <- "data/authority/plants_lookup.rds"
-if (!file.exists(AUTH)) stop("plants_lookup.rds not found; run build_plant_authority.R first")
+# full US state / territory name -> USPS, matched case-insensitively. Combined GBIF
+# strings ("New Mexico / Texas") are split on "/"; junk ("unknown") drops out.
+NAME2AB <- c(
+  "ALABAMA"="AL","ALASKA"="AK","ARIZONA"="AZ","ARKANSAS"="AR","CALIFORNIA"="CA",
+  "COLORADO"="CO","CONNECTICUT"="CT","DELAWARE"="DE","FLORIDA"="FL","GEORGIA"="GA",
+  "HAWAII"="HI","IDAHO"="ID","ILLINOIS"="IL","INDIANA"="IN","IOWA"="IA","KANSAS"="KS",
+  "KENTUCKY"="KY","LOUISIANA"="LA","MAINE"="ME","MARYLAND"="MD","MASSACHUSETTS"="MA",
+  "MICHIGAN"="MI","MINNESOTA"="MN","MISSISSIPPI"="MS","MISSOURI"="MO","MONTANA"="MT",
+  "NEBRASKA"="NE","NEVADA"="NV","NEW HAMPSHIRE"="NH","NEW JERSEY"="NJ","NEW MEXICO"="NM",
+  "NEW YORK"="NY","NORTH CAROLINA"="NC","NORTH DAKOTA"="ND","OHIO"="OH","OKLAHOMA"="OK",
+  "OREGON"="OR","PENNSYLVANIA"="PA","RHODE ISLAND"="RI","SOUTH CAROLINA"="SC",
+  "SOUTH DAKOTA"="SD","TENNESSEE"="TN","TEXAS"="TX","UTAH"="UT","VERMONT"="VT",
+  "VIRGINIA"="VA","WASHINGTON"="WA","WEST VIRGINIA"="WV","WISCONSIN"="WI","WYOMING"="WY",
+  "DISTRICT OF COLUMBIA"="DC","PUERTO RICO"="PR","VIRGIN ISLANDS"="VI",
+  "U.S. VIRGIN ISLANDS"="VI","AMERICAN SAMOA"="AS","GUAM"="GU")
+
+clean_states <- function(s) {
+  if (is.na(s) || !nzchar(s) || s == "NOMATCH") return(NA_character_)
+  parts <- unlist(strsplit(s, "[|/]"))                 # split combined + multi
+  parts <- toupper(trimws(gsub("\\s+", " ", parts)))
+  ab <- unname(NAME2AB[parts])
+  ab <- ab[!is.na(ab)]
+  if (!length(ab)) return(NA_character_)
+  paste(sort(unique(ab)), collapse = ";")
+}
+
+raw <- read.table(RAW, sep = "\t", header = FALSE, quote = "", comment.char = "",
+                   stringsAsFactors = FALSE, fill = TRUE,
+                   col.names = c("sym", "key", "states"))
+raw$states_l48 <- vapply(raw$states, clean_states, character(1))
+
 out <- readRDS(AUTH)
 authority <- out$authority
-synonyms  <- out$synonyms %||% character(0)
-`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
-
-STATE_ABBR <- c(Alabama="AL", Alaska="AK", Arizona="AZ", Arkansas="AR", California="CA",
-  Colorado="CO", Connecticut="CT", Delaware="DE", Florida="FL", Georgia="GA", Idaho="ID",
-  Illinois="IL", Indiana="IN", Iowa="IA", Kansas="KS", Kentucky="KY", Louisiana="LA",
-  Maine="ME", Maryland="MD", Massachusetts="MA", Michigan="MI", Minnesota="MN",
-  Mississippi="MS", Missouri="MO", Montana="MT", Nebraska="NE", Nevada="NV",
-  "New Hampshire"="NH", "New Jersey"="NJ", "New Mexico"="NM", "New York"="NY",
-  "North Carolina"="NC", "North Dakota"="ND", Ohio="OH", Oklahoma="OK", Oregon="OR",
-  Pennsylvania="PA", "Rhode Island"="RI", "South Carolina"="SC", "South Dakota"="SD",
-  Tennessee="TN", Texas="TX", Utah="UT", Vermont="VT", Virginia="VA", Washington="WA",
-  "West Virginia"="WV", Wisconsin="WI", Wyoming="WY")
-
-fetch_state_symbols <- function(state_name) {
-  u <- sprintf("https://plantsservices.sc.egov.usda.gov/api/plantsDownload/GetGSATByState?state=%s",
-               utils::URLencode(state_name))
-  for (k in 1:3) {
-    r <- tryCatch(httr::GET(u, httr::timeout(90)), error = function(e) NULL)
-    if (!is.null(r) && httr::status_code(r) == 200) {
-      j <- tryCatch(jsonlite::fromJSON(httr::content(r, "text", encoding = "UTF-8")),
-                    error = function(e) NULL)
-      if (is.data.frame(j) && nrow(j) && "Symbol" %in% names(j)) return(toupper(trimws(j$Symbol)))
-      return(NULL)
-    }
-    Sys.sleep(0.5 * k)
-  }
-  NULL
-}
-
-gsat_states <- tryCatch({
-  r <- httr::GET("https://plantsservices.sc.egov.usda.gov/api/plantsDownload/GetGSATStateList", httr::timeout(40))
-  if (httr::status_code(r) == 200) jsonlite::fromJSON(httr::content(r, "text", encoding = "UTF-8"))$State else character(0)
-}, error = function(e) character(0))
-state_names_to_try <- intersect(if (length(gsat_states)) gsat_states else names(STATE_ABBR), names(STATE_ABBR))
-
-cat("state distribution: attempting", length(state_names_to_try), "states ...\n")
-SYM_STATES <- new.env(parent = emptyenv()); covered_states <- character(0)
-for (sn in state_names_to_try) {
-  ab <- unname(STATE_ABBR[sn]); ss <- fetch_state_symbols(sn)
-  if (is.null(ss) || !length(ss)) { cat(sprintf("  %-16s uncovered\n", sn)); next }
-  covered_states <- c(covered_states, ab)
-  ss_acc <- toupper(trimws(unname(ifelse(ss %in% names(synonyms), synonyms[ss], ss))))
-  for (s in unique(ss_acc)) SYM_STATES[[s]] <- c(SYM_STATES[[s]], ab)
-  cat(sprintf("  %-16s %5d symbols (%s)\n", sn, length(ss), ab)); Sys.sleep(0.2)
-}
-covered_states <- sort(unique(covered_states))
-states_l48_for <- function(sym) { v <- SYM_STATES[[sym]]
-  if (is.null(v) || !length(v)) NA_character_ else paste(sort(unique(v)), collapse = ";") }
-
-authority$states_l48 <- vapply(authority$accepted_symbol, states_l48_for, character(1))
+authority$states_l48 <- raw$states_l48[match(authority$accepted_symbol, raw$sym)]
 out$authority <- authority
-out$states_covered <- covered_states
+# Every US state is now covered by GBIF, so the app's state-plausibility check runs
+# at all sites (no 18-state gap). Record the covered set as the full union seen.
+out$states_covered  <- sort(unique(unlist(strsplit(na.omit(authority$states_l48), ";"))))
+out$states_source   <- "GBIF occurrence facets (CC-BY), >=2 records/state"
 out$states_fetchedAt <- format(Sys.time(), "%Y-%m-%d")
 saveRDS(out, AUTH, compress = "xz")
-cat(sprintf("\nstates_l48 merged: %d states covered (%s); %d of %d symbols carry a state distribution\n",
-  length(covered_states), paste(covered_states, collapse = ","),
-  sum(!is.na(authority$states_l48)), nrow(authority)))
+
+cat(sprintf("states_l48 merged from GBIF: %d of %d symbols carry a distribution; %d states/territories covered (%s)\n",
+  sum(!is.na(authority$states_l48)), nrow(authority),
+  length(out$states_covered), paste(out$states_covered, collapse = ",")))
