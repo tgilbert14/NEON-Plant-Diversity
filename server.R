@@ -308,6 +308,150 @@ server <- function(input, output, session) {
     tab <- input$heroNav; if (!is.null(tab) && nzchar(tab)) nav_select("tabs", tab)
   })
 
+  # ---- Search the network -------------------------------------------------
+  # Filters the small in-memory SEARCH_INDEX (built at boot from the committed
+  # bundles) — no live fetch, instant. Two modes: find a species across sites,
+  # and filter sites by introduced/native cover share. Both jump to a site's
+  # Overview through the SAME load_site_full() the map / sidebar use.
+  site_name_of <- function(code) {
+    r <- site_table[site_table$site == code, ]
+    if (nrow(r) && !is.na(r$name[1])) r$name[1] else code
+  }
+  # a per-row "Explore" button: raises the loading overlay client-side, then
+  # fires searchGo (priority event) -> load_site_full(). Same pattern as the map.
+  search_go_btn <- function(code) {
+    sprintf("<button class='sp-btn sp-go search-go' onclick=\"smtLoadStart('%s &middot; loading');Shiny.setInputValue('searchGo','%s',{priority:'event'});\">Explore &rarr;</button>",
+            code, code)
+  }
+
+  # populate the autocompletes server-side (3.5k taxa -> keep the client light)
+  observe({
+    updateSelectizeInput(session, "searchTaxon", choices = SEARCH_TAXON_CHOICES,
+                         selected = "", server = TRUE)
+    updateSelectizeInput(session, "threshInvader", choices = SEARCH_INVADER_CHOICES,
+                         selected = "", server = TRUE)
+  })
+
+  # the rows for the picked species (one per site it occurs at)
+  search_taxon_rows <- reactive({
+    req(input$searchTaxon, nzchar(input$searchTaxon))
+    if (is.null(SEARCH_TAXA)) return(NULL)
+    d <- SEARCH_TAXA[SEARCH_TAXA$scientificName == input$searchTaxon, , drop = FALSE]
+    if (!nrow(d)) return(d)
+    d[order(-dplyr::coalesce(d$mean_cover, -1)), , drop = FALSE]
+  })
+
+  output$searchTaxonMeta <- renderUI({
+    d <- search_taxon_rows()
+    if (is.null(d) || !nrow(d)) return(NULL)
+    nat <- mode_chr(d$nativity); fam <- mode_chr(d$family)
+    tone <- switch(nat %||% "Unknown", Native = "native", Introduced = "introduced", "unknown")
+    div(class = "search-taxon-meta",
+      span(class = paste0("nat-chip nat-", tone), nat %||% "Unknown"),
+      if (!is.na(fam)) span(class = "dim", " · ", em(fam)))
+  })
+
+  output$searchTaxonCount <- renderUI({
+    d <- search_taxon_rows()
+    n <- if (is.null(d)) 0 else nrow(d)
+    tot <- if (!is.null(SEARCH_INDEX)) nrow(SEARCH_INDEX$sites) else length(BUNDLED)
+    if (!nzchar(input$searchTaxon %||% ""))
+      return(p(class = "dim search-count", "Pick a species to see where it occurs."))
+    p(class = "search-count", sprintf("%d of %d sites", n, tot))
+  })
+
+  output$searchTaxonTbl <- renderDT({
+    d <- search_taxon_rows()
+    if (is.null(d) || !nrow(d))
+      return(datatable(data.frame(Message = "No bundled site has this species."),
+                       rownames = FALSE, options = list(dom = "t"), selection = "none"))
+    yrs <- ifelse(is.na(d$year_min), "",
+                  ifelse(d$year_min == d$year_max, as.character(d$year_min),
+                         paste0(d$year_min, "–", d$year_max)))
+    cov <- ifelse(is.na(d$mean_cover), "presence only", sprintf("%.2f%%", d$mean_cover))
+    out <- data.frame(Site = sprintf("%s &middot; %s", d$site, vapply(d$site, site_name_of, "")),
+                      `% cover` = cov, Plots = d$n_plots, Years = yrs,
+                      Go = vapply(d$site, search_go_btn, ""),
+                      check.names = FALSE, stringsAsFactors = FALSE)
+    datatable(out, rownames = FALSE, escape = FALSE, selection = "none",
+              options = list(pageLength = 12, dom = "tip",
+                             columnDefs = list(list(orderable = FALSE, targets = 4))))
+  })
+
+  # threshold query: sites by introduced/native cover share, OR jump to a site
+  # list filtered to an invader. The "where is invader X" path reuses the taxon
+  # rows (sites that HAVE that introduced species, ranked by its cover there).
+  search_thresh_rows <- reactive({
+    inv <- input$threshInvader %||% ""
+    if (nzchar(inv) && !is.null(SEARCH_TAXA)) {
+      d <- SEARCH_TAXA[SEARCH_TAXA$scientificName == inv, , drop = FALSE]
+      if (!nrow(d)) return(list(mode = "invader", inv = inv, df = d[0, ]))
+      df <- data.frame(site = d$site,
+                       value = d$mean_cover,
+                       label = sprintf("%s cover", inv),
+                       stringsAsFactors = FALSE)
+      df <- df[order(-dplyr::coalesce(df$value, -1)), , drop = FALSE]
+      return(list(mode = "invader", inv = inv, df = df))
+    }
+    # the % threshold path runs on the canonical site_index pct_introduced (the
+    # SAME number as each site's hero), with a native counterpart derived as the
+    # complement-free native share when requested.
+    s <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$sites else SITE_INDEX
+    if (is.null(s) || !nrow(s)) return(list(mode = "pct", df = data.frame()))
+    val <- s$pct_introduced
+    lab <- "% introduced cover"
+    if (identical(input$threshNativity, "Native")) {
+      # native share is recomputed per site from the index taxa (cover-weighted),
+      # so it matches the introduced share's denominator exactly.
+      val <- vapply(s$site, function(st) {
+        d <- SEARCH_TAXA[SEARCH_TAXA$site == st & is.finite(SEARCH_TAXA$mean_cover), ]
+        tot <- sum(d$mean_cover, na.rm = TRUE)
+        if (tot > 0) round(100 * sum(d$mean_cover[d$nativity == "Native"], na.rm = TRUE) / tot, 1) else NA_real_
+      }, numeric(1))
+      lab <- "% native cover"
+    }
+    thr <- suppressWarnings(as.numeric(input$threshPct)); if (!is.finite(thr)) thr <- 0
+    keep <- if (identical(input$threshDir, "le")) is.finite(val) & val <= thr else is.finite(val) & val >= thr
+    df <- data.frame(site = s$site[keep], value = val[keep], label = lab, stringsAsFactors = FALSE)
+    df <- df[order(-df$value), , drop = FALSE]
+    list(mode = "pct", dir = input$threshDir, thr = thr, lab = lab, df = df,
+         total = nrow(s))
+  })
+
+  output$searchThreshCount <- renderUI({
+    r <- search_thresh_rows(); n <- nrow(r$df)
+    tot <- if (!is.null(SEARCH_INDEX)) nrow(SEARCH_INDEX$sites) else length(BUNDLED)
+    if (identical(r$mode, "invader")) {
+      if (!n) return(p(class = "dim search-count", sprintf("No bundled site has %s.", r$inv)))
+      return(p(class = "search-count", sprintf("%s found at %d of %d sites", r$inv, n, tot)))
+    }
+    p(class = "search-count", sprintf("%d of %d sites", n, tot))
+  })
+
+  output$searchThreshTbl <- renderDT({
+    r <- search_thresh_rows()
+    if (is.null(r$df) || !nrow(r$df))
+      return(datatable(data.frame(Message = "No site matches that filter."),
+                       rownames = FALSE, options = list(dom = "t"), selection = "none"))
+    d <- r$df
+    cov <- ifelse(is.na(d$value), "presence only", sprintf("%.1f%%", d$value))
+    colname <- if (identical(r$mode, "invader")) "% cover (site)" else d$label[1]
+    out <- data.frame(Site = sprintf("%s &middot; %s", d$site, vapply(d$site, site_name_of, "")),
+                      x = cov, Go = vapply(d$site, search_go_btn, ""),
+                      check.names = FALSE, stringsAsFactors = FALSE)
+    names(out)[2] <- colname
+    datatable(out, rownames = FALSE, escape = FALSE, selection = "none",
+              options = list(pageLength = 12, dom = "tip",
+                             columnDefs = list(list(orderable = FALSE, targets = 2))))
+  })
+
+  # the go-to-site jump: load the bundle (instant) and land on the Overview.
+  observeEvent(input$searchGo, {
+    s <- input$searchGo
+    if (is.null(s) || !nzchar(s)) { session$sendCustomMessage("loadDone", list()); return() }
+    load_site_full(s)   # syncs the sidebar, loads from the bundle, nav -> overview
+  })
+
   # ---- hero stats ---------------------------------------------------------
   output$heroStats <- renderUI({
     lb <- rv$lb; snap <- rv$snap; if (is.null(lb) || is.null(snap)) return(NULL)

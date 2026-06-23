@@ -21,7 +21,8 @@ appFiles <- c(
   "global.R", "ui.R", "server.R",
   list.files("R", pattern = "\\.R$", full.names = TRUE),
   list.files("www", recursive = TRUE, full.names = TRUE),
-  Sys.glob("data/*.rds"),                                       # precomputed indexes
+  Sys.glob("data/*.rds"),                                       # precomputed indexes (incl. search_index.rds)
+  "data/search_index.rds",                                      # the "Search the network" index (explicit; also caught by the glob)
   list.files("data/sites", pattern = "\\.rds$", full.names = TRUE),
   list.files("data/env",   pattern = "\\.rds$", full.names = TRUE),   # env overlays
   # RUNTIME-CRITICAL reference data the app loads on the Expected-vs-Observed

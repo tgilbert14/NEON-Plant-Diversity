@@ -3324,6 +3324,9 @@
     "data/expected/YELL.rds": {
       "checksum": "99ce09d4d44925ebf2bfe3f416d265fc"
     },
+    "data/search_index.rds": {
+      "checksum": "f8965fdd20b2958a814f9e4dcb0bacd3"
+    },
     "data/site_index.rds": {
       "checksum": "071c94431bd8a9d0b662e48385e7c94f"
     },
@@ -3466,7 +3469,7 @@
       "checksum": "c6b1aae87f0cdcc3c3f79322c8f51247"
     },
     "global.R": {
-      "checksum": "8a0e5586fe0407612f87ed15f0508d2e"
+      "checksum": "d99934240091d0f79a367e5aec2373ac"
     },
     "R/env_helpers.R": {
       "checksum": "a4b25aba783ff5fbcac36ebca9114b3e"
@@ -3487,13 +3490,13 @@
       "checksum": "a1e644891252e5fcb26798c5074fae28"
     },
     "server.R": {
-      "checksum": "19aa5cc5a95e3554c7d1a554a1cff02e"
+      "checksum": "16f54cafee7713790fe6e5c79da7621a"
     },
     "ui.R": {
-      "checksum": "c4bf6c960edde6d5db62290927ea1e8a"
+      "checksum": "ccc1cba52c43426434710d18510d2c98"
     },
     "www/app.js": {
-      "checksum": "5551012df6e6c6d9b8a73375db558c8f"
+      "checksum": "ea8b5b2576bd16862778354ce9484da7"
     },
     "www/pincards.js": {
       "checksum": "4601057336d8b4ab22b3a5b5a68ea33e"
@@ -3502,7 +3505,7 @@
       "checksum": "f3b361acc92527b3d41b7db0ebfdb87a"
     },
     "www/styles.css": {
-      "checksum": "1f4f9b18cbb324b246c4bfff647a0703"
+      "checksum": "90ad2dc4520893cda27259d61bec333c"
     }
   },
   "users": null

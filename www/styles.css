@@ -1355,3 +1355,23 @@ svg.smt-pin-lines {
   .hero-stat::before, .site-card::before { animation: none !important; }
   .hero-stat:hover, .site-card:hover, .evo-box:hover { transform: none; }
 }
+
+/* ---- Search the network -------------------------------------------------- */
+.search-modebar { margin: 4px 0 14px; }
+.search-modebar .radio-inline, .search-modebar .form-check-inline { font-weight: 600; }
+.search-count { font-weight: 700; margin: 0 0 8px; color: var(--pine, #2f9a4f); }
+.search-taxon-meta { margin-top: 6px; font-size: 14px; }
+.nat-chip { display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-weight: 700; font-size: 12px; color: #fff; letter-spacing: .2px; }
+.nat-native { background: var(--native); }
+.nat-introduced { background: var(--introduced); }
+.nat-unknown { background: var(--unknown); color: #21331f; }
+.thresh-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.search-go { display: inline-block; width: auto; min-height: 32px; padding: 4px 12px;
+  font-size: 13px; }
+@media (max-width: 640px) {
+  .thresh-row { flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .search-go { transition: none !important; }
+}

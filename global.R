@@ -53,6 +53,18 @@ load_demo <- function() { b <- load_site_bundle(DEMO_META$site); if (!is.null(b)
 SITE_INDEX <- read_bundle("data/site_index.rds")
 if (is.null(SITE_INDEX)) SITE_INDEX <- tryCatch(readRDS("data/site_index.rds"), error = function(e) NULL)
 
+# "Search the network" index — one small precomputed file loaded ONCE at boot
+# (built by scripts/build_search_index.R). list(taxa=, sites=). Searches filter
+# it in memory, so the network-wide search is instant with no live fetch. NULL-safe.
+SEARCH_INDEX <- tryCatch(readRDS("data/search_index.rds"), error = function(e) NULL)
+SEARCH_TAXA  <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$taxa else NULL
+# the autocomplete choice list: every distinct species in the index (sorted)
+SEARCH_TAXON_CHOICES <- if (!is.null(SEARCH_TAXA))
+  sort(unique(SEARCH_TAXA$scientificName)) else character(0)
+# introduced-only species (for the "jump to a known invader" quick filter)
+SEARCH_INVADER_CHOICES <- if (!is.null(SEARCH_TAXA))
+  sort(unique(SEARCH_TAXA$scientificName[SEARCH_TAXA$nativity == "Introduced"])) else character(0)
+
 # bundled sites only (the demo deploy ships these); join site metadata for the picker
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {
