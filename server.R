@@ -150,8 +150,20 @@ server <- function(input, output, session) {
   }
   observeEvent(input$loadBtn, load_site(input$site))
   observeEvent(input$pickSite, load_site_full(input$pickSite))
-  observeEvent(input$demoBtn,  ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
-  observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo = TRUE))
+
+  # "Change site" (in the hero band) -> back to the picker-map landing.
+  # Clears the loaded state, hides the loaded view + plot picker, re-shows the
+  # splash, and kicks the picker map to re-measure so it never paints half-width.
+  observeEvent(input$changeSite, {
+    rv$occ <- NULL; rv$snap <- NULL; rv$ground <- NULL; rv$lb <- NULL
+    rv$pal <- NULL; rv$label <- NULL; rv$site <- NULL; rv$plot <- NULL
+    shinyjs::hide("mainTabsWrap"); shinyjs::hide("plotPickerWrap"); shinyjs::show("splash")
+    session$sendCustomMessage("kickMaps", list())
+  })
+
+  # (v2 flow: the Santa Rita demo path was removed — users pick a real site on
+  #  the map, the Browse-all-sites list, or the by-name select panel. The
+  #  demoBtn / demoBtn2 inputs and their observers are gone with it.)
 
   # The map dot popup: a clear two-choice card (Explore loads the site, About
   # opens an instant info modal). Mirrors the flagship Small Mammal / Ground Beetle
@@ -276,7 +288,7 @@ server <- function(input, output, session) {
   observeEvent(input$help, {
     showModal(modalDialog(easyClose = TRUE, title = tagList(bs_icon("question-circle"), " How it works"),
       tags$ul(
-        tags$li(HTML("Pick a <b>site</b> (or open the Santa Rita demo). Numbers describe the <b>most recent survey</b> of each plot.")),
+        tags$li(HTML("Pick a <b>site</b> on the map (or by name in the panel below it). Numbers describe the <b>most recent survey</b> of each plot. Use <b>change site</b> in the hero band to switch.")),
         tags$li(HTML("<b>Diversity</b>: the nested species-area curve (1→400 m²), the Hill profile, and a Chao2 estimate of undetected species.")),
         tags$li(HTML("<b>Native vs Invasive</b>: how much cover is introduced, which species, and where invasion has a foothold at the finest scale.")),
         tags$li(HTML("<b>Diversity Lab</b>: every plot as a dot; <b>tap one</b> to pin its card, then “Open plot profile” for the full, downloadable drill-down.")),
@@ -313,7 +325,11 @@ server <- function(input, output, session) {
             div(class = "hs-l", l),
             if (!is.null(sub)) div(class = "hs-sub", sub)))
     div(class = "hero-band",
-      div(class = "hero-title", bs_icon("broadcast"), tags$b(rv$label)),
+      div(class = "hero-title", bs_icon("broadcast"), tags$b(rv$label),
+        actionLink("changeSite", tagList(bs_icon("arrow-left-circle"), " change site"),
+                   class = "hero-change"),
+        downloadLink("reportPdf", tagList(bs_icon("file-earmark-arrow-down"), " report card (PDF)"),
+                     class = "hero-report")),
       div(class = "hero-grid",
         hero(n_sp, "species", icon = "flower3", tone = "navy", nav = "diversity"),
         hero(nrow(lb), "plots", icon = "grid-3x3", tone = "pine", nav = "map"),
@@ -781,7 +797,7 @@ server <- function(input, output, session) {
     if (is.null(rv$plot)) return(div(class = "qc-empty",
       div(class = "qc-empty-icon", "\U0001F33F"),
       h4("Tap a plot to see its card"),
-      p("Tap a dot above and choose “Open plot profile”, or pick a plot in the sidebar.")))
+      p("Tap a dot above and choose “Open plot profile”, or use the plot picker at the top.")))
     lb <- rv$lb; row <- lb[lb$plotID == rv$plot, ]; if (!nrow(row)) return(NULL)
     div(class = "lab-sel",
       span(class = "ls-emoji", "\U0001F33E"),
@@ -860,7 +876,7 @@ server <- function(input, output, session) {
     if (is.null(rv$plot)) return(div(class = "qc-empty",
       div(class = "qc-empty-icon", "\U0001F33F"),
       h4("Pick a plot to open its profile"),
-      p("Use the Diversity Lab (tap a dot → “Open plot profile”) or the sidebar plot picker.")))
+      p("Use the Diversity Lab (tap a dot → “Open plot profile”) or the “Open a plot's profile” picker at the top.")))
     div(class = "plot-profile-wrap", plot_card_ui(rv$plot))
   })
 

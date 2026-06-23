@@ -6,8 +6,8 @@
 tier_badge <- function(label, color) tags$span(class = "tag-badge",
   style = sprintf("background:%s;border-color:%s;color:#fff", color, color), label)
 
-ui <- bslib::page_sidebar(
-  theme = app_theme, title = NULL,
+ui <- bslib::page_fillable(
+  theme = app_theme,
   window_title = "NEON Plant Diversity Explorer", fillable = FALSE,
 
   tags$head(
@@ -25,44 +25,35 @@ ui <- bslib::page_sidebar(
   ),
   useShinyjs(),
 
-  # ---- sidebar -----------------------------------------------------------
-  sidebar = sidebar(
-    width = 320, class = "control-deck",
-    div(class = "brand",
-      div(class = "brand-mark", "\U0001F33F"),
-      div(div(class = "brand-title", "Plant Diversity Explorer"),
-          div(class = "brand-sub", "NEON field observatory"))),
-
-    selectInput("stateSel", label = tagList(bs_icon("geo-alt-fill"), " 1 · Pick a state"),
-                choices = NULL, width = "100%"),
-    selectInput("site", label = tagList(bs_icon("pin-map-fill"), " 2 · Pick a site"),
-                choices = NULL, width = "100%"),
-    uiOutput("siteBio"),
-
-    actionButton("loadBtn", tagList(bs_icon("globe-americas"), " Explore this site"),
-                 class = "btn-primary btn-lg w-100 load-btn", onclick = "smtLoadStart()"),
-    actionButton("demoBtn", tagList(bs_icon("stars"), " or open the Santa Rita demo"),
-                 class = "btn-link btn-sm w-100 reset-demo",
-                 onclick = "smtLoadStart('Santa Rita · demo dataset')"),
-
-    hidden(div(id = "plotPickerWrap",
-      hr(class = "deck-hr"),
-      selectizeInput("plotSel", label = tagList(bs_icon("search"), " Open a plot's profile"),
-                     choices = NULL, options = list(placeholder = "Pick a plot…")),
-      actionButton("surpriseBtn", tagList(bs_icon("dice-5-fill"), " Surprise me"),
-                   class = "btn-outline-dark btn-sm w-100"))),
-
-    hr(class = "deck-hr"),
-    actionButton("help", tagList(bs_icon("question-circle"), " How it works"),
-                 class = "btn-outline-dark btn-sm w-100"),
-    div(class = "theme-toggle-row",
-      tags$span(class = "theme-toggle-lab", bs_icon("circle-half"), " Theme"),
-      input_dark_mode(id = "colorMode", mode = "light")),
-    div(class = "deck-foot",
-      bs_icon("database"), " NEON ", tags$code("DP1.10058.001"),
-      br(), tags$a(href = "https://desertdatalabs.com", target = "_blank",
-                   bs_icon("box-arrow-up-right"), " Desert Data Labs"))
+  # ---- persistent top control bar (theme + help) -------------------------
+  # v2 flow: the sidebar is gone. The picker map IS the way to select a site
+  # (its select panel lives on the landing/splash). The two controls that must
+  # stay reachable everywhere — the theme toggle and the help dialog — sit in
+  # this slim top-right bar above the hero. Same ids (help, colorMode) so the
+  # server is untouched.
+  div(class = "top-bar",
+    div(class = "top-bar-brand",
+      tags$span(class = "tb-mark", "\U0001F33F"),
+      tags$span(class = "tb-title", "Plant Diversity Explorer")),
+    div(class = "top-bar-actions",
+      actionButton("help", tagList(bs_icon("question-circle"), " How it works"),
+                   class = "btn-outline-dark btn-sm tb-help"),
+      div(class = "tb-theme",
+        tags$span(class = "tb-theme-lab", bs_icon("circle-half")),
+        input_dark_mode(id = "colorMode", mode = "light")))
   ),
+
+  # "Open a plot's profile" picker — was in the sidebar, now a hidden body block
+  # revealed on site load (server: shinyjs::show("plotPickerWrap")). Same ids
+  # (plotSel, surpriseBtn) so the server logic is untouched.
+  hidden(div(id = "plotPickerWrap", class = "plot-picker-wrap",
+    div(class = "ppw-row",
+      div(class = "ppw-sel",
+        selectizeInput("plotSel", label = tagList(bs_icon("search"), " Open a plot's profile"),
+                       choices = NULL, width = "100%",
+                       options = list(placeholder = "Pick a plot…"))),
+      actionButton("surpriseBtn", tagList(bs_icon("dice-5-fill"), " Surprise me"),
+                   class = "btn-outline-dark ppw-surprise")))),
 
   # ---- loading overlay ---------------------------------------------------
   div(id = "loadOverlay", class = "load-overlay",
@@ -86,16 +77,33 @@ ui <- bslib::page_sidebar(
            span(class = "title-tag", "unofficial")),
         p(class = "app-subtitle",
           "A field guide to what grows where NEON samples: how rich each site is, what covers the ground, and where introduced plants are gaining a foothold. Built on the nested-quadrat plant survey (DP1.10058.001).")),
-      p("Tap a ", tags$b("site"), " on the map (dot size is species richness), or step into the Santa Rita demo (a Sonoran desert grassland with a textbook Lehmann-lovegrass invasion)."),
+      p("Tap a ", tags$b("site"), " on the map (dot size is species richness) to explore it, or pick one by name in the panel below the map. You can also open the full ", tags$b("Browse all 46 sites"), " list."),
       div(class = "splash-colorby",
         radioButtons("splashColorBy", label = NULL, inline = TRUE,
           choices = c("Colour: invasion" = "invasion", "Colour: completeness" = "completeness"),
           selected = "invasion"),
         uiOutput("splashLegend")),
       mapPickerUI("picker", height = "520px", spinner = DDL$green),
-      div(class = "picker-actions", style = "margin:14px 0",
-        actionButton("demoBtn2", tagList(bs_icon("stars"), " Open the Santa Rita demo"),
-                     class = "btn-primary btn-lg", onclick = "smtLoadStart('Santa Rita · demo dataset')")),
+
+      # ---- relocated select panel (was the sidebar) ----------------------
+      # Same input ids the server's cascade + load path depend on (stateSel,
+      # site, loadBtn). Tapping a dot is the primary path; this panel is the
+      # by-name fallback. Same ids, so server.R is untouched. (This app loads
+      # each site's full annual span from its bundle — no date window control.)
+      div(class = "select-panel",
+        div(class = "sp-head", bs_icon("sliders"),
+            " Or pick a site by name"),
+        div(class = "sp-row",
+          div(class = "sp-field",
+            selectInput("stateSel", label = tagList(bs_icon("geo-alt-fill"), " State"),
+                        choices = NULL, width = "100%")),
+          div(class = "sp-field",
+            selectInput("site", label = tagList(bs_icon("pin-map-fill"), " Site"),
+                        choices = NULL, width = "100%"))),
+        uiOutput("siteBio"),
+        actionButton("loadBtn", tagList(bs_icon("globe-americas"), " Explore this site"),
+                     class = "btn-primary btn-lg load-btn sp-load", onclick = "smtLoadStart()")),
+
       # CLOSED-by-default site list (canonical "Browse all 46 sites" disclosure):
       # the splash stays clean; the full card grid is one tap away and scrolls.
       # WIDTH GOTCHA: this grid used to be always-visible and was what gave the
@@ -123,8 +131,7 @@ ui <- bslib::page_sidebar(
           actionButton("goMap", tagList(bs_icon("map-fill"), div("Map"), tags$small("plots across the site")), class = "home-btn")),
         div(class = "tools-strip",
           actionButton("compareBtn", tagList(bs_icon("layout-split"), " Compare two sites"), class = "btn-outline-dark btn-sm"),
-          downloadButton("allDataZip", "Download all data (CSV)", class = "btn-outline-dark btn-sm"),
-          downloadButton("reportPdf", "Site report (PDF)", class = "btn-outline-dark btn-sm")),
+          downloadButton("allDataZip", "Download all data (CSV)", class = "btn-outline-dark btn-sm")),
         card(full_screen = TRUE,
           card_head("bar-chart-steps", "What covers the ground: most abundant plants",
             info_pop("Cover composition",
