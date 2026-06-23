@@ -187,4 +187,5 @@ fmt_range <- function(a, b) if (is.null(a) || is.null(b) || is.na(a) || is.na(b)
   list(name = "Plant Phenology",  prod = "DP1.10055.001",           url = "https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/"),
   list(name = "Veg Structure",    prod = "DP1.10098.001",           url = "https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"),
   list(name = "Water Chemistry",  prod = "DP1.20093.001",           url = "https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"),
-  list(name = "Mosquito Pulse",   prod = "DP1.10043.001",           url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/"))
+  list(name = "Mosquito Pulse",   prod = "DP1.10043.001",           url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/"),
+  list(name = "Little Inverts",   prod = "DP1.20120.001",           url = "https://tgilbert14.github.io/NEON-My-Little-Inverts/"))
