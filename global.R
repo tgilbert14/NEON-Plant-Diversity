@@ -17,6 +17,7 @@ suppressPackageStartupMessages({
 source("R/site_metadata.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
+source("R/seasonal_env.R",  local = FALSE)   # Driver Cascade's seasonal-aggregate driver read (winter vs monsoon rain)
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
 source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
 source("R/report_pdf.R",    local = FALSE)   # one-page site report PDF (base graphics)

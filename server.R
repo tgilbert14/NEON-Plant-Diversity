@@ -837,6 +837,69 @@ server <- function(input, output, session) {
           showarrow = FALSE, font = list(color = if (is_dark()) "#9fb0c4" else "#8a97a8", size = 10))))
   })
 
+  # ---- The SEASONAL driver read (Driver Cascade's seasonal-aggregate question) -
+  # The annual precip layer above sums the cool-season rain (Oct-Mar) and the
+  # summer monsoon (Jul-Sep) into one number, even though those two seasons feed
+  # different plants. This card splits the year by season and correlates RICHNESS
+  # against this site's yearly winter / monsoon rain + spring warmth at LAG 0
+  # (plants respond the same year), the way the Driver Cascade does. The biome
+  # dictates the lead driver: in drylands it is WINTER rain (germinates the spring
+  # forbs). Per-site n is a handful of years, so this is SUGGESTIVE, not a verdict;
+  # the honest pooled test lives in the Driver Cascade app.
+  output$seasonalDriver <- renderUI({
+    e <- cur_env(); if (is.null(e)) return(NULL)
+    resp <- plant_metric_series(rv$occ, "richness")          # year, value = species richness
+    if (is.null(resp) || nrow(resp) < 3) return(NULL)
+    site_code <- rv$site %||% (if (!is.null(rv$occ) && "siteID" %in% names(rv$occ)) mode_chr(rv$occ$siteID) else NULL)
+    biome <- seasonal_biome(site_code)
+    # plants respond SAME-year -> lag 0 for every seasonal driver (NOT the mammal monsoon lag-1)
+    links <- tryCatch(seasonal_driver_links(e, resp, biome = biome,
+               lags = c(precip_winter = 0L, precip_monsoon = 0L, temp_spring = 0L)),
+               error = function(err) NULL)
+    eyebrow <- div(class = "ec-eyebrow", bs_icon("calendar-range"),
+                   tags$span("seasonal climate \U00B7 the cascade read"),
+                   info_pop("The seasonal read",
+                     p("A single annual rain total blends two seasons that feed different plants: ", tags$b("winter rain"), " (Oct-Mar) germinates the spring annual forbs, while the ", tags$b("summer monsoon"), " (Jul-Sep) drives the warm-season grasses. The ranking above ranks the annual TOTAL, which averages them together."),
+                     p("Here we aggregate rain by season and correlate it against this site's yearly species richness, the way the Driver Cascade does. ", tags$b("Per-site n is only a handful of survey years"), ", so this is suggestive, not significant. The honest test pools many sites in the Driver Cascade app.")))
+    if (is.null(links) || !nrow(links)) {
+      return(div(class = "ec ec-seasonal rail-weak", style = "margin-top:14px;", eyebrow,
+        div(class = "ec-hero", div(class = "ec-hero-text",
+          "No co-located seasonal rain record at this site, so the winter and monsoon seasons can't be split out here. That is missing climate data, not a missing signal."))))
+    }
+    lead <- links[links$expected, , drop = FALSE]; if (!nrow(lead)) lead <- links
+    L <- lead[1, ]; pos <- L$r >= 0
+    strength <- abs(L$r)
+    rail <- if (strength >= 0.6) "rail-strong" else if (strength >= 0.35) "rail-mod" else "rail-weak"
+    sub  <- tolower(L$label)
+    lead_txt <- if (grepl("precip", L$driver))
+      sprintf("A wetter %s tracks %s plant diversity the same year", sub, if (pos) "more" else "less")
+      else sprintf("A warmer %s tracks %s plant diversity the same year", sub, if (pos) "more" else "less")
+    # the contrast: what the plain ANNUAL precip total shows for richness here
+    mr <- tryCatch({ sc <- plant_env_scan(resp, e, "precip"); if (is.null(sc)) NA_real_ else sc$r },
+                   error = function(err) NA_real_)
+    pstr <- if (is.finite(L$p)) sprintf("p = %.2f", L$p) else sprintf("%d yrs, too few for a p", L$n)
+    div(class = paste("ec ec-seasonal", rail), style = "margin-top:14px;",
+      eyebrow,
+      div(class = "ec-hero",
+        div(class = "ec-hero-text", lead_txt, "."),
+        div(class = paste("ec-rvalue", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
+          bs_icon(if (pos) "arrow-up-right" else "arrow-down-right"),
+          HTML(sprintf("r&nbsp;%+.2f", L$r)))),
+      div(class = "ec-foot",
+        tags$span(class = "ec-meta", bs_icon("calendar3"), HTML(sprintf("<b>%d</b> survey years", L$n))),
+        tags$span(class = "ec-meta-dot"), tags$span(class = "ec-meta", bs_icon("shuffle"), pstr),
+        if (is.finite(L$p_adj)) tagList(tags$span(class = "ec-meta-dot"),
+          tags$span(class = "ec-meta", title = "p after accounting for testing several seasons",
+                    HTML(sprintf("season-corrected p = %.2f", L$p_adj))))),
+      div(class = "ec-seasonal-note",
+        HTML(paste0(
+          "In drylands the cool-season (Oct-Mar) rain germinates the spring forbs, so winter rain tracks plant diversity better than the annual total, which averages winter and monsoon rain together even though they feed different plants.",
+          if (is.finite(mr)) sprintf(" The annual rain total shows only about <b>r %+.2f</b> for richness here.", mr) else ""))),
+      div(class = "ec-seasonal-caveat", bs_icon("info-circle"),
+        HTML(" One site, a handful of years, so suggestive not settled. The cross-site test that pools many sites is in the "),
+        tags$a(href = "https://tgilbert14.github.io/NEON-Driver-Cascade/", target = "_blank", "Driver Cascade app"), "."))
+  })
+
   output$envTrend <- renderPlotly({
     e <- cur_env(); ms <- env_series(); pm <- env_perm()
     if (is.null(e) || is.null(ms)) return(note_plot("No environmental data for this site", "\U0001F326"))

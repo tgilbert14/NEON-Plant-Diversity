@@ -29,7 +29,7 @@ ENV_LAGS <- 0:2              # driver leads response by 0, 1, or 2 YEARS (prior-
 # `dig` = decimals in hover. Colours are driver IDENTITY hues (kept OFF the
 # nativity green/clay and OFF the correlation-sign blue/vermillion).
 ENV_LAYERS <- list(
-  precip  = list(col = "precip_mm",     label = "Precipitation",     unit = "mm/yr", agg = "sum",
+  precip  = list(col = "precip_mm",     label = "Precipitation (annual)", unit = "mm/yr", agg = "sum",
                  color = "#2F7D9E", lead = TRUE,  dig = 0,
                  desc = "Total annual precipitation (sum of the monthly weighing-gauge product)."),
   temp    = list(col = "temp_c",        label = "Air temperature",   unit = "°C",    agg = "mean",
@@ -40,7 +40,26 @@ ENV_LAYERS <- list(
                  desc = "Peak monthly share of monitored plants in flower that year."),
   greenup = list(col = "greenup_pct",   label = "Green-up",          unit = "% peak", agg = "max",
                  color = "#2E7D32", lead = TRUE,  dig = 0,
-                 desc = "Peak monthly share leafing out (early-season green-up).")
+                 desc = "Peak monthly share leafing out (early-season green-up)."),
+
+  # ---- SEASONAL precip/temp drivers (Driver Cascade seasonal-aggregate read) ----
+  # The annual precip layer above sums winter rain + the summer monsoon into one
+  # number, even though those two seasons germinate DIFFERENT plants and are often
+  # ENSO-anticorrelated. So the annual total can hide a real link. These three split
+  # the year by SEASON (one value per year, from seasonal_aggregates() in
+  # R/seasonal_env.R) so the existing scan/perm can rank them against the annual total.
+  # Plants respond the SAME year (no carry-over lag), so each is scanned at lag 0 ONLY
+  # (`lags = 0L`); the dryland richness lead is precip_winter (cool-season rain feeds
+  # the spring forbs). `seasonal = TRUE` routes env_annual() to the year-keyed aggregate.
+  precip_winter  = list(seasonal = TRUE, label = "Winter rain (Oct-Mar)", unit = "mm", agg = "sum",
+                 color = "#1f6fb2", lead = TRUE,  dig = 0, lags = 0L,
+                 desc = "Cool-season (Oct-Mar) rain total. In drylands this germinates the spring annual forbs and tracks plant diversity better than the annual total."),
+  precip_monsoon = list(seasonal = TRUE, label = "Summer monsoon rain (Jul-Sep)", unit = "mm", agg = "sum",
+                 color = "#5aa9e6", lead = TRUE,  dig = 0, lags = 0L,
+                 desc = "Summer monsoon (Jul-Sep) rain total, the warm-season pulse, separated from the cool-season rain the annual sum mixes it with."),
+  temp_spring    = list(seasonal = TRUE, label = "Spring temperature (Mar-May)", unit = "°C", agg = "mean",
+                 color = "#C56A3A", lead = FALSE, dig = 1, lags = 0L,
+                 desc = "Mean spring (Mar-May) air temperature, the warmth window the spring flush responds to.")
   # NOTE: `fruiting_pct` is deliberately NOT registered as a driver. It is a max
   # of binned ORDINAL phenophase-intensity (not a measured seed crop) and is
   # sparse (e.g. 15/121 SRER monthly rows), so a max-over-search r off it would
@@ -74,7 +93,12 @@ env_layer_choices <- function(env) {
   base <- c("None" = "none")
   if (is.null(env) || !nrow(env)) return(base)
   have <- vapply(names(ENV_LAYERS), function(k) {
-    col <- ENV_LAYERS[[k]]$col
+    m <- ENV_LAYERS[[k]]
+    if (isTRUE(m$seasonal)) {  # offered when its season aggregates to a real value
+      ag <- seasonal_aggregates(env)
+      return(!is.null(ag) && k %in% names(ag) && any(is.finite(suppressWarnings(as.numeric(ag[[k]])))))
+    }
+    col <- m$col
     col %in% names(env) && any(is.finite(suppressWarnings(as.numeric(env[[col]]))))
   }, logical(1))
   if (!any(have)) return(base)
@@ -85,7 +109,18 @@ env_layer_choices <- function(env) {
 # collapse a driver's monthly series to one value per calendar year
 env_annual <- function(env, layer) {
   meta <- ENV_LAYERS[[layer]]
-  if (is.null(meta) || is.null(env) || !(meta$col %in% names(env))) return(NULL)
+  if (is.null(meta) || is.null(env)) return(NULL)
+  # SEASONAL drivers are already one value per year (winter rain is keyed to the
+  # year its Oct-Mar window ENDS; see seasonal_aggregates()). Route to that helper
+  # and hand back the (year, value) frame the scan expects — no monthly re-collapse.
+  if (isTRUE(meta$seasonal)) {
+    agg <- seasonal_aggregates(env); if (is.null(agg) || !(layer %in% names(agg))) return(NULL)
+    d <- data.frame(year = agg$year, value = suppressWarnings(as.numeric(agg[[layer]])))
+    d <- d[is.finite(d$value) & !is.na(d$year), , drop = FALSE]
+    if (!nrow(d)) return(NULL)
+    return(d[order(d$year), c("year", "value")])
+  }
+  if (!(meta$col %in% names(env))) return(NULL)
   v <- suppressWarnings(as.numeric(env[[meta$col]]))
   d <- data.frame(year = env$year, v = v)
   d <- d[is.finite(d$v) & !is.na(d$year), , drop = FALSE]
@@ -129,6 +164,10 @@ plant_metric_series <- function(occ, metric = "richness") {
 # year-lag window; returns the strongest |r| with its lag and matched-n.
 plant_env_scan <- function(ms, env, layer, lags = ENV_LAGS) {
   if (is.null(ms) || nrow(ms) < MIN_ENV_YEARS) return(NULL)
+  meta0 <- ENV_LAYERS[[layer]]
+  # a driver may pin its own lag set (seasonal drivers respond SAME-year -> lag 0
+  # only), so it can never borrow a spurious 1-2 yr lead from the lag search.
+  if (!is.null(meta0) && !is.null(meta0$lags)) lags <- as.integer(meta0$lags)
   ea <- env_annual(env, layer); if (is.null(ea) || !nrow(ea)) return(NULL)
   best <- list(lag = NA_integer_, r = NA_real_, n = 0L)
   for (L in lags) {
@@ -150,7 +189,10 @@ plant_env_scan <- function(ms, env, layer, lags = ENV_LAGS) {
 plant_env_all <- function(ms, env, lags = ENV_LAGS) {
   if (is.null(ms) || is.null(env)) return(NULL)
   rows <- lapply(names(ENV_LAYERS), function(k) {
-    if (!(ENV_LAYERS[[k]]$col %in% names(env))) return(NULL)
+    mk <- ENV_LAYERS[[k]]
+    # seasonal drivers have no monthly `col` (they aggregate Jul-Sep etc.); only
+    # gate the monthly-column drivers on column presence.
+    if (!isTRUE(mk$seasonal) && !(mk$col %in% names(env))) return(NULL)
     sc <- plant_env_scan(ms, env, k, lags); if (is.null(sc)) return(NULL)
     data.frame(layer = k, label = sc$label, color = ENV_LAYERS[[k]]$color,
                lag = sc$lag, r = sc$r, n = sc$n, stringsAsFactors = FALSE)

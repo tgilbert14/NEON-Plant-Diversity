@@ -289,6 +289,7 @@ ui <- bslib::page_fillable(
               info_pop("Driver ranking",
                 p("Spearman |r| for each driver at its best lag (0–2 yr). These bars ARE the search the permutation test corrects for; they are ", tags$b("not independent evidence"), ", and on a short record none may be distinguishable from chance."))),
             spin(plotlyOutput("envDriverRank", height = "360px")))),
+        uiOutput("seasonalDriver"),
         card(card_head("calendar3", "The two series over time",
             info_pop("Context", p("The plant signal (left axis) and the selected driver (right axis) across the years, the raw movement behind the correlation."))),
           spin(plotlyOutput("envTrend", height = "300px"))),
