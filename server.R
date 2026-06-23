@@ -369,13 +369,23 @@ server <- function(input, output, session) {
                   ifelse(d$year_min == d$year_max, as.character(d$year_min),
                          paste0(d$year_min, "–", d$year_max)))
     cov <- ifelse(is.na(d$mean_cover), "presence only", sprintf("%.2f%%", d$mean_cover))
+    # "% cover" DISPLAYS with the % suffix but must SORT by magnitude, not as a
+    # string ("10" < "9" lexicographically). Carry a hidden numeric sort key
+    # (presence-only -> -1 so it ranks below all real cover) and point the visible
+    # column's order at it via orderData; the key column is hidden from view.
+    cov_sort <- ifelse(is.na(d$mean_cover), -1, d$mean_cover)
     out <- data.frame(Site = sprintf("%s &middot; %s", d$site, vapply(d$site, site_name_of, "")),
                       `% cover` = cov, Plots = d$n_plots, Years = yrs,
                       Go = vapply(d$site, search_go_btn, ""),
+                      `_cov_sort` = cov_sort,
                       check.names = FALSE, stringsAsFactors = FALSE)
     datatable(out, rownames = FALSE, escape = FALSE, selection = "none",
               options = list(pageLength = 12, dom = "tip",
-                             columnDefs = list(list(orderable = FALSE, targets = 4))))
+                             columnDefs = list(
+                               list(orderable = FALSE, targets = 4),
+                               list(orderData = 5, targets = 1),   # "% cover" sorts by hidden numeric key
+                               list(visible = FALSE, targets = 5)  # hide the sort key column
+                             )))
   })
 
   # threshold query: sites by introduced/native cover share, OR jump to a site
@@ -436,13 +446,22 @@ server <- function(input, output, session) {
     d <- r$df
     cov <- ifelse(is.na(d$value), "presence only", sprintf("%.1f%%", d$value))
     colname <- if (identical(r$mode, "invader")) "% cover (site)" else d$label[1]
+    # cover column DISPLAYS the % suffix but must SORT numerically (not as a
+    # string). Hidden numeric sort key (presence-only -> -1) + orderData, same
+    # recipe as searchTaxonTbl.
+    cov_sort <- ifelse(is.na(d$value), -1, d$value)
     out <- data.frame(Site = sprintf("%s &middot; %s", d$site, vapply(d$site, site_name_of, "")),
                       x = cov, Go = vapply(d$site, search_go_btn, ""),
+                      `_cov_sort` = cov_sort,
                       check.names = FALSE, stringsAsFactors = FALSE)
     names(out)[2] <- colname
     datatable(out, rownames = FALSE, escape = FALSE, selection = "none",
               options = list(pageLength = 12, dom = "tip",
-                             columnDefs = list(list(orderable = FALSE, targets = 2))))
+                             columnDefs = list(
+                               list(orderable = FALSE, targets = 2),
+                               list(orderData = 3, targets = 1),   # cover column sorts by hidden numeric key
+                               list(visible = FALSE, targets = 3)  # hide the sort key column
+                             )))
   })
 
   # the go-to-site jump: load the bundle (instant) and land on the Overview.

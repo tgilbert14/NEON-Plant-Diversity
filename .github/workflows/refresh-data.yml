@@ -132,6 +132,14 @@ jobs:
         run: |
           Rscript scripts/bundle_plant_data.R
 
+      # Rebuild the "Search the network" precomputed index (data/search_index.rds)
+      # FROM the committed per-site bundles + site_index — runs on every refresh
+      # (incl. skip_download, which still rebundles from the committed raw) so the
+      # in-app search can never drift behind the data. Reads bundles, no live fetch.
+      - name: Rebuild the search index
+        run: |
+          Rscript scripts/build_search_index.R
+
       - name: Regenerate manifest.json
         run: |
           Rscript scripts/write_manifest.R
@@ -147,6 +155,7 @@ jobs:
             data/sites \
             data/env \
             data/site_index.rds \
+            data/search_index.rds \
             data-sample/demo.rds \
             manifest.json
           if git diff --cached --quiet; then
