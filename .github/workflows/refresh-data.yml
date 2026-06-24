@@ -23,10 +23,11 @@ name: Refresh NEON plant data bundle
 # rebundle + redeploy the already-committed raw/bundle fast (a deploy test that
 # skips the long NEON re-pull).
 #
-# OPTIONAL SECRET (Settings → Secrets and variables → Actions):
-#   NEON_TOKEN   a NEON API token — raises the anonymous rate limit so the
-#                46-site pull finishes faster. Anonymous works too (just slower),
-#                so this secret is OPTIONAL; fetch_plant_all.R reads $NEON_TOKEN.
+# REQUIRED SECRET (Settings → Secrets and variables → Actions):
+#   NEON_TOKEN   a NEON API token from your NEON "My Account" page. From 2026-06-30
+#                NEON REQUIRES a token for downloads (before that it only raised the
+#                rate limit). Without it the re-pull fails after that date; the app
+#                keeps its last committed bundle. fetch_plant_all.R reads $NEON_TOKEN.
 #
 # FLOW: gate (monthly check) → checkout → setup-r + deps → fetch raw to
 # ../plant-data-fetch (resumable, time-boxed, non-fatal) → bundle every raw dump
