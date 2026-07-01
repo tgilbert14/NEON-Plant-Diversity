@@ -128,12 +128,25 @@ MASCOT_CRITTER <- htmltools::HTML(paste0(
 
 # Light desert-DAY hexes for bslib (the app PAGE defaults to light; only the
 # prominent info-boxes go dark via CSS). Keep these readable on the light paper.
+# Fonts are named as plain CSS families here, NOT font_google(). font_google()
+# defaults to local = TRUE, which downloads the font from Google's servers and
+# compiles it into the theme AT APP STARTUP (server-side). On Connect Cloud that
+# live fetch runs on every cold start against an empty cache and, when Google Fonts
+# is slow/unreachable, blocks/fails the boot -> "start-up error". Naming the family
+# as a string does zero network at boot; the glyphs still reach the browser via the
+# non-blocking client-side <link> in ui.R (display=swap), with a system fallback.
+rubik_stack <- bslib::font_collection(
+  "Rubik", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
+)
+fraunces_stack <- bslib::font_collection(
+  "Fraunces", "Georgia", "Cambria", "Times New Roman", "serif"
+)
 app_theme <- bs_theme(
   version = 5, bg = "#ffffff", fg = "#16243a",
   primary = "#2f9a4f", secondary = "#e0685a",
   success = "#3f9a52", info = "#2f8fc4", warning = "#d6a31c", danger = "#e0685a",
-  base_font = font_google("Rubik"),
-  heading_font = font_google("Fraunces"),   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
+  base_font = rubik_stack,
+  heading_font = fraunces_stack,   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
   "border-radius" = "10px")
 
 # ---- static-asset cache-busting (mtime query) -----------------------------
