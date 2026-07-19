@@ -112,6 +112,14 @@ function smtHandleShinyConnected() {
   Shiny.setInputValue("pickSite", requested, { priority: "event" });
 }
 
+function smtHandleShinyDisconnected() {
+  var status = document.getElementById("appStatus");
+  if (!status) return;
+  status.textContent = "Connection lost";
+  status.dataset.appReady = "false";
+  status.dataset.siteReady = "false";
+}
+
 // Shiny emits lifecycle notifications through jQuery. A native
 // addEventListener() callback does not receive Shiny's synthetic
 // `shiny:connected` event, which can leave both the readiness receipt and
@@ -120,8 +128,10 @@ function smtHandleShinyConnected() {
 // fallback for static/non-Shiny harnesses that dispatch a real DOM event.
 if (window.jQuery) {
   window.jQuery(document).on("shiny:connected", smtHandleShinyConnected);
+  window.jQuery(document).on("shiny:disconnected", smtHandleShinyDisconnected);
 } else {
   document.addEventListener("shiny:connected", smtHandleShinyConnected);
+  document.addEventListener("shiny:disconnected", smtHandleShinyDisconnected);
 }
 
 // (The site report card is now a server-side PDF streamed by a Shiny

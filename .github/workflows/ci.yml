@@ -130,6 +130,7 @@ jobs:
           node scripts/check_custom_message_handlers.mjs
           node scripts/check_cover.mjs
           bash -n scripts/post_deploy_smoke.sh
+          python3 -m py_compile scripts/chromedriver_semantic_smoke.py
 
       - name: Run registered science and build-portability contracts
         run: |

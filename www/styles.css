@@ -638,9 +638,9 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .map-picker-wrap { width: 100%; min-width: 280px; }
 
 /* "change site" link in the hero band */
-.hero-change { font-size: 12.5px; font-weight: 700; color: var(--terra); text-decoration: none;
+.hero-change { font-size: 12.5px; font-weight: 700; color: var(--pine2); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
-.hero-change:hover { color: var(--pine); text-decoration: underline; }
+.hero-change:hover { color: var(--pine2); text-decoration: underline; }
 
 @media (max-width: 640px) {
   .splash-map { padding: 22px 14px 18px; }
@@ -751,7 +751,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 /* "report card" link in the hero band */
 .hero-report { font-size: 12.5px; font-weight: 700; color: var(--sky2); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
-.hero-report:hover { color: var(--pine); text-decoration: underline; }
+.hero-report:hover { color: var(--pine2); text-decoration: underline; }
 
 /* The site report card is now a server-side PDF (downloadHandler output$reportPdf,
    built in R/report_pdf.R), so the old hidden-HTML .report-card / .rc-* styles and
@@ -1461,15 +1461,6 @@ svg.smt-pin-lines {
   color: var(--pine2); font-weight: 800; cursor: pointer; }
 .plot-table-open { min-height: 44px; }
 @media (max-width: 640px) {
-  .hero-title { flex-wrap: wrap; align-items: flex-start; gap: 8px; }
-  .hero-title > .bi:first-child { flex: 0 0 auto; margin-top: 2px; }
-  .hero-title > b { flex: 1 1 calc(100% - 32px); min-width: 0; line-height: 1.25; }
-  .hero-receipt { flex: 1 0 100%; margin-left: 0; padding: 8px 10px;
-    border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
-  .hero-change, .hero-report { display: inline-flex; flex: 1 1 calc(50% - 4px);
-    align-items: center; justify-content: center; min-width: 0; min-height: 44px;
-    box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px;
-    padding: 8px 9px; text-align: center; line-height: 1.2; background: var(--paper); }
   .splash-contract > span { flex: 1 1 auto; justify-content: center; }
   .smt-pin { max-width: min(250px, calc(100vw - 34px)); }
 }
