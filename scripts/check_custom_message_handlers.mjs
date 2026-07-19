@@ -31,6 +31,7 @@ if (invalid.length) {
 const ui = readFileSync("ui.R", "utf8");
 const app = readFileSync("www/app.js", "utf8");
 const server = readFileSync("server.R", "utf8");
+const styles = readFileSync("www/styles.css", "utf8");
 if (!/id\s*=\s*["']appStatus["']/.test(ui) || !/data-app-ready/.test(ui)) {
   throw new Error("ui.R must expose the appStatus semantic readiness element");
 }
@@ -39,6 +40,10 @@ if (!/dataset\.appReady\s*=\s*["']true["']/.test(app)) {
 }
 if (!/jQuery\(document\)\.on\(\s*["']shiny:connected["']\s*,\s*smtHandleShinyConnected\s*\)/.test(app)) {
   throw new Error("www/app.js must subscribe to Shiny's jQuery lifecycle event for readiness and deep links");
+}
+if (!/\.hero-title\s*\{[^}]*flex-wrap:\s*wrap/s.test(styles) ||
+    !/\.hero-change,\s*\.hero-report\s*\{[^}]*min-height:\s*44px/s.test(styles)) {
+  throw new Error("the loaded-site header must stack its receipt and keep both actions touch-sized on mobile");
 }
 if (!server.includes('observeEvent(input[["plotly_click-hillSrc"]], {')) {
   throw new Error("the lazy Hill plot must defer event_data() until an actual Plotly input arrives");
@@ -50,4 +55,4 @@ if (hillEventReads.length !== 1) {
   throw new Error(`expected one deferred hillSrc event_data() read, found ${hillEventReads.length}`);
 }
 
-console.log(`OK: ${seen} handlers, semantic readiness, and deferred Plotly event wiring passed.`);
+console.log(`OK: ${seen} handlers, semantic readiness, mobile site header, and deferred Plotly event wiring passed.`);

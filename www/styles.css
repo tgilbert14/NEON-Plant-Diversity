@@ -1453,14 +1453,23 @@ svg.smt-pin-lines {
 .search-go { display: inline-flex; align-items: center; width: auto; min-height: 44px; padding: 7px 12px;
   font-size: 13px; }
 .hero-receipt { display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-  color: #cfe6d3; font-size: 11px; font-weight: 650; }
+  color: var(--muted); font-size: 11px; font-weight: 650; line-height: 1.35; }
+.hero-receipt .bi { color: var(--pine2); flex: none; }
 .lab-table-details { margin: 14px 0; border: 1px solid var(--line); border-radius: 12px;
   background: var(--paper); padding: 0 14px 14px; }
 .lab-table-details > summary { display: flex; align-items: center; gap: 8px; min-height: 48px;
   color: var(--pine2); font-weight: 800; cursor: pointer; }
 .plot-table-open { min-height: 44px; }
 @media (max-width: 640px) {
-  .hero-receipt { flex-basis: 100%; margin-left: 0; }
+  .hero-title { flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .hero-title > .bi:first-child { flex: 0 0 auto; margin-top: 2px; }
+  .hero-title > b { flex: 1 1 calc(100% - 32px); min-width: 0; line-height: 1.25; }
+  .hero-receipt { flex: 1 0 100%; margin-left: 0; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .hero-change, .hero-report { display: inline-flex; flex: 1 1 calc(50% - 4px);
+    align-items: center; justify-content: center; min-width: 0; min-height: 44px;
+    box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 9px; text-align: center; line-height: 1.2; background: var(--paper); }
   .splash-contract > span { flex: 1 1 auto; justify-content: center; }
   .smt-pin { max-width: min(250px, calc(100vw - 34px)); }
 }
