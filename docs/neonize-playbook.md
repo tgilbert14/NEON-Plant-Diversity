@@ -59,7 +59,7 @@ Core requirements:
 - optional basemap tiles explicitly separated from core data/analysis;
 - one-argument Shiny custom-message handlers;
 - semantic readiness markers promoted only after Shiny connects and the requested entity loads;
-- deterministic derived artifacts from explicit cutoffs, build dates, and versions.
+- deterministic derived artifacts from explicit query cutoffs/snapshot IDs, separately recorded actual build dates, builder commits, and versions.
 
 A missing production bundle is a release error. Do not mask it with a live API fallback that changes provenance, latency, schema, and reproducibility.
 
@@ -84,13 +84,15 @@ Fetch, build, validate, promote, deploy, and public health are separate receipts
 
 A refresh must:
 
-1. use an explicit source release/cutoff;
+1. use an explicit query cutoff and immutable query/snapshot ID, recording an official source release only when it was actually selected;
 2. fetch into empty isolated staging;
 3. fail on any missing expected entity;
-4. build complete candidates atomically;
+4. build complete candidates atomically with one matching receipt across every expected bundle and index, including raw/source digests and builder commit;
 5. compare two builds byte-for-byte;
 6. regenerate and verify the exact manifest closure;
 7. open a review PR—never commit directly to the watched production branch.
+
+Repository receipt and upstream vintage are separate facts. If a legacy bundle family lacks its original build date, release, cutoff, query receipt, or raw-source digest, keep those fields unknown and identify only the exact repository bytes. Do not infer source vintage from commit dates, file mtimes, manifests, or runtime hashes. A revalidation/skip-download path preserves the existing receipt without stamping a new date or release.
 
 A release must pass R parse/runtime, science fixtures, bundle/schema/index checks, offline boot, export inspection, cover checks, desktop/mobile browser QA, console health, semantic Shiny/entity readiness, and exact promoted-commit identity. An HTTP 200, shell marker, or no-CORS response is not application readiness.
 

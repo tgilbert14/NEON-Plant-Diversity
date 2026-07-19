@@ -99,22 +99,20 @@ server <- function(input, output, session) {
     rv$site   <- b$meta$site
     session$sendCustomMessage("plantSite", list(site = b$meta$site %||% "site"))  # name the export PNGs by site
     rv$is_demo <- is_demo
-    # export provenance: prefer the bundle's own build stamp; fall back to the
-    # site .rds mtime (= the build vintage on already-shipped bundles, so this
-    # works with no rebuild). neon_release is NA until a release-tagged refresh.
-    bundle_built_at <- b$meta$built_at
-    if (is.null(bundle_built_at) || length(bundle_built_at) != 1L ||
-        is.na(bundle_built_at) || !nzchar(trimws(as.character(bundle_built_at)))) {
-      f <- file.path(SITE_DIR, paste0(b$meta$site, ".rds"))
-      bundle_built_at <- if (file.exists(f))
-        format(as.Date(file.info(f)$mtime), "%Y-%m-%d") else "date unavailable"
-    }
-    bundle_release <- b$meta$neon_release
-    if (is.null(bundle_release) || length(bundle_release) != 1L ||
-        is.na(bundle_release) || !nzchar(trimws(as.character(bundle_release))))
-      bundle_release <- NA_character_
-    rv$built_at <- as.character(bundle_built_at)
-    rv$neon_release <- as.character(bundle_release)
+    # Provenance comes from the verified release-wide source receipt. The legacy
+    # 46-site family is content-addressed; filesystem mtimes are never data vintage.
+    rv$built_at <- PLANT_SOURCE_STATUS$built_at
+    rv$repository_imported_at <- PLANT_SOURCE_STATUS$repository_imported_at
+    rv$neon_release <- PLANT_SOURCE_STATUS$neon_release
+    rv$source_start <- PLANT_SOURCE_STATUS$source_start
+    rv$source_cutoff <- PLANT_SOURCE_STATUS$source_cutoff
+    rv$source_receipt_id <- PLANT_SOURCE_STATUS$source_receipt_id
+    rv$source_digest <- PLANT_SOURCE_STATUS$source_digest
+    rv$source_receipt_basis <- PLANT_SOURCE_STATUS$receipt_basis
+    rv$source_provenance_class <- PLANT_SOURCE_STATUS$provenance_class
+    rv$source_bundle_commit <- PLANT_SOURCE_STATUS$bundle_commit
+    rv$query_package <- PLANT_SOURCE_STATUS$query_package
+    rv$neon_utilities_version <- PLANT_SOURCE_STATUS$neon_utilities_version
     rv$plot   <- NULL
     yrs <- range(b$occ$year, na.rm = TRUE)
     rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1] == yrs[2]) yrs[1] else paste0(yrs[1], "–", yrs[2]))
@@ -508,9 +506,12 @@ server <- function(input, output, session) {
     div(class = "hero-band",
       div(class = "hero-title", bs_icon("broadcast"), tags$b(rv$label),
         tags$span(class = "hero-receipt", bs_icon("database-check"),
-          sprintf(" bundle %s%s", rv$built_at %||% "date unavailable",
-            if (!is.na(rv$neon_release %||% NA_character_) && nzchar(rv$neon_release %||% ""))
-              paste0(" · NEON ", rv$neon_release) else " · release not tagged")),
+          if (identical(rv$source_provenance_class, "legacy-partial"))
+            sprintf(" exact legacy bundle set · registered %s · upstream release/cutoff unknown",
+                    rv$repository_imported_at %||% "date unavailable")
+          else sprintf(" query through %s · receipt %s",
+                       rv$source_cutoff %||% "cutoff unavailable",
+                       rv$source_receipt_id %||% "unavailable")),
         actionLink("changeSite", tagList(bs_icon("arrow-left-circle"), " change site"),
                    class = "hero-change"),
         downloadLink("reportPdf", tagList(bs_icon("file-earmark-arrow-down"), " report card (PDF)"),
@@ -1261,15 +1262,35 @@ server <- function(input, output, session) {
       env <- tryCatch(load_env(site), error = function(e) NULL)
       bundle_file <- file.path(SITE_DIR, paste0(site, ".rds"))
       env_file <- file.path(ENV_DIR, paste0(site, ".rds"))
-      # provenance stamp — when this bundle was built + (if tagged) the NEON release
+      # Provenance stamp for the exact verified source family. Legacy bytes retain
+      # their partial receipt rather than borrowing a checkout/deploy timestamp.
       built_at <- rv$built_at
       if (is.null(built_at) || length(built_at) != 1L || is.na(built_at) ||
           !nzchar(trimws(as.character(built_at)))) built_at <- NA_character_
       neon_rel <- rv$neon_release %||% NA_character_
+      repository_imported_at <- rv$repository_imported_at %||% NA_character_
+      source_start <- rv$source_start %||% NA_character_
+      source_cutoff <- rv$source_cutoff %||% NA_character_
+      source_receipt_id <- rv$source_receipt_id %||% NA_character_
+      source_digest <- rv$source_digest %||% NA_character_
+      receipt_basis <- rv$source_receipt_basis %||% NA_character_
+      provenance_class <- rv$source_provenance_class %||% NA_character_
+      source_bundle_commit <- rv$source_bundle_commit %||% NA_character_
+      query_package <- rv$query_package %||% NA_character_
+      neon_utilities_version <- rv$neon_utilities_version %||% NA_character_
+      raw_source_inventory <- "data/source/plant-raw-SHA256SUMS.txt"
       exported_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
       prov <- data.frame(
         artifact = "plant_occurrence_bundle",
         site = site, builtAt = built_at, neonRelease = neon_rel,
+        repositoryImportedAt = repository_imported_at,
+        sourceStart = source_start, sourceCutoff = source_cutoff,
+        sourceReceiptId = source_receipt_id, sourceDigest = source_digest,
+        sourceReceiptBasis = receipt_basis,
+        sourceProvenanceClass = provenance_class,
+        sourceBundleCommit = source_bundle_commit,
+        queryPackage = query_package,
+        neonUtilitiesVersion = neon_utilities_version,
         dpid = "DP1.10058.001", exportedAt = exported_at,
         bundleFile = file.path("data", "sites", basename(bundle_file)),
         bundleMd5 = if (file.exists(bundle_file)) unname(tools::md5sum(bundle_file)) else NA_character_,
@@ -1280,6 +1301,13 @@ server <- function(input, output, session) {
       if (!is.null(env) && nrow(env)) prov <- rbind(prov, data.frame(
         artifact = "environment_context_overlay",
         site = site, builtAt = NA_character_, neonRelease = NA_character_,
+        repositoryImportedAt = NA_character_, sourceStart = NA_character_,
+        sourceCutoff = NA_character_, sourceReceiptId = NA_character_,
+        sourceDigest = NA_character_,
+        sourceReceiptBasis = "partial upstream query receipt; see ENVIRONMENT-CONTEXT-RECEIPT.md",
+        sourceProvenanceClass = "partial-context-overlay",
+        sourceBundleCommit = NA_character_,
+        queryPackage = NA_character_, neonUtilitiesVersion = NA_character_,
         dpid = "multiple co-located context products; see environment_context.csv source",
         exportedAt = exported_at,
         bundleFile = file.path("data", "env", basename(env_file)),
@@ -1293,8 +1321,17 @@ server <- function(input, output, session) {
         sprintf("Generated %s by an unofficial Desert Data Labs explorer.", format(Sys.Date(), "%Y-%m-%d")),
         "Source: NEON Plant presence & percent cover DP1.10058.001 (div_1m2Data + div_10m2Data100m2Data).",
         "License: NEON DP1.10058.001, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); aggregated and derived by this app.",
-        sprintf("Bundle built: %s%s", ifelse(is.na(built_at), "date unavailable", built_at),
-                if (!is.na(neon_rel) && nzchar(neon_rel)) sprintf(" | NEON release %s", neon_rel) else " | NEON release not tagged"),
+        if (identical(provenance_class, "legacy-partial"))
+          sprintf("Source receipt: exact legacy 46-site family registered from a repository import on %s at commit %s | original build date, NEON release, fetch cutoff, and query receipt were not preserved.",
+                  ifelse(is.na(repository_imported_at), "date unavailable", repository_imported_at),
+                  ifelse(is.na(source_bundle_commit), "unavailable", source_bundle_commit))
+        else sprintf("Source receipt: query %s through %s | receipt %s | bundle built %s%s",
+                     ifelse(is.na(source_start), "start unavailable", source_start),
+                     ifelse(is.na(source_cutoff), "cutoff unavailable", source_cutoff),
+                     ifelse(is.na(source_receipt_id), "unavailable", source_receipt_id),
+                     ifelse(is.na(built_at), "date unavailable", built_at),
+                     if (!is.na(neon_rel) && nzchar(neon_rel))
+                       sprintf(" | official NEON release %s", neon_rel) else ""),
         "", "FILES",
         " occurrences_all.csv   - every bundled taxon record, including coarse IDs; is_species marks analysis eligibility.",
         " analysis_snapshot.csv - the exact latest registered plot snapshots used by current-state analyses.",
@@ -1303,7 +1340,10 @@ server <- function(input, output, session) {
         " environment_context.csv - bundled co-located climate/phenology context, when available.",
         " expected_vs_observed.csv - NRCS reference flora vs observed (only if a reference list is bundled).",
         " reference_provenance.csv - single-point NRCS reference scope and identifiers, when available.",
-        " provenance.csv        - build/vintage, bundle checksum, estimator contract, product and license.",
+        " provenance.csv        - source receipt, bundle checksum, estimator contract, product and license.",
+        if (file.exists(raw_source_inventory))
+          " plant_raw_source_SHA256SUMS.txt - durable per-file raw-source checksum inventory bound by sourceDigest."
+        else NULL,
         " data_dictionary.csv   - column definitions, types, units, NA semantics, and estimands for every shipped frame.",
         "", "NOTES",
         " * Current-state analyses use each plot's latest registered (year, bout); occurrences_all.csv retains all records.",
@@ -1311,6 +1351,9 @@ server <- function(input, output, session) {
         " * percentCover is plant ocular cover at 1 m^2 (NA at presence-only 10/100 m^2 scales); groundCoverPct is abiotic ground cover;",
         "   layers overlap, so site-summed cover is a relative index, not a share of ground.",
         " * nativity is NEON's nativeStatusCode collapsed to native/introduced/unknown; contradictory statuses route to review.",
+        if (identical(provenance_class, "legacy-partial"))
+          " * source vintage is not inferred from filesystem timestamps. This legacy family is exact-byte verified, but its original build date, NEON release, and fetch cutoff are unknown."
+        else " * source vintage comes from the matching query-snapshot receipt across all 46 bundles; filesystem and deployment timestamps are not source evidence.",
         " * the NRCS comparison is one reference point/soil unit near the site centre, not a complete site-wide flora.",
         " * environment context is a separately versioned suite overlay. Its per-row source is retained, but the original product/query receipt is partial;",
         "   it is descriptive only and excluded from Driver/Cascade promotion.")
@@ -1350,6 +1393,11 @@ server <- function(input, output, session) {
       if (!is.null(ev_tbl)) frames[["expected_vs_observed.csv"]] <- ev_tbl
       if (!is.null(ref_prov)) frames[["reference_provenance.csv"]] <- ref_prov
       utils::write.csv(plant_codebook(frames), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
+      if (file.exists(raw_source_inventory) &&
+          !file.copy(raw_source_inventory,
+                     file.path(tmp, "plant_raw_source_SHA256SUMS.txt"),
+                     overwrite = TRUE, copy.mode = FALSE, copy.date = FALSE))
+        stop("Could not include the durable raw-source inventory in the export")
       writeLines(readme, file.path(tmp, "README.txt"))
       fs <- list.files(tmp, full.names = TRUE)
       old <- setwd(tmp); on.exit(setwd(old), add = TRUE)

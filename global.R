@@ -15,6 +15,7 @@ suppressPackageStartupMessages({
 
 # ---- helpers + metadata ---------------------------------------------------
 source("R/site_metadata.R", local = FALSE)
+source("R/source_receipt.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
@@ -65,8 +66,27 @@ SEARCH_TAXON_CHOICES <- if (!is.null(SEARCH_TAXA))
 SEARCH_INVADER_CHOICES <- if (!is.null(SEARCH_TAXA))
   sort(unique(SEARCH_TAXA$scientificName[SEARCH_TAXA$nativity == "Introduced"])) else character(0)
 
-# bundled sites only (the demo deploy ships these); join site metadata for the picker
-BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
+# Bundled sites only (the deploy ships all 46). The canonical metadata—not the
+# derived index—defines the required inventory so a duplicated/missing index row
+# cannot redefine the receipt boundary.
+EXPECTED_PLANT_SITES <- sort(as.character(neon_sites$site))
+if (!is.data.frame(SITE_INDEX) || nrow(SITE_INDEX) != length(EXPECTED_PLANT_SITES) ||
+    anyDuplicated(as.character(SITE_INDEX$site)) ||
+    !identical(sort(as.character(SITE_INDEX$site)), EXPECTED_PLANT_SITES))
+  stop("data/site_index.rds does not match the canonical 46-site inventory",
+       call. = FALSE)
+BUNDLED <- EXPECTED_PLANT_SITES
+SOURCE_BUNDLE_METAS <- stats::setNames(lapply(BUNDLED, function(site) {
+  bundle <- readRDS(file.path(SITE_DIR, paste0(site, ".rds")))
+  bundle$meta
+}), BUNDLED)
+PLANT_SOURCE_STATUS <- resolve_plant_source_set(
+  SITE_DIR, SITE_INDEX, EXPECTED_PLANT_SITES, SOURCE_BUNDLE_METAS,
+  require_bundle_metas = TRUE
+)
+rm(SOURCE_BUNDLE_METAS)
+verify_plant_durable_source_inventory(PLANT_SOURCE_STATUS, EXPECTED_PLANT_SITES)
+verify_plant_search_receipt(SEARCH_INDEX, PLANT_SOURCE_STATUS)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), c("richness","n_plots","pct_introduced","dominant_family")])

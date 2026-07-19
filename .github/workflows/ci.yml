@@ -33,6 +33,49 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Require human review surfaces when the plant source family changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          if git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- \
+              data/sites data/site_index.rds data/source; then
+            echo "Plant source family unchanged; refresh-review surface gate not required."
+            exit 0
+          fi
+          required=(
+            README.md
+            DEPLOY.md
+            docs/PLANT-SOURCE-RECEIPT.md
+            docs/SCIENCE-CONTRACT.md
+            docs/DATA-TAKEAWAYS.md
+            docs/EXPERT-REVIEW.md
+            docs/DRIVER-KNOWLEDGE-PACKAGE.md
+            docs/SUITE-LEARNING-HANDOFF.md
+            docs/ENVIRONMENT-CONTEXT-RECEIPT.md
+            docs/BUILD-TEST-HANDOFF.md
+            docs/index.html
+            docs/assets/cover-generated/plant-social-card-v1.svg
+            docs/og-image.png
+            docs/IMAGE-PROVENANCE.md
+            docs/cover-receipt.txt
+          )
+          missing=()
+          for path in "${required[@]}"; do
+            if [ ! -e "$path" ] ||
+               git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- "$path"; then
+              missing+=("$path")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error title=Plant refresh review incomplete::a changed source family requires human review of every provenance, science, Driver, empirical cover, and release surface"
+            printf 'missing reviewed change: %s\n' "${missing[@]}"
+            exit 1
+          fi
+          echo "Plant refresh review surfaces changed with the source family."
+
       - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           r-version: '4.5.2'
@@ -44,7 +87,7 @@ jobs:
           packages: >
             shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly,
             leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
-            jsonlite, rsconnect, cpp11,
+            digest, jsonlite, rsconnect, cpp11,
             url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sf_1.1-1.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/s2_1.1.11.tar.gz,

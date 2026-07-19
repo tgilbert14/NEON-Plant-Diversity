@@ -38,6 +38,7 @@ app_files <- c(
   list.files("data/sites", pattern = "[.]rds$", full.names = TRUE),
   list.files("data/env", pattern = "[.]rds$", full.names = TRUE),
   list.files("data/expected", pattern = "[.]rds$", full.names = TRUE),
+  list.files("data/source", pattern = "[.](txt|json)$", full.names = TRUE),
   "data/authority/plants_lookup.rds",
   list.files("data-sample", pattern = "[.]rds$", full.names = TRUE)
 )
@@ -79,7 +80,7 @@ rsconnect::writeManifest(appDir = ".", appFiles = app_files)
 RUNTIME_ROOTS <- c(
   "shiny", "bslib", "bsicons", "dplyr", "tidyr", "stringr", "tibble",
   "plotly", "leaflet", "DT", "shinyjs", "shinycssloaders", "RColorBrewer",
-  "htmltools"
+  "htmltools", "digest"
 )
 DROP_PACKAGES <- c("neonUtilities", "arrow", "rsconnect")
 

@@ -2,7 +2,9 @@
 
 Source app: NEON Plant Diversity Explorer (`DP1.10058.001`)
 
-Disposition: **context only; no new inferential Driver bytes until the registered opportunity/panel/provenance contracts are present in promoted artifacts.**
+Disposition: **descriptive legacy context only; no current-source or inferential Driver promotion until the registered opportunity, panel, and complete source-receipt contracts are present in promoted artifacts.**
+
+The current plant family is the exact 46-site legacy set introduced in repository commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. Its canonical hash proves exact bytes, not upstream vintage. Because the original NEON release, query cutoff/receipt, raw-source digest, and actual build date were not preserved, `builtAt`, `neonRelease`, and `sourceCutoff` remain `NA`; `repositoryImportedAt` and `sourceBundleCommit` are repository-receipt fields. See [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
 
 ## What this app contributes
 
@@ -30,20 +32,21 @@ Disposition: **context only; no new inferential Driver bytes until the registere
 Driver may ingest a proposed Plant field only when the source package includes:
 
 1. estimator contract version;
-2. exact source artifact hash and release/cutoff;
-3. one-bout-per-plot-year selection receipt;
-4. recurrent-panel or common-grain support;
-5. opportunity/denominator semantics;
-6. missing/unknown/conflict semantics;
-7. uncertainty or explicit “descriptive only” class;
-8. exact app/export/fixture parity.
+2. exact source artifact and inventory hashes;
+3. one complete matching source receipt across all 46 plant bundles and `site_index.rds`, including the actual build date, query cutoff and immutable snapshot/query ID, true official release only when actually selected, raw/source digest, and builder commit;
+4. one-bout-per-plot-year selection receipt;
+5. recurrent-panel or common-grain support;
+6. opportunity/denominator semantics;
+7. missing/unknown/conflict semantics;
+8. uncertainty or explicit “descriptive only” class;
+9. exact app/export/fixture parity.
 
-Until then, Driver should show Plant Diversity as a companion app and method/context source without adding its values to evidence tallies.
+The legacy exact-family receipt does not satisfy item 3, and missing fields may not be filled from repository dates, file mtimes, manifest hashes, or runtime hashes. Until a reviewed refresh satisfies every item, Driver should show Plant Diversity as a companion app and descriptive method/context source without adding its values to current-source evidence tallies.
 
 ## Design feedback for Driver
 
 - Centre Driver Cascade as integrator; companions orbit it by evidence role.
-- Every Driver result should link back to the owning app, estimator contract, support, release, and source hash.
+- Every Driver result should link back to the owning app, estimator contract, support, source-receipt class/fields, and exact source hash; an unknown release stays unknown.
 - Use `promote`, `context`, `hold`, and `reject` dispositions instead of silently treating every available metric as an edge.
 - Separate producer composition, producer phenology, and producer standing stock. Plant Diversity owns composition; Plant Phenology owns timing; Vegetation Structure should own standing-stock/productivity context.
 - Carry “can tell / cannot tell” and release-receipt patterns into the Driver cover and result panels.

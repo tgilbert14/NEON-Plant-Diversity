@@ -5,6 +5,7 @@
 
 suppressWarnings(suppressMessages(library(dplyr)))
 source("R/site_metadata.R")
+source("R/source_receipt.R")
 source("R/plant_helpers.R")
 
 root <- Sys.getenv("PDE_OUTPUT_ROOT", ".")
@@ -19,8 +20,12 @@ if (!identical(sites, expected_sites))
                paste(setdiff(sites, expected_sites), collapse = ",")),
        call. = FALSE)
 
-taxa_for_site <- function(site) {
-  bundle <- readRDS(file.path(site_dir, paste0(site, ".rds")))
+site_index <- readRDS(site_index_path)
+if (!is.data.frame(site_index) ||
+    !identical(sort(as.character(site_index$site)), expected_sites))
+  stop("data/site_index.rds is not the complete 46-site index", call. = FALSE)
+
+taxa_for_site <- function(site, bundle) {
   if (is.null(bundle$occ) || !nrow(bundle$occ))
     stop(sprintf("%s has no occurrence table", site), call. = FALSE)
   snapshot <- latest_snapshot(bundle$occ)
@@ -54,31 +59,59 @@ taxa_for_site <- function(site) {
              "n_plots", "year_min", "year_max")]
 }
 
-bundles <- lapply(sites, function(site) readRDS(file.path(site_dir, paste0(site, ".rds"))))
-receipts <- vapply(bundles, function(bundle) as.character(bundle$meta$built_at), character(1))
-release_ids <- vapply(bundles, function(bundle) {
-  value <- bundle$meta$neon_release
-  if (is.null(value) || !length(value) || is.na(value)) "" else as.character(value)
-}, character(1))
+bundles <- stats::setNames(
+  lapply(sites, function(site) readRDS(file.path(site_dir, paste0(site, ".rds")))),
+  sites
+)
+bundle_metas <- lapply(bundles, `[[`, "meta")
+source_status <- resolve_plant_source_set(
+  site_dir, site_index, expected_sites, bundle_metas,
+  require_bundle_metas = TRUE
+)
 
 requested_date <- trimws(Sys.getenv("PDE_BUILD_DATE", ""))
 requested_release <- trimws(Sys.getenv("NEON_RELEASE", ""))
-if (nzchar(requested_date) && any(receipts != requested_date))
+requested_start <- trimws(Sys.getenv("PDE_SOURCE_START", ""))
+requested_cutoff <- trimws(Sys.getenv("PDE_SOURCE_CUTOFF", ""))
+requested_receipt <- trimws(Sys.getenv("PDE_SOURCE_RECEIPT_ID", ""))
+requested_package <- trimws(Sys.getenv("PDE_QUERY_PACKAGE", ""))
+requested_neon_version <- trimws(Sys.getenv("PDE_NEON_UTILITIES_VERSION", ""))
+requested_digest <- trimws(Sys.getenv("PDE_SOURCE_DIGEST", ""))
+requested_commit <- trimws(Sys.getenv("PDE_BUILDER_COMMIT", ""))
+if (nzchar(requested_date) &&
+    (is.na(source_status$built_at) ||
+     !identical(source_status$built_at, requested_date)))
   stop("Site bundle build receipts do not match PDE_BUILD_DATE", call. = FALSE)
-if (nzchar(requested_release) && any(release_ids != requested_release))
+if (nzchar(requested_release) &&
+    (is.na(source_status$neon_release) ||
+     !identical(source_status$neon_release, requested_release)))
   stop("Site bundle release receipts do not match NEON_RELEASE", call. = FALSE)
-parsed_receipts <- suppressWarnings(as.Date(receipts, format = "%Y-%m-%d"))
-if (any(is.na(parsed_receipts)))
-  stop("Every site bundle must carry a valid built_at receipt", call. = FALSE)
+if (nzchar(requested_start) &&
+    !identical(source_status$source_start, requested_start))
+  stop("Site source receipts do not match PDE_SOURCE_START", call. = FALSE)
+if (nzchar(requested_cutoff) &&
+    !identical(source_status$source_cutoff, requested_cutoff))
+  stop("Site source receipts do not match PDE_SOURCE_CUTOFF", call. = FALSE)
+if (nzchar(requested_receipt) &&
+    !identical(source_status$source_receipt_id, requested_receipt))
+  stop("Site source receipts do not match PDE_SOURCE_RECEIPT_ID", call. = FALSE)
+if (nzchar(requested_package) &&
+    !identical(source_status$query_package, requested_package))
+  stop("Site source receipts do not match PDE_QUERY_PACKAGE", call. = FALSE)
+if (nzchar(requested_neon_version) &&
+    !identical(source_status$neon_utilities_version, requested_neon_version))
+  stop("Site source receipts do not match PDE_NEON_UTILITIES_VERSION", call. = FALSE)
+if (nzchar(requested_digest) &&
+    !identical(source_status$source_digest, requested_digest))
+  stop("Site source receipts do not match PDE_SOURCE_DIGEST", call. = FALSE)
+if (nzchar(requested_commit) &&
+    !identical(source_status$bundle_commit, requested_commit))
+  stop("Site source receipts do not match PDE_BUILDER_COMMIT", call. = FALSE)
 
-built_at <- if (nzchar(requested_date)) requested_date else max(receipts)
-nonempty_releases <- sort(unique(release_ids[nzchar(release_ids)]))
-if (length(nonempty_releases) > 1L)
-  stop("Site bundles contain mixed NEON release receipts", call. = FALSE)
-neon_release <- if (nzchar(requested_release)) requested_release else
-  if (length(nonempty_releases)) nonempty_releases[[1L]] else NA_character_
+site_index <- site_index[match(expected_sites, site_index$site), , drop = FALSE]
+rownames(site_index) <- NULL
 
-taxa <- dplyr::bind_rows(lapply(sites, taxa_for_site))
+taxa <- dplyr::bind_rows(Map(taxa_for_site, sites, bundles))
 taxa <- taxa[!is.na(taxa$scientificName) & nzchar(taxa$scientificName), , drop = FALSE]
 taxa$year_min[!is.finite(taxa$year_min)] <- NA_integer_
 taxa$year_max[!is.finite(taxa$year_max)] <- NA_integer_
@@ -86,19 +119,24 @@ taxa <- taxa[order(taxa$scientificName, taxa$site,
                    -dplyr::coalesce(taxa$mean_cover, -1), method = "radix"), , drop = FALSE]
 rownames(taxa) <- NULL
 
-site_index <- readRDS(site_index_path)
-if (!is.data.frame(site_index) ||
-    !identical(sort(as.character(site_index$site)), expected_sites))
-  stop("data/site_index.rds is not the complete 46-site index", call. = FALSE)
-site_index <- site_index[match(expected_sites, site_index$site), , drop = FALSE]
-rownames(site_index) <- NULL
-
 index <- list(
   taxa = tibble::as_tibble(taxa),
   sites = tibble::as_tibble(site_index),
-  built_at = built_at,
-  neon_release = neon_release
+  built_at = source_status$built_at,
+  repository_imported_at = source_status$repository_imported_at,
+  neon_release = source_status$neon_release,
+  source_start = source_status$source_start,
+  source_cutoff = source_status$source_cutoff,
+  source_receipt_id = source_status$source_receipt_id,
+  source_digest = source_status$source_digest,
+  source_receipt_basis = source_status$receipt_basis,
+  source_provenance_class = source_status$provenance_class,
+  source_bundle_commit = source_status$bundle_commit,
+  query_package = source_status$query_package,
+  neon_utilities_version = source_status$neon_utilities_version
 )
 saveRDS(index, search_path, compress = "xz")
-cat(sprintf("SEARCH INDEX PASSED: %d taxon-site rows, 46/46 sites, built_at=%s.\n",
-            nrow(index$taxa), built_at))
+cat(sprintf(
+  "SEARCH INDEX PASSED: %d taxon-site rows, 46/46 sites, provenance=%s.\n",
+  nrow(index$taxa), source_status$provenance_class
+))

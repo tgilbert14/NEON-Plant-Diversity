@@ -710,9 +710,19 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   source         = "source system or reference-list construction route",
   # provenance.csv
   artifact       = "artifact class described by this provenance row",
-  builtAt        = "build provenance: date this bundle was built",
+  builtAt        = "date the app bundle was actually built (unknown for the exact legacy family)",
   exportedAt     = "date this CSV export was generated",
-  neonRelease    = "build provenance: NEON release tag for the source product (NA if untagged)",
+  neonRelease    = "official NEON published release selected by the query, when one was actually selected",
+  repositoryImportedAt = "date the exact legacy family was imported into this repository; not an upstream build or fetch date",
+  sourceStart    = "first calendar month requested by a receipt-complete source query",
+  sourceCutoff   = "closed end date requested by a receipt-complete source query",
+  sourceReceiptId = "app-defined immutable identifier for the source query snapshot",
+  sourceDigest   = "SHA-256 identity for the source family represented by this row",
+  sourceReceiptBasis = "human-readable boundary explaining what the source receipt does and does not establish",
+  sourceProvenanceClass = "receipt class: exact legacy partial, reviewed query snapshot, or partial context overlay",
+  sourceBundleCommit = "full Git commit that imported the legacy family or built the reviewed query snapshot",
+  queryPackage   = "NEON query package selected for a receipt-complete refresh",
+  neonUtilitiesVersion = "neonUtilities version used for a receipt-complete source query",
   dpid           = "NEON data product id (DP1.10058.001)",
   fetchedAt      = "build provenance: date this bundle was fetched/built",
   bundleFile     = "runtime artifact path used by the app",
@@ -786,7 +796,16 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("percentCover")] <- "NA is expected at presence-only 10/100 m^2 scales or when 1 m^2 cover was not recorded; it is not zero."
   out[cols %in% c("groundCoverPct")] <- "NA means abiotic ground cover was not recorded for that ground-cover class and sampling unit; it is not zero."
   out[cols %in% c("nativity")] <- "Unknown is the analysis category for unresolved/conflicting status; NA means no derived category was supplied."
-  out[cols %in% c("neonRelease", "queryDate")] <- "NA means the release/query date was not captured, not that no release/query occurred."
+  out[cols %in% c("builtAt", "neonRelease", "sourceStart", "sourceCutoff",
+                  "sourceReceiptId", "queryPackage", "neonUtilitiesVersion")] <-
+    "NA means this upstream/build receipt field was not preserved or does not apply; it must not be inferred from filesystem or deployment time."
+  out[cols %in% c("repositoryImportedAt")] <-
+    "NA means the artifact is not the registered legacy repository import."
+  out[cols %in% c("sourceDigest", "sourceReceiptBasis", "sourceProvenanceClass",
+                  "sourceBundleCommit")] <-
+    "NA means the represented artifact has only partial provenance; see sourceReceiptBasis and the release documentation."
+  out[cols %in% c("queryDate")] <-
+    "NA means the reference query date was not captured, not that no query occurred."
   out[cols %in% c("reference_production")] <- "NA is expected where NRCS provides no production ranking, including many forest ecological sites."
   out[cols %in% c("total_cover", "intro_cover", "native_cover", "dominant", "dominant_cover", "pct_introduced") ] <-
     "NA means no eligible 1 m^2 cover estimate was available for the selected plot snapshot; it is not zero."
@@ -823,8 +842,13 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("referenceScope", "referenceLatitude", "referenceLongitude", "ecoclassid", "ecositeName",
                   "ecosite_name", "mlra", "queryDate")] <-
     "provenance for the single-coordinate NRCS ecological-site reference artifact."
-  out[cols %in% c("artifact", "builtAt", "exportedAt", "neonRelease", "dpid", "fetchedAt", "bundleFile", "bundleMd5",
-                  "snapshotContract", "estimatorContract", "sourceLicense")] <-
+  out[cols %in% c("artifact", "builtAt", "exportedAt", "neonRelease",
+                  "repositoryImportedAt", "sourceStart", "sourceCutoff",
+                  "sourceReceiptId", "sourceDigest", "sourceReceiptBasis",
+                  "sourceProvenanceClass", "sourceBundleCommit", "queryPackage",
+                  "neonUtilitiesVersion", "dpid", "fetchedAt", "bundleFile",
+                  "bundleMd5", "snapshotContract", "estimatorContract",
+                  "sourceLicense")] <-
     "release/provenance metadata for the exported artifact, not an ecological estimand."
   out[cols %in% c("plant_metric", "metric_value", "driver", "driver_value", "driver_label", "lag_years",
                   "spearman_r", "best_lag_years", "matched_years", "permutation_p",

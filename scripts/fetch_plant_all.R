@@ -6,6 +6,7 @@
 
 suppressPackageStartupMessages(library(neonUtilities))
 source("R/site_metadata.R")
+source("R/source_receipt.R")
 
 read_required_env <- function(name) {
   value <- trimws(Sys.getenv(name, ""))
@@ -17,6 +18,7 @@ read_required_env <- function(name) {
 outdir <- Sys.getenv("PDE_RAW_OUT_DIR", "../plant-data-fetch")
 start_d <- Sys.getenv("PDE_FETCH_START", "2013-01")
 end_d <- read_required_env("PDE_FETCH_END")
+query_package <- read_required_env("PDE_QUERY_PACKAGE")
 token <- read_required_env("NEON_TOKEN")
 
 if (!grepl("^[0-9]{4}-[0-9]{2}$", start_d) ||
@@ -24,6 +26,20 @@ if (!grepl("^[0-9]{4}-[0-9]{2}$", start_d) ||
   stop("PDE_FETCH_START and PDE_FETCH_END must use YYYY-MM", call. = FALSE)
 if (start_d > end_d)
   stop("PDE_FETCH_START must not be later than PDE_FETCH_END", call. = FALSE)
+if (!identical(query_package, "basic"))
+  stop("PDE_QUERY_PACKAGE must be 'basic' for this registered source schema",
+       call. = FALSE)
+
+parse_month_start <- function(value, name) {
+  parsed <- suppressWarnings(as.Date(paste0(value, "-01"), format = "%Y-%m-%d"))
+  if (is.na(parsed) || !identical(format(parsed, "%Y-%m"), value))
+    stop(sprintf("%s must be a valid calendar month", name), call. = FALSE)
+  parsed
+}
+
+query_start_date <- parse_month_start(start_d, "PDE_FETCH_START")
+query_end_month <- parse_month_start(end_d, "PDE_FETCH_END")
+query_cutoff_date <- seq(query_end_month, by = "1 month", length.out = 2L)[2L] - 1
 
 args <- commandArgs(trailingOnly = TRUE)
 requested <- if (length(args)) unique(args) else as.character(neon_sites$site)
@@ -48,7 +64,7 @@ for (site in requested) {
     neonUtilities::loadByProduct(
       dpID = "DP1.10058.001", site = site,
       startdate = start_d, enddate = end_d,
-      package = "basic", check.size = "FALSE", token = token
+      package = query_package, check.size = "FALSE", token = token
     ),
     error = function(error) {
       message(sprintf("FETCH FAILED [%s]: %s", site, conditionMessage(error)))
@@ -61,6 +77,25 @@ for (site in requested) {
       is.null(result$div_10m2Data100m2Data) ||
       !is.data.frame(result$div_10m2Data100m2Data) ||
       nrow(result$div_10m2Data100m2Data) == 0L) {
+    failed <- c(failed, site)
+    next
+  }
+
+  semantic_problems <- c(
+    plant_source_row_problems(
+      result$div_1m2Data, site, "div_1m2Data",
+      query_start_date, query_cutoff_date
+    ),
+    plant_source_row_problems(
+      result$div_10m2Data100m2Data, site, "div_10m2Data100m2Data",
+      query_start_date, query_cutoff_date
+    )
+  )
+  if (length(semantic_problems)) {
+    message(sprintf(
+      "RAW SEMANTICS FAILED [%s]: %s",
+      site, paste(semantic_problems, collapse = "; ")
+    ))
     failed <- c(failed, site)
     next
   }

@@ -29,17 +29,21 @@ This file is the reusable learning package for the next companion app and the fi
 
 1. Refresh into isolated staging and require the full expected inventory before publishing.
 2. A failure collector must exit non-zero.
-3. Derived output must be byte-deterministic from explicit inputs and dates.
+3. Derived output must be byte-deterministic from explicit inputs and dates, with actual build date kept separate from query cutoff and source release.
 4. The manifest is an exact file/package closure, not a place to rewrite package metadata.
 5. Custom Shiny message handlers require exactly one payload parameter under current Shiny.
 6. Vendor essential browser dependencies; optional basemap tiles must not be confused with core data dependencies.
 7. “App ready” requires a semantic Shiny connection/site-load receipt. A `no-cors` fetch proves nothing.
 8. Data/codebook/provenance must be generated from the exact exported frames and fail on undocumented columns.
 9. Scheduled refreshes create review candidates, never direct-to-production commits.
+10. Repository receipt and upstream vintage are different facts. Use fields such as `repositoryImportedAt` and `sourceBundleCommit`; keep unknown `builtAt`, `neonRelease`, and `sourceCutoff` values as `NA`.
+11. Filesystem mtimes and manifest/runtime hashes prove neither source age nor upstream release. Content hashes identify exact bytes only.
+12. A query-snapshot refresh requires one complete matching receipt across every expected bundle and its index, including query/snapshot identity, raw/source digest, and builder commit.
+13. A skip-download run revalidates existing bytes and receipts without stamping a workflow date or invented source metadata.
 
 ## Pattern to carry to every next app
 
-- Public cover: outcome-led hero, role chip, verified facts with vintage, can/cannot, methods, release receipt, Driver-centred suite map, source/license/independence.
+- Public cover: outcome-led hero, role chip, verified facts with receipt-qualified vintage or an explicit unknown, can/cannot, methods, release receipt, Driver-centred suite map, source/license/independence.
 - In-app chrome: skip link, main/nav landmarks, persistent app/data status, 44px targets, visible focus, mobile intent-grouped navigation.
 - Science package: `SCIENCE-CONTRACT.md`, hard fixtures, parity test, Driver disposition.
 - Release package: bundle verifier, handler/cover static gates, exact manifest closure, offline core boot, deterministic build, semantic post-deploy smoke.
@@ -47,7 +51,7 @@ This file is the reusable learning package for the next companion app and the fi
 
 ## Driver changes to make after companion promotion
 
-- Add Plant Diversity as **composition & invasion context**, not a productivity vote.
+- Add Plant Diversity as **descriptive legacy composition & invasion context**, not a current-source or productivity vote; reconsider current-source promotion only after a complete reviewed refresh receipt.
 - Add source-app/contract/support/release links to every accepted Driver field.
 - Add the four-state disposition (`promote`, `context`, `hold`, `reject`).
 - Rebuild the Driver cover around the suite constellation with Driver clearly centred.

@@ -1,16 +1,188 @@
 #!/usr/bin/env Rscript
 
-# Executable science-contract fixtures.  These tests use hard assertions and
-# synthetic records so they do not depend on network access or bundled sites.
+# Executable science-contract fixtures. Metric tests use synthetic records;
+# release-receipt tests inspect only committed local bytes. Nothing uses network.
 suppressPackageStartupMessages(library(dplyr))
 source("R/plant_helpers.R")
 source("R/site_metadata.R")
+source("R/source_receipt.R")
 source("R/expected_qc.R")
 source("R/env_helpers.R")
 source("R/report_pdf.R")
 
 assert <- function(ok, msg) if (!isTRUE(ok)) stop(msg, call. = FALSE)
 near <- function(x, y, tol = 1e-10) isTRUE(all.equal(x, y, tolerance = tol, check.attributes = FALSE))
+
+# 0. Source provenance is a fail-closed family state machine. The frozen legacy
+# bytes are exact, but their upstream build/release/cutoff remain unknown.
+receipt_sites <- sort(as.character(neon_sites$site))
+receipt_index <- readRDS("data/site_index.rds")
+receipt_metas <- stats::setNames(lapply(receipt_sites, function(site) {
+  readRDS(file.path("data", "sites", paste0(site, ".rds")))$meta
+}), receipt_sites)
+current_receipt <- resolve_plant_source_set(
+  "data/sites", receipt_index, receipt_sites, receipt_metas,
+  require_bundle_metas = TRUE
+)
+assert(current_receipt$provenance_class %in% c("legacy-partial", "query-snapshot"),
+       "current plant family did not resolve to a registered receipt class")
+if (identical(current_receipt$provenance_class, "legacy-partial")) {
+  assert(identical(current_receipt$repository_imported_at, "2026-06-19") &&
+         identical(current_receipt$bundle_commit,
+                   "4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e") &&
+         identical(current_receipt$source_digest,
+                   "8f967bf7d0369879d0e9d3ac1ce19717d755ae681bc8eaa6d1341c3ade1f2a8a") &&
+         identical(current_receipt$receipt_basis,
+                   "legacy repository import commit date; not an upstream fetch cutoff") &&
+         is.na(current_receipt$built_at) && is.na(current_receipt$neon_release) &&
+         is.na(current_receipt$source_cutoff),
+         "legacy source receipt overstates upstream provenance")
+  bad_receipt <- PLANT_SOURCE_RECEIPT
+  bad_receipt$site_inventory_sha256 <- paste(rep("0", 64L), collapse = "")
+  bad_receipt_failed <- tryCatch({
+    verify_legacy_plant_source_receipt("data/sites", receipt_sites, bad_receipt)
+    FALSE
+  }, error = function(error) TRUE)
+  assert(bad_receipt_failed,
+         "an unregistered 46-site family passed the legacy receipt gate")
+} else {
+  assert(.receipt_iso_date(current_receipt$built_at) &&
+         .receipt_iso_date(current_receipt$source_cutoff) &&
+         .receipt_hex(current_receipt$source_digest, 64L) &&
+         grepl(current_receipt$source_digest, current_receipt$source_receipt_id,
+               fixed = TRUE),
+         "current query-snapshot receipt is incomplete")
+}
+
+# Receipt-state fixtures start from stripped metadata so they remain valid after
+# the repository itself advances from the legacy family to a reviewed refresh.
+fixture_index <- receipt_index
+for (field in PLANT_REFRESH_RECEIPT_FIELDS) attr(fixture_index, field) <- NULL
+fixture_metas <- lapply(receipt_metas, function(meta) {
+  meta[PLANT_REFRESH_RECEIPT_FIELDS] <- NULL
+  meta
+})
+partial_metas <- fixture_metas
+partial_metas[[1L]]$built_at <- "2026-07-18"
+partial_failed <- tryCatch({
+  resolve_plant_source_set("data/sites", fixture_index, receipt_sites,
+                           partial_metas, require_bundle_metas = TRUE)
+  FALSE
+}, error = function(error) grepl("partial or mixed", conditionMessage(error)))
+assert(partial_failed, "a partial future source receipt fell back to legacy mode")
+future_values <- list(
+  receipt_version = "plant-source-receipt-v2",
+  product = "DP1.10058.001",
+  built_at = "2026-07-18",
+  source_start = "2013-01",
+  source_cutoff = "2026-06-30",
+  source_receipt_id = paste0("plant-query-fixture-sha256-",
+                             paste(rep("a", 64L), collapse = "")),
+  query_package = "basic",
+  neon_utilities_version = "2.4.2",
+  source_digest = paste(rep("a", 64L), collapse = ""),
+  builder_commit = paste(rep("b", 40L), collapse = ""),
+  neon_release = NA_character_
+)
+future_index <- fixture_index
+for (field in names(future_values)) attr(future_index, field) <- future_values[[field]]
+future_metas <- fixture_metas
+for (site in names(future_metas))
+  for (field in names(future_values))
+    future_metas[[site]][[field]] <- future_values[[field]]
+future_receipt <- resolve_plant_source_set(
+  "data/sites", future_index, receipt_sites, future_metas,
+  require_bundle_metas = TRUE
+)
+assert(identical(future_receipt$provenance_class, "query-snapshot") &&
+       identical(future_receipt$source_cutoff, "2026-06-30") &&
+       is.na(future_receipt$neon_release),
+       "a complete query-snapshot receipt did not resolve as refreshed data")
+future_search <- list(
+  built_at = future_receipt$built_at,
+  repository_imported_at = future_receipt$repository_imported_at,
+  neon_release = future_receipt$neon_release,
+  source_start = future_receipt$source_start,
+  source_cutoff = future_receipt$source_cutoff,
+  source_receipt_id = future_receipt$source_receipt_id,
+  source_digest = future_receipt$source_digest,
+  source_receipt_basis = future_receipt$receipt_basis,
+  source_provenance_class = future_receipt$provenance_class,
+  source_bundle_commit = future_receipt$bundle_commit,
+  query_package = future_receipt$query_package,
+  neon_utilities_version = future_receipt$neon_utilities_version
+)
+verify_plant_search_receipt(future_search, future_receipt)
+future_search$source_cutoff <- "2026-06-29"
+stale_search_failed <- tryCatch({
+  verify_plant_search_receipt(future_search, future_receipt)
+  FALSE
+}, error = function(error) grepl("differs", conditionMessage(error)))
+assert(stale_search_failed, "a stale search-index source receipt passed")
+midmonth_values <- future_values
+midmonth_values$source_cutoff <- "2026-06-29"
+midmonth_failed <- tryCatch({
+  .validate_plant_refresh_receipt(midmonth_values)
+  FALSE
+}, error = function(error) TRUE)
+assert(midmonth_failed, "a mid-month cutoff passed the monthly query receipt")
+future_metas[[1L]]$source_digest <- paste(rep("c", 64L), collapse = "")
+future_metas[[1L]]$source_receipt_id <- paste0(
+  "plant-query-fixture-sha256-", future_metas[[1L]]$source_digest
+)
+mixed_failed <- tryCatch({
+  resolve_plant_source_set("data/sites", future_index, receipt_sites,
+                           future_metas, require_bundle_metas = TRUE)
+  FALSE
+}, error = function(error) grepl("differs", conditionMessage(error)))
+assert(mixed_failed, "mixed refreshed source digests passed the family gate")
+
+# Raw fetch/build boundaries reject plausible-looking cross-site and malformed
+# records before they can become runtime keys or source-vintage evidence.
+raw_rows <- data.frame(
+  siteID = c("SRER", "SRER"),
+  plotID = c("SRER_001", "SRER_002"),
+  endDate = c("2013-01-01", "2026-06-30T23:59:59.125Z"),
+  stringsAsFactors = FALSE
+)
+validate_plant_source_rows(
+  raw_rows, "SRER", "fixture", "2013-01-01", "2026-06-30"
+)
+row_gate_fails <- function(frame, consumed = NULL) {
+  tryCatch({
+    validate_plant_source_rows(
+      frame, "SRER", "fixture", "2013-01-01", "2026-06-30", consumed
+    )
+    FALSE
+  }, error = function(error) TRUE)
+}
+foreign_site <- raw_rows
+foreign_site$siteID[1L] <- "ABBY"
+assert(row_gate_fails(foreign_site),
+       "a foreign siteID passed the raw-row boundary")
+foreign_plot <- raw_rows
+foreign_plot$plotID[1L] <- "ABBY_001"
+assert(row_gate_fails(foreign_plot),
+       "a foreign retained plotID passed behind a matching siteID")
+malformed_date <- raw_rows
+malformed_date$endDate[1L] <- "2013-01-01garbage"
+assert(row_gate_fails(malformed_date),
+       "an endDate with trailing junk passed the raw-row boundary")
+invalid_clock <- raw_rows
+invalid_clock$endDate[1L] <- "2013-01-01T25:00:00Z"
+assert(row_gate_fails(invalid_clock),
+       "an endDate with an invalid clock passed the raw-row boundary")
+out_of_window <- raw_rows
+out_of_window$endDate[1L] <- "2012-12-31"
+assert(row_gate_fails(out_of_window),
+       "an out-of-window endDate passed the raw-row boundary")
+masked_rows <- rbind(raw_rows[1L, ], foreign_plot[1L, ])
+validate_plant_source_rows(
+  masked_rows, "SRER", "fixture", "2013-01-01", "2026-06-30",
+  c(TRUE, FALSE)
+)
+assert(row_gate_fails(masked_rows, c(TRUE, TRUE)),
+       "the consumed-row mask failed to gate a foreign retained plotID")
 
 occ_row <- function(plotID, subplotID, year, bout, taxonID, scientificName,
                     nativity = "Native", status = "N", cover = 10,
@@ -195,8 +367,14 @@ empty_frame <- function(cols) as.data.frame(stats::setNames(replicate(length(col
 env_cols <- c("siteID", "ym", "date", "precip_mm", "temp_c", "temp_min", "temp_max",
               "flowering_pct", "flowering_pct_n", "greenup_pct", "greenup_pct_n",
               "fruiting_pct", "fruiting_pct_n", "source", "year")
-prov_cols <- c("artifact", "site", "builtAt", "neonRelease", "dpid", "exportedAt", "bundleFile", "bundleMd5",
-               "snapshotContract", "estimatorContract", "sourceLicense")
+prov_cols <- c(
+  "artifact", "site", "builtAt", "neonRelease", "repositoryImportedAt",
+  "sourceStart", "sourceCutoff", "sourceReceiptId", "sourceDigest",
+  "sourceReceiptBasis", "sourceProvenanceClass", "sourceBundleCommit",
+  "queryPackage", "neonUtilitiesVersion", "dpid", "exportedAt",
+  "bundleFile", "bundleMd5", "snapshotContract", "estimatorContract",
+  "sourceLicense"
+)
 ref_cols <- c("site", "referenceScope", "referenceLatitude", "referenceLongitude", "source",
               "ecoclassid", "ecositeName", "mlra", "queryDate", "sourceLicense")
 rank_cols <- c("plant_metric", "driver", "driver_label", "spearman_r", "best_lag_years",

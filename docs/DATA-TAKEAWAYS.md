@@ -14,7 +14,7 @@ The current artifact inventory contains:
 - a site index, search index, and plant authority artifact;
 - hard-assertion science fixtures in `scripts/test_science_contracts.R` and bundle/release checks in `scripts/verify_bundle.R`.
 
-These are inventory facts, not ecological findings. File presence does not prove that every bundle has the intended source vintage, that the candidate code reproduces earlier values, or that the deployed app serves the same bytes.
+These are inventory facts, not ecological findings. The exact 46-site plant family is now content-addressed under the legacy-partial [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md): it entered the repository in commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. That repository receipt and the frozen-family hash prove which bytes are under review; they do not prove upstream vintage. File presence alone does not prove that the candidate code reproduces earlier values or that the deployed app serves the same bytes.
 
 ## Registered product contract
 
@@ -68,7 +68,9 @@ The plant authority supports accepted-symbol and lower-48 nativity review, but s
 
 ### Empirical validation
 
-The previous review mixed historical bundle calculations with claims about the current application. Values such as site rankings, site-specific Chao2 estimates, invasion percentages, and climate correlations must be recomputed after the candidate manifest, bundles, and source SHA are frozen. Until then they are not current release findings.
+The previous review mixed historical bundle calculations with claims about the current application. Values such as site rankings, site-specific Chao2 estimates, invasion percentages, and climate correlations must be recomputed after the candidate manifest, bundles, and exact source-family receipt are frozen. Recomputed values may be reported as descriptive results for those exact bytes. They are not current-source findings because the original NEON release, query cutoff/receipt, raw-source digest, and actual build date were not preserved.
+
+For the legacy family, `builtAt`, `neonRelease`, and `sourceCutoff` remain `NA`. `repositoryImportedAt=2026-06-19` and `sourceBundleCommit=4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` distinguish repository receipt from upstream source history. File mtimes and manifest/runtime hashes cannot fill the missing fields.
 
 ## Export and reproducibility contract
 
@@ -105,6 +107,6 @@ It may not claim:
 
 ## Release and Driver disposition
 
-Release remains a candidate until R parsing, science fixtures, bundle verification, deterministic rebuilds, strict manifest equality, offline boot, human desktop/mobile review, export inspection, and semantic post-deploy checks all pass for one recorded commit.
+Release remains a candidate until R parsing, science fixtures, bundle verification, deterministic rebuilds, strict manifest equality, offline boot, human desktop/mobile review, export inspection, and semantic post-deploy checks all pass for one recorded commit. Passing those gates can validate an application release over the exact legacy bytes; it cannot retroactively create an upstream source receipt or establish currentness.
 
-Driver/Cascade disposition is **context-only / hold inferential promotion**. After byte and contract validation, common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty may be handed off as context. Productivity votes, per-site climate–richness edges, management inference, and phenology signals owned by the Phenology app remain excluded.
+Driver/Cascade disposition is **context-only / hold current-source and inferential promotion**. After exact-byte and contract validation, common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty may be handed off as descriptive legacy context. Current-source promotion requires a future complete matching receipt across all 46 bundles and `site_index.rds`; productivity votes, per-site climate–richness edges, management inference, and phenology signals owned by the Phenology app remain excluded.

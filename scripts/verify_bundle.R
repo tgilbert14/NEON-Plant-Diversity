@@ -23,6 +23,7 @@ read_checked <- function(path) {
 }
 
 source("R/site_metadata.R")
+source("R/source_receipt.R")
 source("R/plant_helpers.R")
 source("R/expected_qc.R")
 EXPECTED_SITES <- sort(as.character(neon_sites$site))
@@ -32,11 +33,22 @@ EXPECTED_REPOSITORY <-
 EXPECTED_REFERENCE_SITE_COUNT <- 34L
 EXPECTED_BUILD_DATE <- trimws(Sys.getenv("PDE_EXPECT_BUILD_DATE", ""))
 EXPECTED_RELEASE <- trimws(Sys.getenv("PDE_EXPECT_RELEASE", ""))
+EXPECTED_RELEASE_MISSING <- identical(
+  trimws(Sys.getenv("PDE_EXPECT_RELEASE_MISSING", "0")), "1"
+)
+EXPECTED_SOURCE_START <- trimws(Sys.getenv("PDE_EXPECT_SOURCE_START", ""))
+EXPECTED_SOURCE_CUTOFF <- trimws(Sys.getenv("PDE_EXPECT_SOURCE_CUTOFF", ""))
+EXPECTED_SOURCE_RECEIPT_ID <- trimws(Sys.getenv("PDE_EXPECT_SOURCE_RECEIPT_ID", ""))
+EXPECTED_QUERY_PACKAGE <- trimws(Sys.getenv("PDE_EXPECT_QUERY_PACKAGE", ""))
+EXPECTED_NEON_UTILITIES_VERSION <-
+  trimws(Sys.getenv("PDE_EXPECT_NEON_UTILITIES_VERSION", ""))
+EXPECTED_SOURCE_DIGEST <- trimws(Sys.getenv("PDE_EXPECT_SOURCE_DIGEST", ""))
+EXPECTED_BUILDER_COMMIT <- trimws(Sys.getenv("PDE_EXPECT_BUILDER_COMMIT", ""))
 
 REQUIRED_RUNTIME_PACKAGES <- c(
   "shiny", "bslib", "bsicons", "dplyr", "tidyr", "stringr", "tibble",
   "plotly", "leaflet", "DT", "shinyjs", "shinycssloaders", "RColorBrewer",
-  "htmltools"
+  "htmltools", "digest"
 )
 FORBIDDEN_RUNTIME_PACKAGES <- c("neonUtilities", "arrow", "rsconnect")
 EXPECTED_GEO_PINS <- c(
@@ -79,8 +91,7 @@ if (!identical(site_codes, EXPECTED_SITES))
                paste(setdiff(site_codes, EXPECTED_SITES), collapse = ",")))
 
 bundles <- list()
-bundle_dates <- character(0)
-bundle_releases <- character(0)
+bundle_metas <- list()
 for (path in site_files) {
   site <- sub("[.]rds$", "", basename(path))
   bundle <- read_checked(path)
@@ -119,37 +130,23 @@ for (path in site_files) {
   }
   meta <- bundle$meta
   if (!is.list(meta) ||
-      !all(c("site", "lat", "lng", "years", "built_at", "neon_release") %in% names(meta)) ||
+      !all(c("site", "lat", "lng", "years") %in% names(meta)) ||
       !identical(as.character(meta$site), site)) {
     note(sprintf("%s metadata is incomplete or identifies another site", path))
   } else {
-    built_at <- as.character(meta$built_at)
-    release <- if (is.null(meta$neon_release) || is.na(meta$neon_release)) "" else
-      as.character(meta$neon_release)
-    parsed_built_at <- suppressWarnings(as.Date(built_at, format = "%Y-%m-%d"))
-    if (length(built_at) != 1L || is.na(parsed_built_at))
-      note(sprintf("%s has an invalid built_at receipt", path))
-    if (nzchar(EXPECTED_BUILD_DATE) && !identical(built_at, EXPECTED_BUILD_DATE))
-      note(sprintf("%s build receipt differs from PDE_EXPECT_BUILD_DATE", path))
-    if (nzchar(EXPECTED_RELEASE) && !identical(release, EXPECTED_RELEASE))
-      note(sprintf("%s release receipt differs from PDE_EXPECT_RELEASE", path))
+    if (!is.numeric(meta$lat) || !is.numeric(meta$lng) ||
+        length(meta$lat) != 1L || length(meta$lng) != 1L ||
+        !is.finite(meta$lat) || !is.finite(meta$lng) ||
+        abs(meta$lat) > 90 || abs(meta$lng) > 180)
+      note(sprintf("%s metadata lacks a valid finite coordinate", path))
     if (is.data.frame(bundle$occ) && "year" %in% names(bundle$occ) &&
         !identical(sort(unique(as.integer(bundle$occ$year))), sort(as.integer(meta$years))))
       note(sprintf("%s metadata years differ from its occurrence table", path))
-    bundle_dates[[site]] <- built_at
-    bundle_releases[[site]] <- release
+    bundle_metas[[site]] <- meta
   }
 }
 cat(sprintf("plant bundles: %d expected, %d readable\n",
             length(EXPECTED_SITES), length(bundles)))
-
-if (length(bundle_dates) && length(unique(bundle_dates)) != 1L)
-  note(sprintf("plant bundles have mixed build receipts: %s",
-               paste(sort(unique(bundle_dates)), collapse = ",")))
-nonempty_releases <- unique(bundle_releases[nzchar(bundle_releases)])
-if (length(nonempty_releases) > 1L)
-  note(sprintf("plant bundles have mixed release receipts: %s",
-               paste(sort(nonempty_releases), collapse = ",")))
 
 # ---- environmental overlays ------------------------------------------------
 env_files <- list.files("data/env", pattern = "[.]rds$", full.names = TRUE)
@@ -235,18 +232,12 @@ if (!is.null(site_index)) {
     if (!identical(sort(as.character(site_index$site)), EXPECTED_SITES))
       note("site_index site set differs from site_metadata")
     if (anyDuplicated(as.character(site_index$site))) note("site_index contains duplicate sites")
-    index_date <- as.character(attr(site_index, "built_at") %||% "")
-    index_release <- as.character(attr(site_index, "neon_release") %||% "")
-    if (nzchar(EXPECTED_BUILD_DATE) && !identical(index_date, EXPECTED_BUILD_DATE))
-      note("site_index build receipt differs from PDE_EXPECT_BUILD_DATE")
-    if (nzchar(EXPECTED_RELEASE) && !identical(index_release, EXPECTED_RELEASE))
-      note("site_index release receipt differs from PDE_EXPECT_RELEASE")
-    if (nzchar(index_date) && length(bundle_dates) && !identical(index_date, max(bundle_dates)))
-      note("site_index build receipt differs from the site bundles")
-    if (nzchar(index_release) && length(nonempty_releases) &&
-        !identical(index_release, nonempty_releases[[1L]]))
-      note("site_index release receipt differs from the site bundles")
     if (all(c("site", "lat", "lng") %in% names(site_index))) {
+      if (!is.numeric(site_index$lat) || !is.numeric(site_index$lng) ||
+          any(!is.finite(site_index$lat)) || any(!is.finite(site_index$lng)) ||
+          any(abs(site_index$lat) > 90) || any(abs(site_index$lng) > 180)) {
+        note("site_index coordinates must be finite numeric latitude/longitude")
+      }
       metadata <- neon_sites[match(site_index$site, neon_sites$site), ]
       if (any(abs(site_index$lat - metadata$lat) > 1.5, na.rm = TRUE) ||
           any(abs(site_index$lng - metadata$lng) > 1.5, na.rm = TRUE))
@@ -261,11 +252,18 @@ if (!is.null(site_index)) {
         expected_richness <- length(unique(species$scientificName))
         expected_plots <- length(unique(snapshot$plotID))
         expected_invasion <- site_invasion(snapshot)
+        families <- sort(table(species$family[!is.na(species$family)]),
+                         decreasing = TRUE)
+        expected_family <- if (length(families)) names(families)[1L] else NA_character_
+        actual_family <- as.character(row$dominant_family)
+        same_family <- (length(actual_family) == 1L) &&
+          ((is.na(actual_family) && is.na(expected_family)) ||
+           identical(actual_family, expected_family))
         same_invasion <- isTRUE(all.equal(as.numeric(row$pct_introduced),
                                           as.numeric(expected_invasion),
                                           tolerance = 1e-10, check.attributes = FALSE))
         if (nrow(row) != 1L || row$richness != expected_richness ||
-            row$n_plots != expected_plots || !same_invasion ||
+            row$n_plots != expected_plots || !same_invasion || !same_family ||
             !isTRUE(all.equal(as.numeric(row$lat), as.numeric(bundles[[site]]$meta$lat),
                               tolerance = 1e-10)) ||
             !isTRUE(all.equal(as.numeric(row$lng), as.numeric(bundles[[site]]$meta$lng),
@@ -276,11 +274,57 @@ if (!is.null(site_index)) {
   }
 }
 
+source_status <- tryCatch(
+  resolve_plant_source_set(
+    "data/sites", site_index, EXPECTED_SITES, bundle_metas,
+    require_bundle_metas = TRUE
+  ),
+  error = function(error) {
+    note(sprintf("plant source receipt failed: %s", conditionMessage(error)))
+    NULL
+  }
+)
+if (!is.null(source_status)) {
+  if (EXPECTED_RELEASE_MISSING && !is.na(source_status$neon_release))
+    note("plant source receipt claims an official NEON release when none was selected")
+  if (EXPECTED_RELEASE_MISSING && nzchar(EXPECTED_RELEASE))
+    note("refresh expectations conflict about whether an official NEON release exists")
+  expected_receipt <- c(
+    built_at = EXPECTED_BUILD_DATE,
+    neon_release = EXPECTED_RELEASE,
+    source_start = EXPECTED_SOURCE_START,
+    source_cutoff = EXPECTED_SOURCE_CUTOFF,
+    source_receipt_id = EXPECTED_SOURCE_RECEIPT_ID,
+    query_package = EXPECTED_QUERY_PACKAGE,
+    neon_utilities_version = EXPECTED_NEON_UTILITIES_VERSION,
+    source_digest = EXPECTED_SOURCE_DIGEST,
+    bundle_commit = EXPECTED_BUILDER_COMMIT
+  )
+  for (field in names(expected_receipt)) {
+    expected <- expected_receipt[[field]]
+    if (nzchar(expected) && !identical(source_status[[field]], expected))
+      note(sprintf("plant source %s differs from its expected refresh receipt", field))
+  }
+}
+
+if (!is.null(source_status))
+  tryCatch(
+    verify_plant_durable_source_inventory(source_status, EXPECTED_SITES),
+    error = function(error)
+      note(sprintf("plant raw-source inventory failed: %s", conditionMessage(error)))
+  )
+
 search <- read_checked("data/search_index.rds")
 if (!is.null(search)) {
+  search_receipt_fields <- c(
+    "built_at", "repository_imported_at", "neon_release", "source_start",
+    "source_cutoff", "source_receipt_id", "source_digest",
+    "source_receipt_basis", "source_provenance_class",
+    "source_bundle_commit", "query_package", "neon_utilities_version"
+  )
   if (!is.list(search) ||
-      !all(c("taxa", "sites", "built_at", "neon_release") %in% names(search))) {
-    note("search_index must contain taxa/sites/built_at/neon_release")
+      !all(c("taxa", "sites", search_receipt_fields) %in% names(search))) {
+    note("search_index lacks the complete source-receipt schema")
   } else if (!is.data.frame(search$taxa) || !nrow(search$taxa) ||
              !is.data.frame(search$sites) || !nrow(search$sites)) {
     note("search_index taxa and sites must be non-empty data frames")
@@ -305,14 +349,26 @@ if (!is.null(search)) {
         !isTRUE(all.equal(as.data.frame(search$sites), as.data.frame(site_index),
                           check.attributes = FALSE)))
       note("search sites differ from site_index")
-    if (length(bundle_dates) &&
-        !identical(as.character(search$built_at), max(bundle_dates)))
-      note("search built_at does not match the bundle receipt")
-    expected_release <- if (length(nonempty_releases)) nonempty_releases[[1L]] else ""
-    search_release <- if (is.null(search$neon_release) || is.na(search$neon_release)) "" else
-      as.character(search$neon_release)
-    if (!identical(search_release, expected_release))
-      note("search release receipt differs from the site bundles")
+    if (!is.null(source_status)) {
+      status_fields <- c(
+        built_at = "built_at",
+        repository_imported_at = "repository_imported_at",
+        neon_release = "neon_release",
+        source_start = "source_start",
+        source_cutoff = "source_cutoff",
+        source_receipt_id = "source_receipt_id",
+        source_digest = "source_digest",
+        source_receipt_basis = "receipt_basis",
+        source_provenance_class = "provenance_class",
+        source_bundle_commit = "bundle_commit",
+        query_package = "query_package",
+        neon_utilities_version = "neon_utilities_version"
+      )
+      for (field in names(status_fields)) {
+        if (!identical(search[[field]], source_status[[status_fields[[field]]]]))
+          note(sprintf("search %s differs from the resolved source family", field))
+      }
+    }
   }
 }
 
@@ -424,6 +480,7 @@ if (!file.exists("manifest.json")) {
       list.files("data/sites", pattern = "[.]rds$", full.names = TRUE),
       list.files("data/env", pattern = "[.]rds$", full.names = TRUE),
       list.files("data/expected", pattern = "[.]rds$", full.names = TRUE),
+      list.files("data/source", pattern = "[.](txt|json)$", full.names = TRUE),
       "data/authority/plants_lookup.rds",
       list.files("data-sample", pattern = "[.]rds$", full.names = TRUE)
     )

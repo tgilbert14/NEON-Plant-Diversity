@@ -12,7 +12,8 @@ Use committed bundles when data are read-only, update on a release cadence, fit 
 
 Fetch into an empty staging root with:
 
-- explicit product, release/cutoff, site/entity inventory, and source version;
+- explicit product, query cutoff and immutable query/snapshot ID, site/entity inventory, and source version;
+- an official upstream release only when that release was actually selected and recorded;
 - source/license/query receipts;
 - failure collection that exits non-zero;
 - no write credential in the validation job;
@@ -22,7 +23,7 @@ Resumability may help a developer fetch, but a candidate is not complete until e
 
 ## Build boundary
 
-Build from immutable staged inputs into a separate candidate root. Trim only after documenting the source-to-bundle mapping. Preserve the fields required to reconstruct classifications, denominators, support, joins, and release provenance.
+Build from immutable staged inputs into a separate candidate root. Trim only after documenting the source-to-bundle mapping. Preserve the fields required to reconstruct classifications, denominators, support, joins, and release provenance. Record the actual build date separately from source cutoff/snapshot identity, and preserve raw/source digests plus the builder commit.
 
 For Plant Diversity, the candidate contains exactly:
 
@@ -31,9 +32,11 @@ For Plant Diversity, the candidate contains exactly:
 - `data/site_index.rds` and `data/search_index.rds`;
 - the SRER default artifact;
 - expected/reference, authority, and completeness artifacts;
-- explicit build/release receipts.
+- explicit source/build receipts, with an official release value only when that release was selected.
 
-Build twice in isolated roots with pinned R/package/numeric settings and compare exact bytes. A wall-clock timestamp may appear only when supplied as an explicit candidate input; it must not silently make otherwise identical builds differ.
+Every expected bundle and its index must carry one complete matching source receipt. Partial or disagreeing receipt fields fail closed. Build twice in isolated roots with pinned R/package/numeric settings and compare exact bytes. A wall-clock timestamp may appear only when supplied as an explicit candidate input; it must not silently make otherwise identical builds differ.
+
+Legacy families with missing upstream receipts may be frozen by a content-addressed repository receipt and used for explicitly descriptive exact-byte results. Their missing build date, release, cutoff, query ID, and raw-source digest remain unknown; file mtimes, repository dates, manifests, and runtime hashes cannot repair those gaps.
 
 ## Runtime boundary
 
@@ -66,17 +69,19 @@ Do not infer deployment from a Git push. Record the Connect revision/deployment 
 
 ## Refresh publication
 
-Scheduled refreshes open or update a review PR. Review inventory, schema, row-count, vintage, deletion, metric, and bundle-size changes before promotion. A refresh never pushes directly to `master` and never overwrites the last known-good bundle set without a rollback path.
+Scheduled refreshes open or update a review PR. Review inventory, schema, row-count, vintage, deletion, metric, and bundle-size changes before promotion. A refresh never pushes directly to `master` and never overwrites the last known-good bundle set without a rollback path. A skip-download run revalidates the existing bytes and receipt without stamping new source metadata.
 
 ## Minimum bundle receipt
 
 Every promoted bundle family records:
 
 - source product and license;
-- release/cutoff and build date;
+- actual build date, query cutoff and immutable query/snapshot ID;
+- true selected official release when applicable;
 - expected and actual inventory;
 - schema/version;
-- source and derived hashes;
+- raw/source and derived per-file and aggregate hashes;
+- builder commit;
 - observation/estimator contract version;
 - missingness/opportunity semantics;
 - build environment;

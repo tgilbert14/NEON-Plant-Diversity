@@ -13,12 +13,12 @@ on:
         description: "Revalidate committed bundles and rebuild search/manifest only"
         type: boolean
         default: false
-      cutoff_month:
-        description: "Closed NEON data cutoff (YYYY-MM); blank uses the previous month"
+      source_cutoff:
+        description: "Closed source cutoff (YYYY-MM-DD month end); blank uses the previous month end"
         type: string
         required: false
-      release_id:
-        description: "Immutable source receipt; blank derives it from the cutoff"
+      source_receipt_id:
+        description: "App-defined query snapshot label; the workflow binds it to the full raw SHA-256"
         type: string
         required: false
 
@@ -34,9 +34,14 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       run: ${{ steps.check.outputs.run }}
-      cutoff: ${{ steps.receipt.outputs.cutoff }}
+      source_cutoff: ${{ steps.receipt.outputs.source_cutoff }}
+      source_start: ${{ steps.receipt.outputs.source_start }}
+      fetch_end_month: ${{ steps.receipt.outputs.fetch_end_month }}
       build_date: ${{ steps.receipt.outputs.build_date }}
-      release: ${{ steps.receipt.outputs.release }}
+      source_receipt_label: ${{ steps.receipt.outputs.source_receipt_label }}
+      query_package: ${{ steps.receipt.outputs.query_package }}
+      neon_release: ${{ steps.receipt.outputs.neon_release }}
+      builder_commit: ${{ steps.receipt.outputs.builder_commit }}
     steps:
       - id: check
         shell: bash
@@ -59,31 +64,56 @@ jobs:
         if: steps.check.outputs.run == 'true'
         shell: bash
         env:
-          REQUESTED_CUTOFF: ${{ github.event.inputs.cutoff_month }}
-          REQUESTED_RELEASE: ${{ github.event.inputs.release_id }}
+          REQUESTED_SOURCE_CUTOFF: ${{ github.event.inputs.source_cutoff }}
+          REQUESTED_SOURCE_RECEIPT_ID: ${{ github.event.inputs.source_receipt_id }}
+          BUILDER_COMMIT: ${{ github.sha }}
+          SOURCE_START: "2013-01"
+          QUERY_PACKAGE: basic
         run: |
           set -euo pipefail
-          cutoff="${REQUESTED_CUTOFF:-}"
-          if [ -z "$cutoff" ]; then
-            cutoff=$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)
+          latest_closed_cutoff=$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%F)
+          source_cutoff="${REQUESTED_SOURCE_CUTOFF:-}"
+          if [ -z "$source_cutoff" ]; then
+            source_cutoff="$latest_closed_cutoff"
           fi
-          if [[ ! "$cutoff" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
-            echo "::error title=Invalid cutoff::cutoff_month must use YYYY-MM"
+          if [[ ! "$source_cutoff" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || \
+             [ "$(date -u -d "$source_cutoff" +%F 2>/dev/null || true)" != "$source_cutoff" ]; then
+            echo "::error title=Invalid source cutoff::source_cutoff must be a valid ISO date (YYYY-MM-DD)"
             exit 1
           fi
-          build_date=$(date -u -d "${cutoff}-01 +1 month -1 day" +%F)
-          release="${REQUESTED_RELEASE:-}"
-          if [ -z "$release" ]; then
-            release="NEON-DP1.10058.001-through-${cutoff}"
-          fi
-          if [[ ! "$release" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "::error title=Invalid release::release_id uses unsupported characters"
+          cutoff_month="${source_cutoff:0:7}"
+          month_end=$(date -u -d "${cutoff_month}-01 +1 month -1 day" +%F)
+          if [ "$source_cutoff" != "$month_end" ]; then
+            echo "::error title=Open cutoff::the current monthly loadByProduct fetch requires a month-end source_cutoff"
             exit 1
           fi
-          echo "cutoff=$cutoff" >> "$GITHUB_OUTPUT"
+          if [[ "$source_cutoff" > "$latest_closed_cutoff" ]]; then
+            echo "::error title=Open cutoff::source_cutoff must not be later than the latest closed month ($latest_closed_cutoff)"
+            exit 1
+          fi
+          build_date=$(date -u +%F)
+          source_receipt_label="${REQUESTED_SOURCE_RECEIPT_ID:-}"
+          if [ -z "$source_receipt_label" ]; then
+            source_receipt_label="PDE-DP1.10058.001-query-through-${source_cutoff}"
+          fi
+          if [[ ! "$source_receipt_label" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error title=Invalid source receipt::source_receipt_id label uses unsupported characters"
+            exit 1
+          fi
+          if [[ ! "$BUILDER_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=Invalid builder commit::github.sha must be a full commit SHA"
+            exit 1
+          fi
+          echo "source_cutoff=$source_cutoff" >> "$GITHUB_OUTPUT"
+          echo "source_start=$SOURCE_START" >> "$GITHUB_OUTPUT"
+          echo "fetch_end_month=$cutoff_month" >> "$GITHUB_OUTPUT"
           echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-          echo "Candidate receipt: cutoff=$cutoff build_date=$build_date release=$release"
+          echo "source_receipt_label=$source_receipt_label" >> "$GITHUB_OUTPUT"
+          echo "query_package=$QUERY_PACKAGE" >> "$GITHUB_OUTPUT"
+          # loadByProduct is a cutoff query, not an official immutable NEON release selector.
+          echo "neon_release=" >> "$GITHUB_OUTPUT"
+          echo "builder_commit=$BUILDER_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Candidate query: source_start=$SOURCE_START source_cutoff=$source_cutoff package=$QUERY_PACKAGE build_date=$build_date source_receipt_label=$source_receipt_label builder_commit=$BUILDER_COMMIT neon_release=NA"
 
   fetch_raw:
     needs: gate
@@ -92,6 +122,9 @@ jobs:
     timeout-minutes: 360
     permissions:
       contents: read
+    outputs:
+      source_digest: ${{ steps.source_digest.outputs.source_digest }}
+      neon_utilities_version: ${{ steps.fetch_runtime.outputs.neon_utilities_version }}
     env:
       RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
       RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
@@ -118,11 +151,27 @@ jobs:
           install-pandoc: 'false'
           install-quarto: 'false'
 
+      - name: Capture the actual fetch runtime receipt
+        id: fetch_runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          neon_utilities_version=$(Rscript --vanilla -e \
+            'cat(as.character(utils::packageVersion("neonUtilities")))')
+          if [[ ! "$neon_utilities_version" =~ ^[0-9]+([.][0-9]+){1,3}([.-][A-Za-z0-9]+)?$ ]]; then
+            echo "::error title=Invalid fetch runtime::could not record a valid neonUtilities package version"
+            exit 1
+          fi
+          echo "neon_utilities_version=$neon_utilities_version" >> "$GITHUB_OUTPUT"
+          echo "neonUtilities fetch runtime: $neon_utilities_version"
+
       - name: Fetch exactly 46 sites into empty staging
         env:
           NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
           PDE_RAW_OUT_DIR: ${{ runner.temp }}/plant-raw
-          PDE_FETCH_END: ${{ needs.gate.outputs.cutoff }}
+          PDE_FETCH_START: ${{ needs.gate.outputs.source_start }}
+          PDE_FETCH_END: ${{ needs.gate.outputs.fetch_end_month }}
+          PDE_QUERY_PACKAGE: ${{ needs.gate.outputs.query_package }}
         run: |
           set -euo pipefail
           if [ -z "${NEON_TOKEN:-}" ]; then
@@ -133,6 +182,23 @@ jobs:
           Rscript --vanilla scripts/fetch_plant_all.R
           count=$(find "$PDE_RAW_OUT_DIR" -maxdepth 1 -name '*_raw.rds' -type f | wc -l)
           test "$count" -eq 46
+
+      - name: Bind the exact raw-file family to an immutable digest
+        id: source_digest
+        env:
+          PDE_RAW_OUT_DIR: ${{ runner.temp }}/plant-raw
+        run: |
+          set -euo pipefail
+          (
+            cd "$PDE_RAW_OUT_DIR"
+            find . -maxdepth 1 -name '*_raw.rds' -type f -print0 | \
+              LC_ALL=C sort -z | xargs -0 sha256sum > SOURCE-SHA256SUMS.txt
+            test "$(wc -l < SOURCE-SHA256SUMS.txt)" -eq 46
+            sha256sum --check SOURCE-SHA256SUMS.txt
+            source_digest=$(sha256sum SOURCE-SHA256SUMS.txt | awk '{print $1}')
+            echo "source_digest=$source_digest" >> "$GITHUB_OUTPUT"
+            echo "Raw family SHA-256: $source_digest"
+          )
 
       - name: Upload immutable raw staging
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -151,6 +217,10 @@ jobs:
     timeout-minutes: 100
     permissions:
       contents: read
+    outputs:
+      effective_source_receipt_id: ${{ steps.effective_receipt.outputs.effective_source_receipt_id }}
+      source_digest: ${{ needs.fetch_raw.outputs.source_digest }}
+      neon_utilities_version: ${{ needs.fetch_raw.outputs.neon_utilities_version }}
     env:
       RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
       RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
@@ -176,7 +246,7 @@ jobs:
           packages: >
             shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly,
             leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
-            jsonlite, rsconnect, cpp11,
+            digest, jsonlite, rsconnect, cpp11,
             url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sf_1.1-1.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/s2_1.1.11.tar.gz,
@@ -213,11 +283,48 @@ jobs:
           name: plant-diversity-raw-${{ github.sha }}
           path: ${{ runner.temp }}/plant-raw
 
+      - name: Verify the downloaded raw family receipt
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        env:
+          EXPECTED_SOURCE_DIGEST: ${{ needs.fetch_raw.outputs.source_digest }}
+          PDE_RAW_DIR: ${{ runner.temp }}/plant-raw
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_SOURCE_DIGEST"
+          (
+            cd "$PDE_RAW_DIR"
+            sha256sum --check SOURCE-SHA256SUMS.txt
+            actual=$(sha256sum SOURCE-SHA256SUMS.txt | awk '{print $1}')
+            test "$actual" = "$EXPECTED_SOURCE_DIGEST"
+          )
+
+      - name: Bind the query snapshot label to the raw family digest
+        id: effective_receipt
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        env:
+          SOURCE_RECEIPT_LABEL: ${{ needs.gate.outputs.source_receipt_label }}
+          SOURCE_DIGEST: ${{ needs.fetch_raw.outputs.source_digest }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_DIGEST" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error title=Invalid source digest::cannot mint an immutable query snapshot ID"
+            exit 1
+          fi
+          effective_source_receipt_id="${SOURCE_RECEIPT_LABEL}-sha256-${SOURCE_DIGEST}"
+          echo "effective_source_receipt_id=$effective_source_receipt_id" >> "$GITHUB_OUTPUT"
+          echo "Effective query snapshot ID: $effective_source_receipt_id"
+
       - name: Build twice in isolated staging and compare exact bytes
         env:
-          CANDIDATE_CUTOFF: ${{ needs.gate.outputs.cutoff }}
+          CANDIDATE_SOURCE_START: ${{ needs.gate.outputs.source_start }}
+          CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
           CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
-          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          CANDIDATE_SOURCE_RECEIPT_ID: ${{ steps.effective_receipt.outputs.effective_source_receipt_id }}
+          CANDIDATE_QUERY_PACKAGE: ${{ needs.gate.outputs.query_package }}
+          CANDIDATE_NEON_UTILITIES_VERSION: ${{ needs.fetch_raw.outputs.neon_utilities_version }}
+          CANDIDATE_SOURCE_DIGEST: ${{ needs.fetch_raw.outputs.source_digest }}
+          CANDIDATE_BUILDER_COMMIT: ${{ needs.gate.outputs.builder_commit }}
+          CANDIDATE_NEON_RELEASE: ${{ needs.gate.outputs.neon_release }}
           SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
           set -euo pipefail
@@ -227,15 +334,31 @@ jobs:
             cp -R data/env data/expected data/authority "$stage/data/"
             if [ "$SKIP_DOWNLOAD" = "true" ]; then
               cp -R data/sites "$stage/data/sites"
+              if [ -d data/source ]; then cp -R data/source "$stage/data/source"; fi
               cp data/site_index.rds "$stage/data/site_index.rds"
               cp data-sample/demo.rds "$stage/data-sample/demo.rds"
               PDE_OUTPUT_ROOT="$stage" Rscript --vanilla scripts/build_search_index.R
             else
               PDE_RAW_DIR="$RUNNER_TEMP/plant-raw" PDE_OUTPUT_ROOT="$stage" \
-                PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" NEON_RELEASE="$CANDIDATE_RELEASE" \
+                PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
+                PDE_SOURCE_START="$CANDIDATE_SOURCE_START" \
+                PDE_SOURCE_CUTOFF="$CANDIDATE_SOURCE_CUTOFF" \
+                PDE_SOURCE_RECEIPT_ID="$CANDIDATE_SOURCE_RECEIPT_ID" \
+                PDE_QUERY_PACKAGE="$CANDIDATE_QUERY_PACKAGE" \
+                PDE_NEON_UTILITIES_VERSION="$CANDIDATE_NEON_UTILITIES_VERSION" \
+                PDE_SOURCE_DIGEST="$CANDIDATE_SOURCE_DIGEST" \
+                PDE_BUILDER_COMMIT="$CANDIDATE_BUILDER_COMMIT" \
+                NEON_RELEASE="$CANDIDATE_NEON_RELEASE" \
                 Rscript --vanilla scripts/bundle_plant_data.R
               PDE_OUTPUT_ROOT="$stage" PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
-                NEON_RELEASE="$CANDIDATE_RELEASE" \
+                PDE_SOURCE_START="$CANDIDATE_SOURCE_START" \
+                PDE_SOURCE_CUTOFF="$CANDIDATE_SOURCE_CUTOFF" \
+                PDE_SOURCE_RECEIPT_ID="$CANDIDATE_SOURCE_RECEIPT_ID" \
+                PDE_QUERY_PACKAGE="$CANDIDATE_QUERY_PACKAGE" \
+                PDE_NEON_UTILITIES_VERSION="$CANDIDATE_NEON_UTILITIES_VERSION" \
+                PDE_SOURCE_DIGEST="$CANDIDATE_SOURCE_DIGEST" \
+                PDE_BUILDER_COMMIT="$CANDIDATE_BUILDER_COMMIT" \
+                NEON_RELEASE="$CANDIDATE_NEON_RELEASE" \
                 Rscript --vanilla scripts/build_search_index.R
             fi
             PDE_SITE_DIR="$stage/data/sites" \
@@ -253,12 +376,25 @@ jobs:
 
       - name: Promote staged bytes and validate the complete candidate
         env:
+          CANDIDATE_SOURCE_START: ${{ needs.gate.outputs.source_start }}
+          CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
           CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
-          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          CANDIDATE_SOURCE_RECEIPT_ID: ${{ steps.effective_receipt.outputs.effective_source_receipt_id }}
+          CANDIDATE_QUERY_PACKAGE: ${{ needs.gate.outputs.query_package }}
+          CANDIDATE_NEON_UTILITIES_VERSION: ${{ needs.fetch_raw.outputs.neon_utilities_version }}
+          CANDIDATE_SOURCE_DIGEST: ${{ needs.fetch_raw.outputs.source_digest }}
+          CANDIDATE_BUILDER_COMMIT: ${{ needs.gate.outputs.builder_commit }}
+          CANDIDATE_NEON_RELEASE: ${{ needs.gate.outputs.neon_release }}
           SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
           set -euo pipefail
           rsync -a --delete "$RUNNER_TEMP/plant-stage-first/data/sites/" data/sites/
+          if [ -d "$RUNNER_TEMP/plant-stage-first/data/source" ]; then
+            mkdir -p data/source
+            rsync -a --delete "$RUNNER_TEMP/plant-stage-first/data/source/" data/source/
+          else
+            rm -rf data/source
+          fi
           cp "$RUNNER_TEMP/plant-stage-first/data/site_index.rds" data/site_index.rds
           cp "$RUNNER_TEMP/plant-stage-first/data/search_index.rds" data/search_index.rds
           cp "$RUNNER_TEMP/plant-stage-first/data-sample/demo.rds" data-sample/demo.rds
@@ -274,7 +410,15 @@ jobs:
             Rscript --vanilla scripts/verify_bundle.R
           else
             PDE_EXPECT_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
-              PDE_EXPECT_RELEASE="$CANDIDATE_RELEASE" \
+              PDE_EXPECT_SOURCE_START="$CANDIDATE_SOURCE_START" \
+              PDE_EXPECT_SOURCE_CUTOFF="$CANDIDATE_SOURCE_CUTOFF" \
+              PDE_EXPECT_SOURCE_RECEIPT_ID="$CANDIDATE_SOURCE_RECEIPT_ID" \
+              PDE_EXPECT_QUERY_PACKAGE="$CANDIDATE_QUERY_PACKAGE" \
+              PDE_EXPECT_NEON_UTILITIES_VERSION="$CANDIDATE_NEON_UTILITIES_VERSION" \
+              PDE_EXPECT_SOURCE_DIGEST="$CANDIDATE_SOURCE_DIGEST" \
+              PDE_EXPECT_BUILDER_COMMIT="$CANDIDATE_BUILDER_COMMIT" \
+              PDE_EXPECT_RELEASE="$CANDIDATE_NEON_RELEASE" \
+              PDE_EXPECT_RELEASE_MISSING=1 \
               Rscript --vanilla scripts/verify_bundle.R
           fi
           node scripts/check_custom_message_handlers.mjs
@@ -285,7 +429,7 @@ jobs:
           git diff --check
 
       - name: Package the validated candidate
-        run: tar -czf "$RUNNER_TEMP/plant-diversity-refresh.tgz" data data-sample www/runtime-receipt.txt manifest.json
+        run: tar -czf "$RUNNER_TEMP/plant-diversity-refresh.tgz" data data-sample/demo.rds www/runtime-receipt.txt manifest.json
 
       - name: Upload immutable validated candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -317,11 +461,26 @@ jobs:
       - name: Publish or update the review branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CANDIDATE_CUTOFF: ${{ needs.gate.outputs.cutoff }}
-          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          CANDIDATE_SOURCE_START: ${{ needs.gate.outputs.source_start }}
+          CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
+          CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
+          CANDIDATE_SOURCE_RECEIPT_ID: ${{ needs.build_candidate.outputs.effective_source_receipt_id }}
+          CANDIDATE_QUERY_PACKAGE: ${{ needs.gate.outputs.query_package }}
+          CANDIDATE_NEON_UTILITIES_VERSION: ${{ needs.build_candidate.outputs.neon_utilities_version }}
+          CANDIDATE_SOURCE_DIGEST: ${{ needs.build_candidate.outputs.source_digest }}
+          CANDIDATE_BUILDER_COMMIT: ${{ needs.gate.outputs.builder_commit }}
           SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
           set -euo pipefail
+          if [ "$SKIP_DOWNLOAD" != "true" ]; then
+            if [[ ! "$CANDIDATE_SOURCE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || \
+               [[ "$CANDIDATE_SOURCE_RECEIPT_ID" != *"$CANDIDATE_SOURCE_DIGEST"* ]] || \
+               [[ ! "$CANDIDATE_NEON_UTILITIES_VERSION" =~ ^[0-9]+([.][0-9]+){1,3}([.-][A-Za-z0-9]+)?$ ]] || \
+               [[ ! "$CANDIDATE_BUILDER_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error title=Incomplete source receipt::validated candidate receipt outputs were not forwarded intact"
+              exit 1
+            fi
+          fi
           git fetch origin master
           remote_master=$(git rev-parse origin/master)
           if [ "$remote_master" != "$GITHUB_SHA" ]; then
@@ -331,7 +490,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/validated-release"
           tar -xzf "$RUNNER_TEMP/refresh-candidate/plant-diversity-refresh.tgz" -C "$RUNNER_TEMP/validated-release"
           rsync -a --delete "$RUNNER_TEMP/validated-release/data/" data/
-          rsync -a --delete "$RUNNER_TEMP/validated-release/data-sample/" data-sample/
+          cp "$RUNNER_TEMP/validated-release/data-sample/demo.rds" data-sample/demo.rds
           cp "$RUNNER_TEMP/validated-release/www/runtime-receipt.txt" www/runtime-receipt.txt
           cp "$RUNNER_TEMP/validated-release/manifest.json" manifest.json
           changed=$(git diff --name-only)
@@ -346,6 +505,29 @@ jobs:
           fi
           branch="automation/plant-diversity-data-refresh"
           remote_head=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+          if [ -n "$remote_head" ]; then
+            git fetch --no-tags origin \
+              "refs/heads/$branch:refs/remotes/origin/$branch"
+            merge_base=$(git merge-base origin/master "refs/remotes/origin/$branch" || true)
+            if [ -z "$merge_base" ]; then
+              git fetch --no-tags --deepen=200 origin master "$branch"
+              merge_base=$(git merge-base origin/master "refs/remotes/origin/$branch" || true)
+            fi
+            if [ -z "$merge_base" ]; then
+              echo "::error title=Refresh review history unavailable::could not establish the existing review branch base without risking an overwrite"
+              exit 1
+            fi
+            human_review_paths=$(git diff --name-only "$merge_base" \
+              "refs/remotes/origin/$branch" | \
+              grep -Ev '^(data/|data-sample/|www/runtime-receipt[.]txt$|manifest[.]json$)' || true)
+            if [ -n "$human_review_paths" ]; then
+              pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
+              notice="A newer validated candidate is available from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}, but automation did not overwrite the active human review changes: ${human_review_paths//$'\n'/, }."
+              if [ -n "$pr_url" ]; then gh pr comment "$pr_url" --body "$notice"; fi
+              echo "::notice title=Human refresh review preserved::$notice"
+              exit 0
+            fi
+          fi
           git switch -C "$branch"
           git config user.name "neon-data-bot"
           git config user.email "neon-data-bot@users.noreply.github.com"
@@ -353,7 +535,7 @@ jobs:
           if [ "$SKIP_DOWNLOAD" = "true" ]; then
             receipt="revalidation-only; committed source receipts unchanged"
           else
-            receipt="cutoff ${CANDIDATE_CUTOFF}; release ${CANDIDATE_RELEASE}"
+            receipt="source query ${CANDIDATE_SOURCE_START} through ${CANDIDATE_SOURCE_CUTOFF}; package ${CANDIDATE_QUERY_PACKAGE}; neonUtilities ${CANDIDATE_NEON_UTILITIES_VERSION}; build date ${CANDIDATE_BUILD_DATE}; app receipt ${CANDIDATE_SOURCE_RECEIPT_ID}; raw family sha256 ${CANDIDATE_SOURCE_DIGEST}; builder ${CANDIDATE_BUILDER_COMMIT}; official NEON release not selected"
           fi
           git commit -m "data: propose validated plant-diversity refresh [bot]" \
                      -m "Source ${GITHUB_SHA}; ${receipt}; two exact plant builds, 46 static environment-context byte/schema checks, runtime receipt, manifest, and offline source passed."
@@ -363,10 +545,11 @@ jobs:
             git push origin "$branch:refs/heads/$branch"
           fi
           pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
-          body="Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. Merging this review PR is the explicit production/deployment decision."
+          body="Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. This PR is intentionally draft. Before it can pass CI or be marked ready, a human must recompute/review the empirical cover facts and update the Plant source receipt, science/current-status docs, Driver handoff, suite learning, expert/data verdicts, build handoff, social card, Open Graph image, and cover receipt. Merging the completed review PR is the explicit production/deployment decision."
           if [ -z "$pr_url" ]; then
-            gh pr create --base master --head "$branch" \
+            gh pr create --draft --base master --head "$branch" \
               --title "data: validated NEON plant-diversity refresh" --body "$body"
           else
+            gh pr ready --undo "$pr_url" || true
             gh pr comment "$pr_url" --body "$body"
           fi

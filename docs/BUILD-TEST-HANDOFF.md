@@ -8,12 +8,13 @@ Record before testing:
 
 - commit SHA;
 - R version and repository snapshot;
-- explicit NEON release/cutoff;
-- bundle build date supplied by the release job;
+- plant source-receipt class and exact-family guard;
+- for the legacy family: `builtAt=NA`, `neonRelease=NA`, `sourceCutoff=NA`, plus the separately labelled `repositoryImportedAt=2026-06-19` and `sourceBundleCommit=4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e`;
+- for a future refreshed family: actual bundle build date, query cutoff and immutable snapshot/query ID, official NEON release only if actually selected, raw/source digests, and builder commit;
 - manifest SHA-256;
 - counts for site, environment, expected-reference, search, and authority artifacts.
 
-Do not use the current date as an implicit source cutoff.
+The legacy exact-family identity and canonical SHA-256 guard are registered in [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md). Do not use the current date, repository commit/import date, filesystem mtimes, manifest hash, or runtime hash as an implicit source cutoff, release, or build date.
 
 ## Local and CI gates
 
@@ -30,6 +31,8 @@ Do not use the current date as an implicit source cutoff.
 11. Verify the environment layer against [Environment Context Receipt](ENVIRONMENT-CONTEXT-RECEIPT.md): exact 46-site identity, month/date keys, finite/range rules, and unchanged bytes unless a separate reviewed environment rebuild is in scope.
 12. Exercise an offline core boot. Remote basemap tiles are optional and may fail without breaking data/analysis.
 
+The plant receipt gate fails closed. The exact legacy family must match its canonical content-addressed guard and must continue to expose unknown upstream fields as `NA`. Any family with embedded refreshed receipts must have a complete, identical receipt across all 46 bundles and `data/site_index.rds`; a partial, mixed, or mismatched receipt is a release failure.
+
 ## Data refresh gates
 
 - Fetch into an isolated staging directory.
@@ -37,8 +40,11 @@ Do not use the current date as an implicit source cutoff.
 - Never publish a subset while old bundles remain.
 - Compare candidate and production inventories, row counts, schemas, vintage, and deletions.
 - Build atomically into a candidate root.
+- Preserve the actual build date separately from the query cutoff/snapshot ID; record a true official release only when it was explicitly selected.
+- Preserve raw/source per-file and aggregate digests plus the builder commit.
+- Require one complete matching receipt across all 46 new bundles and `data/site_index.rds` before the candidate can replace the legacy-partial receipt.
 - Open a review PR; never push refreshed data directly to `master`.
-- `skip_download` must never mean “silently reuse unknown inputs.”
+- `skip_download` means revalidate the committed inputs and unchanged receipt. It must never mean “silently reuse unknown inputs” or stamp a new build date, cutoff, release, query ID, or source vintage.
 
 ## Human review
 
@@ -57,6 +63,7 @@ Publish the exact reviewed commit. Then record:
 
 - Connect content URL and deployment identifier;
 - deployed commit and manifest hash;
+- plant source-receipt class, source-bundle identity, and exact-family guard;
 - public HTML 200 response;
 - semantic `data-app-ready="true"` after Shiny connects;
 - one site load with semantic site-ready status;
@@ -73,3 +80,4 @@ If Connect cannot restore an archived dependency, fix the package closure and re
 - Connect and Pages must point to the same promoted commit.
 - If public semantic health fails, stop promotion and restore the last known-good commit through a normal revert/redeploy workflow.
 - Preserve the failed receipt and root cause for the suite learning loop.
+- Keep current-source Driver promotion on hold while the plant family is `legacy-partial`, even if the application release and exact-byte deployment gates pass.
