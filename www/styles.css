@@ -794,6 +794,15 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
   .top-bar-actions { gap: 7px; }
   .app-status { max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
 }
+@media (max-width: 360px) {
+  .top-bar-actions { width: 100%; display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px auto; gap: 6px; }
+  .app-status { width: 100%; max-width: none; min-width: 0; justify-content: center;
+    padding-inline: 6px; overflow: visible; text-overflow: clip; }
+  .top-bar-actions .tb-help { width: 44px; min-width: 44px; justify-content: center;
+    padding-left: 0; padding-right: 0; }
+  .tb-theme { justify-self: end; }
+}
 
 /* ---- v2: relocated site-select panel (was the sidebar) ---------------- */
 .select-panel {

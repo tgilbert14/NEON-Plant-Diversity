@@ -90,6 +90,19 @@ if (!/\.hero-title\s*\{[^}]*color:\s*var\(--pine2\)/s.test(plantStyles) ||
 if (/\.hero-title\s*\{[^}]*flex-wrap:\s*wrap/s.test(styles)) {
   throw new Error("styles.css must not shadow the Plant-specific mobile header contract");
 }
+const compactTopBarBlocks = cssBlocks(
+  styles,
+  /@media\s*\(max-width:\s*360px\)\s*\{/g,
+).filter((block) => /\.top-bar-actions\s*\{/.test(block));
+const compactTopBarContract = [
+  /\.top-bar-actions\s*\{[^}]*width:\s*100%[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+44px\s+auto/s,
+  /\.app-status\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none[^}]*justify-content:\s*center/s,
+  /\.top-bar-actions\s+\.tb-help\s*\{[^}]*width:\s*44px[^}]*min-width:\s*44px/s,
+];
+if (compactTopBarBlocks.length !== 1 ||
+    !compactTopBarContract.every((contract) => contract.test(compactTopBarBlocks[0]))) {
+  throw new Error("the 320px top bar must give readiness a full grid track beside fixed-size controls");
+}
 if (!server.includes('observeEvent(input[["plotly_click-hillSrc"]], {')) {
   throw new Error("the lazy Hill plot must defer event_data() until an actual Plotly input arrives");
 }
