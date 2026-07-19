@@ -1,8 +1,8 @@
 # NEON Plant Diversity Explorer — Data Takeaways and Validation Status
 
-_Candidate review for NEON DP1.10058.001. Updated for the v3 science contract._
+_Production review for NEON DP1.10058.001 · promoted 2026-07-19._
 
-> **Status:** this document separates the implemented product contract from empirical results. The contract is registered in [SCIENCE-CONTRACT.md](SCIENCE-CONTRACT.md), but the candidate has not yet completed the receipts in [BUILD-TEST-HANDOFF.md](BUILD-TEST-HANDOFF.md). Exact ecological values quoted by earlier reviews are retired until they are recomputed from the promoted release bytes.
+> **Status:** the registered contract and exact frozen bytes completed the build, deployment, semantic-health, export, and responsive receipts in [BUILD-TEST-HANDOFF.md](BUILD-TEST-HANDOFF.md) at production commit `d6c48625f8268873bcd42d86285becaadbd57b4c`. Values surfaced by the production app and inspected exports/PDF were recomputed from those bytes. Historical values not reproduced by this release remain retired.
 
 ## What is verified in the repository
 
@@ -14,7 +14,11 @@ The current artifact inventory contains:
 - a site index, search index, and plant authority artifact;
 - hard-assertion science fixtures in `scripts/test_science_contracts.R` and bundle/release checks in `scripts/verify_bundle.R`.
 
-These are inventory facts, not ecological findings. The exact 46-site plant family is now content-addressed under the legacy-partial [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md): it entered the repository in commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. That repository receipt and the frozen-family hash prove which bytes are under review; they do not prove upstream vintage. File presence alone does not prove that the candidate code reproduces earlier values or that the deployed app serves the same bytes.
+These are inventory facts, not ecological findings. The exact 46-site plant family is content-addressed under the legacy-partial [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md): it entered the repository in commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. The frozen-family guard identifies the promoted source bytes, while the CI, manifest, runtime, and Connect receipts prove that the deployed application serves them. None establishes upstream vintage.
+
+## Production QA example: SRER
+
+The promoted app and inspected exports reported 203 plant species across 33 selected current-state plots at Santa Rita Experimental Range, with 22.2% introduced relative cover in the supported 1 m² cover records. The nested species-area view retained the registered 1, 10, 100, and 400 m² grains. These values are a release-parity example for one site, not an effort-standardized national rank, productivity signal, management grade, or current-source trend.
 
 ## Registered product contract
 
@@ -34,7 +38,7 @@ These are inventory facts, not ecological findings. The exact 46-site plant fami
 
 ### Estimators and QC
 
-- Chao2 uses the registered finite-sample bias-corrected incidence formula and is reported as a lower bound. The candidate no longer publishes the earlier classic-form estimate or an unsupported symmetric confidence interval.
+- Chao2 uses the registered finite-sample bias-corrected incidence formula and is reported as a lower bound. The promoted app no longer publishes the earlier classic-form estimate or an unsupported symmetric confidence interval.
 - Species-area support counts only finite plot estimates at each scale; SD is unavailable when fewer than two plots support a scale.
 - Contradictory Native/Introduced NEON records resolve to Unknown and remain in review rather than contributing to both categories.
 - USDA nativity mismatch checks are gated outside the lower 48.
@@ -68,7 +72,7 @@ The plant authority supports accepted-symbol and lower-48 nativity review, but s
 
 ### Empirical validation
 
-The previous review mixed historical bundle calculations with claims about the current application. Values such as site rankings, site-specific Chao2 estimates, invasion percentages, and climate correlations must be recomputed after the candidate manifest, bundles, and exact source-family receipt are frozen. Recomputed values may be reported as descriptive results for those exact bytes. They are not current-source findings because the original NEON release, query cutoff/receipt, raw-source digest, and actual build date were not preserved.
+The previous review mixed historical bundle calculations with claims about the current application. The release recomputed surfaced values under the frozen manifest, bundles, and source-family receipt and checked SRER UI/export/PDF parity. Those values may be reported only as descriptive results for the exact bytes and with their estimand and support attached. They are not current-source findings because the original NEON release, query cutoff/receipt, raw-source digest, and actual build date were not preserved.
 
 For the legacy family, `builtAt`, `neonRelease`, and `sourceCutoff` remain `NA`. `repositoryImportedAt=2026-06-19` and `sourceBundleCommit=4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` distinguish repository receipt from upstream source history. File mtimes and manifest/runtime hashes cannot fill the missing fields.
 
@@ -87,7 +91,7 @@ The PDF must use the same snapshot as the app and exports. Bundle checksum, esti
 
 ## What the app may and may not claim
 
-The candidate may describe:
+The promoted app may describe:
 
 - grain-specific plant composition;
 - relative ocular cover and nativity composition with support;
@@ -107,6 +111,6 @@ It may not claim:
 
 ## Release and Driver disposition
 
-Release remains a candidate until R parsing, science fixtures, bundle verification, deterministic rebuilds, strict manifest equality, offline boot, human desktop/mobile review, export inspection, and semantic post-deploy checks all pass for one recorded commit. Passing those gates can validate an application release over the exact legacy bytes; it cannot retroactively create an upstream source receipt or establish currentness.
+The release passed R parsing, science fixtures, bundle verification, deterministic rebuilds, strict manifest equality, offline boot, human desktop/390/375/361/360/320 review, export inspection, exact Connect/Pages receipts, and semantic post-deploy health for production commit `d6c48625f8268873bcd42d86285becaadbd57b4c`. Those gates validate the application over the exact legacy bytes; they cannot retroactively create an upstream source receipt or establish currentness.
 
-Driver/Cascade disposition is **context-only / hold current-source and inferential promotion**. After exact-byte and contract validation, common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty may be handed off as descriptive legacy context. Current-source promotion requires a future complete matching receipt across all 46 bundles and `site_index.rds`; productivity votes, per-site climate–richness edges, management inference, and phenology signals owned by the Phenology app remain excluded.
+Driver/Cascade disposition is **CONTEXT / NO DRIVER BYTE CHANGE**. Common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty may be handed off only as descriptive legacy context. Current-source and inferential promotion require a future complete matching receipt across all 46 bundles and `site_index.rds`; productivity votes, per-site climate–richness edges, management inference, and phenology signals owned by the Phenology app remain excluded.

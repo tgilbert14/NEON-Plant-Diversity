@@ -4,6 +4,8 @@ See how plant communities change from **1 to 400 m²**, inspect native and intro
 
 [Open the public cover](https://tgilbert14.github.io/NEON-Plant-Diversity/) · [Launch the app](https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/) · [Open Driver Cascade](https://tgilbert14.github.io/NEON-Driver-Cascade/)
 
+Production release `d6c48625f8268873bcd42d86285becaadbd57b4c` serves exact runtime receipt `sha256:0765d8951843cf6fea09a295b260bfb53f1eb6708370748905a4a3941c85d2cb`; the complete CI, Pages, Connect, responsive, export, and source-limit receipt is in [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md).
+
 This is an independent, unofficial R/Shiny explorer for NEON **Plant presence and percent cover** (`DP1.10058.001`). It is the **composition and invasion context** app in the NEON Explorer Suite. It does not treat richness as productivity, turn per-site short records into causal climate edges, or make management prescriptions.
 
 ## Start with the honest question
@@ -131,7 +133,7 @@ The refresh workflow must never mix new partial raw data with old site bundles o
 
 ## Suite role
 
-Plant Diversity supplies **context only** to Driver Cascade today:
+Plant Diversity's disposition is **CONTEXT / NO DRIVER BYTE CHANGE** for this pass:
 
 - eligible after exact-byte and contract validation as descriptive legacy context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty; current-source Driver promotion remains blocked until a complete reviewed refresh receipt exists;
 - excluded: productivity votes, management priority, per-site climate–richness fits, and duplicated phenology signals owned by the Phenology app.

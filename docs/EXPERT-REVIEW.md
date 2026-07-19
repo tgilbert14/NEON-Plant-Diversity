@@ -1,8 +1,8 @@
 # Plant Presence and Percent Cover — Expert Review
 
-_NEON DP1.10058.001 · review updated for the v3 candidate science contract_
+_NEON DP1.10058.001 · review closed against the 2026-07-19 production release_
 
-> **Review verdict:** the candidate now has a defensible analysis contract, but it is not yet a validated empirical release. Method rules, bundled-data facts, and ecological findings are different layers of evidence. This review endorses the first, records the second, and withholds the third until the build and deployment receipts pass.
+> **Review verdict:** the promoted application has a defensible analysis contract and passed the registered build, export, deployment, responsive, and semantic-health receipts at commit `d6c48625f8268873bcd42d86285becaadbd57b4c`. Method rules, bundled-data facts, and ecological findings remain different layers of evidence. Descriptive results are valid for the exact frozen legacy family; current-source, causal, productivity, health, and management claims remain out of scope.
 
 The source-receipt correction establishes a separate limit: the exact legacy plant bytes can be identified, but their upstream date cannot. The current family is descriptive legacy context, not current-source evidence.
 
@@ -23,11 +23,11 @@ The new `snapshot_by_plot_year()` contract closes the previous multi-bout ambigu
 
 ### Species-area
 
-The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The candidate now counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific curve values still require candidate revalidation.
+The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The promoted release counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific values remain descriptive for the exact frozen family.
 
 ### Chao2
 
-Incidence-based Chao2 is the appropriate estimator family for 1 m² presence units, but the former implementation mixed a classic formula, a bias-corrected label, and an approximate interval. The candidate now registers one formula:
+Incidence-based Chao2 is the appropriate estimator family for 1 m² presence units, but the former implementation mixed a classic formula, a bias-corrected label, and an approximate interval. The promoted release registers one formula:
 
 `S_obs + ((m - 1) / m) * Q1 * (Q1 - 1) / (2 * (Q2 + 1))`
 
@@ -77,7 +77,7 @@ The export contract is now materially stronger:
 - definitions, units, NA semantics, and estimands accompany every exported field;
 - the PDF uses the same selected snapshot for richness, species-area, and Chao2.
 
-These are implemented safeguards, not yet a release receipt. The candidate still needs an R execution of the hard-assertion fixtures, exact manifest validation, export inspection, and deployed semantic health evidence.
+These safeguards now have a release receipt. Hard-assertion R fixtures, deterministic artifacts, exact manifest validation, offline sourcing, export/PDF inspection, and deployed semantic health all passed for the recorded production commit.
 
 ## Plant source-provenance review
 
@@ -85,42 +85,40 @@ The exact 46-site `DP1.10058.001` family was introduced by repository commit `4f
 
 The original official NEON release, fetch/query cutoff, query receipt, raw-source digest, and actual bundle build date were not preserved. The scientifically honest legacy values are therefore `builtAt=NA`, `neonRelease=NA`, and `sourceCutoff=NA`, with `repositoryImportedAt` and `sourceBundleCommit` reported separately. Exact-byte validation allows ecological values to remain descriptive for this frozen family; it does not make them current-source results.
 
-## Current evidence and unresolved validation
+## Production evidence and remaining scientific limits
 
-Repository inventory currently shows 46 site bundles, 46 environment bundles, and 34 site reference artifacts. That supports coverage accounting only. It does not validate the ecological values previously quoted in this review.
+The validated inventory contains 46 site bundles, 46 environment bundles, and 34 site reference artifacts. The deterministic release rebuilt the registered analyses, and public/export QA confirmed parity for the exact bytes. That supports descriptive release findings with their grain and support; it does not create upstream vintage or broader inferential authority.
 
-The following remain unresolved until the candidate is frozen and tested:
+The following remain scientific limits rather than unfinished release gates:
 
-1. empirical recomputation of site metrics under the new bout, recurrent-panel, cover, nativity, and Chao2 contracts;
-2. an explicit sampled-opportunity artifact for empty 1 m² quadrats;
-3. a complete current-source plant receipt from a future reviewed refresh; the legacy family has an exact-byte receipt, but its missing upstream vintage/release fields cannot be reconstructed;
-4. deterministic derived-artifact and manifest equality;
-5. cold/offline application boot and export generation;
-6. public Connect deployment identity, semantic readiness, console health, and desktop/mobile review.
+1. an explicit sampled-opportunity artifact for empty 1 m² quadrats;
+2. a complete current-source plant receipt from a future reviewed refresh; the legacy family has an exact-byte receipt, but its missing upstream vintage/release fields cannot be reconstructed;
+3. a coverage-standardized cross-site estimator before any national richness ranking;
+4. plot- or buffer-matched reference flora before stronger expected/observed conclusions.
 
-Earlier claims such as named site rankings, exact invasion percentages, Chao2 values, or significant/non-significant site correlations are historical calculations, not current candidate findings. They must not be copied into UI, reports, or Driver context without recomputation and a source-byte receipt.
+Named site rankings, Chao2 values, invasion percentages, or association screens may be shown only when generated from the promoted code with their estimand, support, and frozen-family receipt. They must not be detached from those qualifications or copied into Driver as current-source, causal, productivity, health, or management evidence.
 
 ## Product honesty scorecard
 
-| Dimension | Candidate assessment | Remaining condition |
+| Dimension | Production assessment | Remaining condition |
 |---|---|---|
-| Observation model | Registered and testable | Execute fixtures in R/CI |
-| Nested-scale fidelity | Strong | Recompute candidate values |
-| Chao2 | Correctly labelled lower-bound contract | Validate bundle opportunity/support |
+| Observation model | Registered and validated | Preserve fixtures and export parity |
+| Nested-scale fidelity | Strong and release-tested | Preserve exact grain/support labels |
+| Chao2 | Correctly labelled lower-bound contract | Add explicit sampled-opportunity data |
 | Cover interpretation | Honest relative-index framing | Add explicit sampled-empty opportunity data |
 | Nativity/QC | Conflicts and regional limits gated | Preserve authority provenance |
 | Expected/reference flora | Correctly limited to one local reference | Build plot/buffer-matched references before stronger claims |
-| Annual metrics | Recurrent plot-panel estimands | Validate support across all sites |
+| Annual metrics | Recurrent plot-panel estimands validated | Preserve panel and bout support |
 | Environment | Descriptive and non-causal | No Driver promotion from this screen |
-| Export/provenance | Exact legacy family identified; upstream receipt incomplete | Preserve `NA` source fields and inspect ZIP/PDF, source receipt, and exact manifest |
-| Release status | Not yet promoted | Complete BUILD-TEST-HANDOFF receipts |
+| Export/provenance | Exact legacy family and public runtime identified; upstream receipt incomplete | Preserve `NA` source fields until a reviewed refresh |
+| Release status | Promoted 2026-07-19 and production-healthy | Keep CI, receipt, mobile, and post-deploy gates hard |
 
 ## Suite and Driver disposition
 
-Plant Diversity is a composition context app, not a productivity or phenology authority. Its eventual suite contribution may include common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, and their support. Those remain descriptive legacy context until candidate bytes and contracts are validated. Even after that validation, current-source promotion stays blocked until all 46 replacement bundles and `site_index.rds` carry one complete matching receipt.
+Plant Diversity is a composition context app, not a productivity or phenology authority. Its validated suite contribution may include common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, and their support. Those are descriptive legacy context. Current-source promotion stays blocked until all 46 replacement bundles and `site_index.rds` carry one complete matching receipt.
 
-The app must not contribute a productivity vote, management priority, per-site climate–richness edge, or phenology signal owned by the Phenology app. Driver disposition remains **context-only / hold current-source and inferential promotion**.
+The app must not contribute a productivity vote, management priority, per-site climate–richness edge, or phenology signal owned by the Phenology app. Driver disposition is **CONTEXT / NO DRIVER BYTE CHANGE** for this pass.
 
 ## Final recommendation
 
-Do not publish a “science complete” verdict from code inspection alone. Run the full handoff, recompute empirical summaries from the reviewed commit, inspect the generated exports and PDF, and record the deployed identity. If those receipts pass, the candidate's method contract and descriptive results for the exact legacy bytes are defensible; the missing upstream release/cutoff/build receipt remains missing. If the gates fail, preserve the failure as part of the suite learning loop and keep the last known-good release in place.
+The full handoff passed, including empirical recomputation, export/PDF inspection, exact deployment identity, mobile review, and semantic post-deploy health. The method contract and descriptive results for the exact legacy bytes are defensible and publishable. The missing upstream release/cutoff/build receipt remains missing, so the app must not be called current-source or “science complete”; every future refresh must repeat the full handoff.
