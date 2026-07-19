@@ -13,7 +13,7 @@
    at content) but would if the cascade's overflow:hidden command-band style is
    ever ported here. See NEON-Driver-Cascade/www/cascade.css for the full story. */
 .hero-band { flex: 0 0 auto; margin: 4px 0 14px; }
-.hero-title { font-weight: 700; color: var(--pine); font-size: 17px; display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.hero-title { font-weight: 700; color: var(--pine2); font-size: 17px; display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .hero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .hero-stat { display: flex; gap: 12px; align-items: center; background: var(--paper); border: 1px solid var(--line);
   border-radius: 12px; padding: 12px 16px; box-shadow: 0 4px 14px var(--shadow); border-top: 3px solid var(--pine); }
@@ -26,6 +26,24 @@
 .hero-gold  .hs-icon { color: var(--gold-ink); }
 .hs-v { font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .hs-l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
+
+/* Loaded-site header becomes an explicit three-row composition on phones:
+   site identity, release receipt, then two equally sized actions. These rules
+   live in the last-loaded stylesheet so the tested contract is the real
+   cascade, not an earlier declaration that plant.css can silently override. */
+@media (max-width: 640px) {
+  .hero-title { flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .hero-title > .bi:first-child { flex: 0 0 auto; margin-top: 2px; }
+  .hero-title > b { flex: 1 1 calc(100% - 32px); min-width: 0; line-height: 1.25; }
+  .hero-receipt { flex: 1 0 100%; margin-left: 0; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .hero-change, .hero-report { display: inline-flex; flex: 1 1 calc(50% - 4px);
+    align-items: center; justify-content: center; min-width: 0; min-height: 44px;
+    box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 9px; text-align: center; line-height: 1.2; background: var(--paper); }
+  .hero-change, .hero-change:hover { color: var(--pine2); }
+  .hero-report, .hero-report:hover { color: var(--sky2); }
+}
 
 /* ---- splash site cards ------------------------------------------------- */
 .site-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 18px 0; }

@@ -52,54 +52,25 @@ check_release_receipt() {
 }
 
 check_browser_ready() {
-  local label="$1" url="$2" chrome="" dom target browser_timeout remaining
-  for candidate in google-chrome-stable google-chrome chromium chromium-browser; do
-    if command -v "$candidate" >/dev/null 2>&1; then chrome=$(command -v "$candidate"); break; fi
-  done
-  if [[ -z "$chrome" ]]; then
-    echo "DOWN [$label] semantic browser requested but Chrome/Chromium is unavailable"
+  local label="$1" url="$2" driver="" target browser_timeout remaining
+  driver=$(command -v chromedriver || true)
+  if [[ -z "$driver" ]]; then
+    echo "DOWN [$label] semantic browser requested but ChromeDriver is unavailable"
     return 1
   fi
-  dom=$(mktemp)
   target="${url%/}/?site=${SMOKE_SITE:-SRER}"
   remaining=$((deadline_at - SECONDS))
   browser_timeout="${SMOKE_BROWSER_TIMEOUT:-150}"
   ((browser_timeout > remaining)) && browser_timeout=$remaining
   if ((browser_timeout <= 0)); then
-    rm -f "$dom"
     echo "DOWN [$label] shared smoke deadline elapsed before browser readiness"
     return 1
   fi
-  if ! timeout "$browser_timeout" "$chrome" \
-      --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
-      --run-all-compositor-stages-before-draw \
-      --virtual-time-budget="${SMOKE_VIRTUAL_TIME_MS:-90000}" \
-      --dump-dom "$target" >"$dom" 2>/dev/null; then
-    rm -f "$dom"
-    echo "DOWN [$label] browser could not complete the semantic probe"
-    return 1
-  fi
-  if grep -Eqi 'startup error|application failed to start|application error|service unavailable' "$dom"; then
-    rm -f "$dom"
-    echo "DOWN [$label] browser reached a host error page"
-    return 1
-  fi
-  if ! grep -Fq 'data-app-ready="true"' "$dom" ||
-     ! grep -Fq 'data-site-ready="true"' "$dom" ||
-     ! grep -Fq "${SMOKE_SITE:-SRER} ready" "$dom"; then
-    rm -f "$dom"
-    echo "DOWN [$label] Shiny connection/site readiness markers were not promoted"
-    return 1
-  fi
-  if grep -Eq 'id="(heroStats|overviewInsight)"[^>]*shiny-output-error' "$dom" ||
-     ! grep -Fq 'class="hero-band"' "$dom" ||
-     ! grep -Fq 'The site holds' "$dom"; then
-    rm -f "$dom"
-    echo "DOWN [$label] site-ready fired but key Overview outputs did not render cleanly"
-    return 1
-  fi
-  rm -f "$dom"
-  echo "ok [$label] browser confirmed Shiny + ${SMOKE_SITE:-SRER} readiness"
+  python3 scripts/chromedriver_semantic_smoke.py \
+    --url "$target" \
+    --site "${SMOKE_SITE:-SRER}" \
+    --timeout "$browser_timeout" \
+    --driver "$driver"
 }
 
 check_one() {

@@ -638,9 +638,9 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 .map-picker-wrap { width: 100%; min-width: 280px; }
 
 /* "change site" link in the hero band */
-.hero-change { font-size: 12.5px; font-weight: 700; color: var(--terra); text-decoration: none;
+.hero-change { font-size: 12.5px; font-weight: 700; color: var(--pine2); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
-.hero-change:hover { color: var(--pine); text-decoration: underline; }
+.hero-change:hover { color: var(--pine2); text-decoration: underline; }
 
 @media (max-width: 640px) {
   .splash-map { padding: 22px 14px 18px; }
@@ -751,7 +751,7 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 /* "report card" link in the hero band */
 .hero-report { font-size: 12.5px; font-weight: 700; color: var(--sky2); text-decoration: none;
   border-left: 1px solid var(--line); padding-left: 10px; cursor: pointer; }
-.hero-report:hover { color: var(--pine); text-decoration: underline; }
+.hero-report:hover { color: var(--pine2); text-decoration: underline; }
 
 /* The site report card is now a server-side PDF (downloadHandler output$reportPdf,
    built in R/report_pdf.R), so the old hidden-HTML .report-card / .rc-* styles and
@@ -1453,14 +1453,14 @@ svg.smt-pin-lines {
 .search-go { display: inline-flex; align-items: center; width: auto; min-height: 44px; padding: 7px 12px;
   font-size: 13px; }
 .hero-receipt { display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-  color: #cfe6d3; font-size: 11px; font-weight: 650; }
+  color: var(--muted); font-size: 11px; font-weight: 650; line-height: 1.35; }
+.hero-receipt .bi { color: var(--pine2); flex: none; }
 .lab-table-details { margin: 14px 0; border: 1px solid var(--line); border-radius: 12px;
   background: var(--paper); padding: 0 14px 14px; }
 .lab-table-details > summary { display: flex; align-items: center; gap: 8px; min-height: 48px;
   color: var(--pine2); font-weight: 800; cursor: pointer; }
 .plot-table-open { min-height: 44px; }
 @media (max-width: 640px) {
-  .hero-receipt { flex-basis: 100%; margin-left: 0; }
   .splash-contract > span { flex: 1 1 auto; justify-content: center; }
   .smt-pin { max-width: min(250px, calc(100vw - 34px)); }
 }

@@ -31,8 +31,7 @@ jobs:
           SMOKE_SLEEP_BASE: "12"
           SMOKE_BROWSER: "1"
           SMOKE_SITE: "SRER"
-          SMOKE_BROWSER_TIMEOUT: "70"
-          SMOKE_VIRTUAL_TIME_MS: "60000"
+          SMOKE_BROWSER_TIMEOUT: "120"
           SMOKE_TOTAL_DEADLINE: "780"
           SMOKE_REQUIRE_RECEIPTS: "1"
         run: |
