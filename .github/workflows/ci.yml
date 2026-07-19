@@ -1,0 +1,153 @@
+name: Validate Plant Diversity Explorer
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plant-diversity-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+  RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+  OPENBLAS_CORETYPE: Haswell
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  PDE_LIVE: "0"
+
+jobs:
+  release_contracts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 100
+    steps:
+      - name: Checkout the immutable app revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: '4.5.2'
+          use-public-rspm: false
+
+      - name: Install runtime and verification closure
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          packages: >
+            shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly,
+            leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
+            jsonlite, rsconnect, cpp11,
+            url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sf_1.1-1.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/s2_1.1.11.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/units_1.0-1.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/wk_0.9.5.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/classInt_0.4-11.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/raster_3.6-32.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sp_2.2-1.tar.gz
+          pak-version: repo
+          dependencies: '"hard"'
+          cache-version: plant-diversity-geo-closure-v2
+          cache: always
+          install-pandoc: 'false'
+          install-quarto: 'false'
+
+      - name: Verify deterministic OpenBLAS runtime
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("libopenblas.so.0")
+          lib.openblas_get_corename.restype = ctypes.c_char_p
+          lib.openblas_get_config.restype = ctypes.c_char_p
+          core = lib.openblas_get_corename().decode("ascii")
+          threads = lib.openblas_get_num_threads()
+          print(f"OpenBLAS core={core} threads={threads} config={lib.openblas_get_config().decode('ascii')}")
+          if core.lower() != "haswell":
+              raise SystemExit(f"expected OpenBLAS Haswell core, got {core!r}")
+          if threads != 1:
+              raise SystemExit(f"expected one OpenBLAS thread, got {threads}")
+          PY
+
+      - name: Parse source and verify static contracts
+        run: |
+          set -euo pipefail
+          Rscript --vanilla -e 'for (f in c("global.R","ui.R","server.R",list.files("R", pattern="[.]R$", full.names=TRUE),list.files("scripts", pattern="[.]R$", full.names=TRUE))) parse(f)'
+          node --check www/app.js
+          node --check www/pincards.js
+          node --check scripts/write_release_receipts.mjs
+          node scripts/check_custom_message_handlers.mjs
+          node scripts/check_cover.mjs
+          bash -n scripts/post_deploy_smoke.sh
+
+      - name: Run registered science and build-portability contracts
+        run: |
+          set -euo pipefail
+          Rscript --vanilla scripts/test_science_contracts.R
+          Rscript --vanilla scripts/test_build_script_portability.R
+
+      - name: Rebuild the derived search index twice and require identical bytes
+        run: |
+          set -euo pipefail
+          Rscript --vanilla scripts/build_search_index.R
+          sha256sum data/search_index.rds > "$RUNNER_TEMP/search-first.txt"
+          Rscript --vanilla scripts/build_search_index.R
+          sha256sum data/search_index.rds > "$RUNNER_TEMP/search-second.txt"
+          diff -u "$RUNNER_TEMP/search-first.txt" "$RUNNER_TEMP/search-second.txt"
+
+      - name: Regenerate the manifest twice and require identical bytes
+        id: manifest
+        run: |
+          set -euo pipefail
+          node scripts/write_release_receipts.mjs
+          Rscript --vanilla scripts/write_manifest.R
+          sha256sum manifest.json > "$RUNNER_TEMP/manifest-first.txt"
+          Rscript --vanilla scripts/write_manifest.R
+          sha256sum manifest.json > "$RUNNER_TEMP/manifest-second.txt"
+          diff -u "$RUNNER_TEMP/manifest-first.txt" "$RUNNER_TEMP/manifest-second.txt"
+
+      - name: Verify all bundles, references, indexes, and exact manifest
+        run: Rscript --vanilla scripts/verify_bundle.R
+
+      - name: Source the complete application offline
+        run: >-
+          Rscript --vanilla -e
+          'Sys.setenv(PDE_LIVE="0"); source("global.R"); source("ui.R");
+          source("server.R"); stopifnot(inherits(ui, "shiny.tag.list") ||
+          inherits(ui, "shiny.tag"), is.function(server), length(BUNDLED) == 46L)'
+
+      - name: Upload an unvalidated manifest for failed-gate diagnosis
+        if: failure() && steps.manifest.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-diversity-manifest-UNVALIDATED-${{ github.sha }}
+          path: manifest.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Upload the validated release-byte candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-diversity-release-candidate-${{ github.sha }}
+          path: |
+            data/search_index.rds
+            www/runtime-receipt.txt
+            docs/cover-receipt.txt
+            manifest.json
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Require committed release bytes to match the validator
+        run: |
+          release_files=(manifest.json data/search_index.rds www/runtime-receipt.txt docs/cover-receipt.txt)
+          git ls-files --error-unmatch "${release_files[@]}"
+          test -z "$(git status --porcelain -- "${release_files[@]}")"
+          git diff --check

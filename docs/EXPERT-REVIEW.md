@@ -1,78 +1,118 @@
-# Plant presence & percent cover (diversity) — Expert Review by Flora (NEON DP1.10058.001)
-_Devoted product-expert review — June 2026._
+# Plant Presence and Percent Cover — Expert Review
 
-> Flora here — I read this app end to end against the nested-quadrat literature it descends from, and the verdict is the one I rarely get to give: **the science is honest and the hard calls are right.** The design is represented faithfully (1→10→100→400 m² nesting, cover only at 1 m², scale parsed from `subplotID`), the estimators are the correct ones (incidence **Chao2**, not the mammal flagship's Chao1), the de-pseudoreplication is real (`latest_snapshot()` on `(year, bout)`), and — most importantly for *my* product — the two things a naïve reader always gets wrong are nailed in *every* banner: **richness travels with its grain, and ocular cover is labelled a relative index, never a share of ground.** This is journal-defensible to a fault. The remaining work is not "fix the math" — it is three things: (1) the per-site Environment tab still lets a strong-looking `r` sit next to a non-significant verdict (the n=6–10 false-negative floor — framing, not math); (2) one composition-vs-productivity sentence needs to be on the page, not just in my head; and (3) FAIR hygiene niceties (the hand-maintained codebook, a provenance stamp, the `fruiting_pct` intensity trap). None of these touch the load-bearing claims. Ship it; harden the Environment lane and the codebook.
+_NEON DP1.10058.001 · review updated for the v3 candidate science contract_
 
-## Method fidelity (is the NEON protocol represented correctly?)
+> **Review verdict:** the candidate now has a defensible analysis contract, but it is not yet a validated empirical release. Method rules, bundled-data facts, and ecological findings are different layers of evidence. This review endorses the first, records the second, and withholds the third until the build and deployment receipts pass.
 
-This is the part the app gets unambiguously right, and it is the part most apps botch.
+## Method fidelity
 
-- **The nested design is encoded faithfully.** NEON's TOS Plant Diversity protocol (Barnett et al., **NEON.DOC.014042**) — itself a continental-scale descendant of the Carolina Vegetation Survey nested-module design (Peet, Wentworth & White 1998) — places eight 1 m², four 10 m², and four 100 m² subplots inside a 400 m² plot, each larger scale *containing* the smaller. The bundler reproduces exactly this: scale is parsed from the `subplotID` string (`_100$`→100, `_10_`→10, `_1_`→1) at `scripts/bundle_plant_data.R:31-35`, and the species-area machine treats it as a true nested curve, not an interpolation (`species_area_plot`, `R/plant_helpers.R:168-187`).
-- **The cover asymmetry is correct.** Cover lives *only* at 1 m² (`div_1m2Data`); 10/100 m² are presence-only — and the bundler hard-sets `percentCover = NA_real_` for the presence table (`bundle_plant_data.R:68`). Every cover metric (`plot_species_cover`, `hill_site`, `site_invasion`) filters `scale == 1` before touching cover. Right.
-- **Taxonomy and nativity follow NEON's own conventions.** `is_species_rank` (`bundle_plant_data.R:41-45`) drops `sp.`/`A/B`/genus before any richness count, and `nativity_of` collapses `nativeStatusCode` to Native / Introduced / Unknown with `NI`/`UNK`/`NA` → Unknown (`:37-40`) — and the app *publishes the Unknown rate* (`unknown_rate`, `unknown_cover_share`) rather than forcing a binary. Suite-median Unknown is 1.35%, up to 9.5% at KONA (per `docs/DATA-TAKEAWAYS.md`), and the hero KPI carries the unknown-cover caveat inline (`server.R:206`). That is how you report a field nativity call honestly.
-- **Snapshot discipline is the single best correctness choice.** `latest_snapshot()` (`plant_helpers.R:67-81`) keeps the latest `(year, bout)` per plot — *not* the year alone — so the two SRER/JORN bouts (spring + monsoon, genuinely different floras) don't get double-counted into richness, the cover denominator, or the Chao2 incidence units. The comment at `:62-66` shows the author understood the bout trap, not just the year trap. This prevents the ~2× richness inflation that is the most common plant-diversity error.
-- **The cadence and repeat-visit structure are represented.** 6–12 survey years/site (median 9.5), same plots re-surveyed, with `native_trend()` (`:269-283`) reserved as the *only* place the full multi-year table is used. Spatial snapshot vs temporal series are kept correctly separate.
+The app preserves the load-bearing parts of the NEON plant-diversity design:
 
-One small fidelity note, not a defect: the protocol records cover in NEON's binned ocular scheme; the app treats `percentCover` as continuous numeric (`as.numeric(percentCover)`, `bundle_plant_data.R:60`). That is fine for summing and sharing, but it is worth a one-line note in the codebook that these are bin midpoints/ocular estimates, not measured cover — reinforces the "relative index" framing the app already leans on.
+- nested incidence at 1, 10, 100, and 400 m²;
+- ocular cover only at 1 m²;
+- species-level analysis separated from coarse taxonomic records;
+- one selected survey event per plot for current-state analyses;
+- Unknown nativity retained as an explicit category;
+- cover described as an overlapping relative index, never a ground-share partition.
 
-## Analysis & metrics — defensible? (with the literature)
+The new `snapshot_by_plot_year()` contract closes the previous multi-bout ambiguity. Selection is deterministic, emits support, and is tested for row-order invariance. `latest_snapshot()` builds on that contract, so app summaries, report values, and snapshot exports have one registered observation model.
 
-Walking the estimators a reviewer would interrogate:
+## Estimator review
 
-- **Species–area curve (the strongest claim).** Mean of per-plot curves with ±1 sd and per-area `n` surfaced (`species_area_site`, `:190-206`; rendered with error bars and an `n`-aware "rough floor" caveat below 5 plots at `server.R:280-284`). This is the *direct* SAR the nested design yields (Arrhenius 1921; Gleason 1922 are the historical anchors), and it is biome-diagnostic exactly as the data shows: JORN climbs only 2.1→5.5 species (genuinely species-poor at every grain), SRER 5.5→42.6, CLBJ 13.3→52.9. The `sd`-before-mean ordering at `:199-205` correctly dodges the dplyr trap where a later `summarise()` expression sees the already-collapsed column. Keep this exactly as is.
-- **Chao2, not Chao1 — the most important estimator call, and it is correct.** Nested-quadrat data are *incidence* data (presence across sampling units), so the correct non-parametric lower bound is the incidence-based **Chao2** (Chao 1987; Colwell & Coddington 1994; Chao & Chiu 2016), built from Q1 (uniques) and Q2 (duplicates). `chao2()` (`:239-263`) uses bout-aware 1 m² incidence units, applies the `(m-1)/m` finite-sample correction, falls back to the `Q2==0` form, carries a rough Chao-1987 variance CI, and flags `unstable = Q2 < 3` — surfaced honestly in the banner ("a lower bound (few doubletons)", `server.R:316`). SRER S_obs=124 → Chao2 145.2 (CI 126–164.5). Using Chao1 here, as the mammal flagship does for counts, would be a reviewer flag; the app got the distinction right and even cites Chao 1987 on the card.
-- **Hill numbers — defensible, with one honest footnote already present.** q0/q1/q2 on summed 1 m² cover (`hill_site`, `:223-230`; `hill_numbers`, `:213-220`). Hill (1973)/Jost (2006)/Chao et al. (2014) accept any non-negative weights, so cover-weighting is legitimate — and the UI already footnotes that the weight is *ocular cover, not individuals* (`server.R:309-310`, "a relative measure, not a share of ground"). That footnote is the difference between defensible and hand-wavy; keep it.
-- **The Expected-vs-Observed lane is framed as completeness, not error — and this is scientifically essential.** Because this product has **no within-bout repeat design, it cannot estimate detection probability** (unlike a wildlife occupancy product). So "expected but not detected" *must* be read as completeness or a real state-transition, never as missing data. The app enforces this: bucket B is neutral, never red, with an explicit "~400 m² per plot" non-detection caption (`ui.R:218-224`), and the headline says it in words ("expected-but-absent reflects completeness, not error", `server.R:868`). The inverse over-claim — treating the NRCS reference list as truth the data must match — is the trap, and the app does not fall into it. The USDA PLANTS join is symbol-exact (`taxonID` *is* the PLANTS symbol; 5,773/5,777 = 99.9% resolve) with synonyms collapsed to the accepted symbol first (`build_plant_authority.R:95-96`), so a synonym can't fake an unmatched signal. The "dominant = top 50% of reference production" convention (`expected_qc.R`, `dom_basis`) is honestly labelled an app-defined, list-length-invariant convention and *not* an official NRCS designation (`server.R:1011`) — exactly the disclosure a reviewer wants.
+### Species-area
 
-**Where the literature says push — the Environment tab.** The per-site annual richness↔climate test is an n=6–10 false-negative/forking-paths regime. The machinery is *valid*: `plant_env_perm()` (`env_helpers.R:168-186`) re-runs the **full driver×lag scan inside every permutation**, so the reported p genuinely corrects for the best-of-12-drivers×3-lags search; `env_verdict()` (`:228-235`) gates every positive verdict on that p; the UI carries "exploratory", "NOT independent evidence", and a shared-trend caveat (`ui.R:245,270`; `server.R:434-443,487`). That is the honest-stats bar. The gap is narrow but real: in `output$envScatter` the OLS fit line is drawn whenever `sd(driver) > 0` (`server.R:459-465`) regardless of the permutation p — so a visually strong line can sit directly under a "no clear link / p=0.76" banner. Across 46 sites only **1 (2%)** clears p<0.05 — the null rate — and SRER's headline green-up r=−0.67 has **p=0.758**. **Fix:** gate or grey the fit line on `pm$p` (draw it solid only when `p < 0.05`, dotted-grey otherwise), and lead the tab with the across-site *pooled* read. The number is fine; the line's visual authority is what overclaims.
+The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The candidate now counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific curve values still require candidate revalidation.
 
-## What the field would add (collection / analysis / presentation / use)
+### Chao2
 
-- **Coverage-based rarefaction before any cross-thing richness comparison.** When effort differs (years, plots, bouts), raw S is not comparable — rarefy to common coverage (Gotelli & Colwell 2001; Chao & Jost 2012; the iNEXT framework, Hsieh et al. 2016). The compare-two-sites modal (`server.R:751-766`) and the cross-site picker currently put raw snapshot richness side by side. At a minimum, footnote that these are raw-S at site-specific effort; ideally, expose a coverage-standardized richness for the compare view. This is the one analysis the wider field would *expect* and not find.
-- **The composition-vs-productivity caveat needs to be on the page.** This is *my* non-negotiable for a dryland producer rung: richness is **composition, not productivity**, and in arid systems a richness uptick is frequently exotic-annual/forb addition after disturbance — more taxa, less native function. The data makes it concrete: the five most-invaded sites (STER 99.8%, KONA 95.1%, SJER 81.6%, LAJA 78.7%, BLAN 72.0% introduced cover) are all in the **bottom third of richness**, yet cross-site Spearman(richness, %introduced) is a near-zero **+0.12** because the relationship is non-monotonic. The Diversity Lab's "RICH & NATIVE 🏆 / SPARSE & INVADED" quadrant labels (`server.R:570-573`) quietly imply rich = healthy. Add one sentence — "more species ≠ more biomass or a healthier system; in drylands richness can rise with exotic addition" — to the Diversity tab head and the Lab info-pop.
-- **Veg-structure basal area as the slow standing-stock floor.** For any producer-state role in the cascade, the honest standing-stock signal is veg-structure basal area (a sibling app), not richness. This app's defensible cascade contributions are green-up phenology and introduced-cover/composition shift — say so where the cascade reads this rung (see below).
-- **`fruiting_pct` is an intensity-max trap if it ever drives a verdict.** It is a max of binned ordinal phenophase-intensity sold as a seed crop, and sparse (15/121 SRER monthly rows). It is registered as an Environment driver (`env_helpers.R:44-46`). Either relabel it a status yes-share on an exact phenophase, or drop it from the driver registry — do not let a 15-point intensity-max produce a headline `r`.
+Incidence-based Chao2 is the appropriate estimator family for 1 m² presence units, but the former implementation mixed a classic formula, a bias-corrected label, and an approximate interval. The candidate now registers one formula:
 
-## Product-specific honesty & QC traps
+`S_obs + ((m - 1) / m) * Q1 * (Q1 - 1) / (2 * (Q2 + 1))`
 
-The eight traps I hold this product to, scored:
+The result is a lower-bound estimate of total richness; its difference from observed richness is the estimated unseen component. `Q1`, `Q2`, `m`, and instability remain visible; no unsupported upper confidence limit is invented. It is not coverage-standardized, and its incidence-unit denominator remains limited by the absence of an explicit sampled-empty-quadrat table.
 
-1. **Grain trap (scale-dependence)** — *Handled.* No richness number travels without its area; the SAR is the spine, the Diversity Lab x-axis is explicitly "Species richness (400 m² plot)", and the curve caveats fire below 5 plots.
-2. **Cover-is-not-ground trap** — *Handled, repeatedly.* "Relative cover index, not a share of ground" appears in the hero tooltip (`server.R:205`), the Hill footnote (`:310`), the help modal (`ui.R:167`), the About card (`ui.R:1002`), and the export README (`server.R:721`). The cover-sum sanity flag fires only above 250% (`flag_cover_sum`), correctly allowing legitimate >100% overlapping-layer quadrats.
-3. **Detection/censoring trap (completeness rule)** — *Handled.* Bucket B is neutral, never red; the "~400 m² per plot, non-detection not error" framing is on the card and in words. This is the rule most likely to be violated by a well-meaning redesign — protect it.
-4. **Pseudoreplication/repeat-visit trap** — *Handled.* `latest_snapshot()` on `(year, bout)`; the multi-year table only feeds `native_trend()`. The single best correctness choice in the app.
-5. **Coarse-ID/morphospecies trap** — *Handled, and surfaced first.* `flag_coarse_rank` advisory renders *before* every Expected-vs-Observed comparison (`server.R:874-880`) with the "read as a floor" framing. Median 11% of records, up to 32.7% at YELL. Direct count, no inference.
-6. **Effort/coverage trap (richness comparison)** — *Partially.* Within-site snapshot effort is handled by `latest_snapshot`; cross-site/compare-view raw-S is *not* coverage-standardized (see "What the field would add"). The one open methods gap.
-7. **Composition-vs-productivity trap** — *Half-handled.* The data and my memory carry it, but the page does not say it in words and the Lab quadrant labels lean the wrong way. Add the sentence.
-8. **Small-n correlation trap** — *Machinery handled, presentation leaks.* Permutation null is valid and search-corrected; the fix is to gate the fit line on p and lead with the pooled result, not to touch the stats.
+### Cover and Hill weights
 
-Two genuine data-quality cross-checks (kept separate from completeness, correctly) round it out: nativity disagreement vs USDA PLANTS (one real flag at SRER — *Eriochloa acuminata*, NEON=Native/USDA=Introduced, labelled "review" not "error", `server.R:944`) and implausible cover-sum. Both degrade gracefully when the authority file is absent.
+Species and watchlist cover are aggregated across all known supported plots rather than only plots where the focal species occurs. Contradictory nativity records are routed to Unknown before nativity partitions are calculated. This is more defensible than present-only averaging.
 
-**FAIR hygiene (low severity, worth doing):** `plant_codebook()` (`plant_helpers.R:381-402`) is hand-maintained and out of sync with the actual export — it documents `plots.csv` at 8 columns while `plot_summary` ships more (`n_unknown, dominant, dominant_cover, native_cover, lat, lng`), and the `occ_long` `keep` vector at `server.R:702-703` includes `bout`/`taxonID` conditionally. Derive the dictionary programmatically from the actual exported frames. And add a provenance stamp (NEON release tag / `fetchedAt`) to the export so a downstream user can cite the exact vintage — the README has only a generated-date string.
+One limitation remains: the bundles identify subplots through occurrence records, not through a complete survey-opportunity ledger. Known absences can contribute zero; unrecorded opportunity cannot. Hill numbers therefore remain cover-weighted descriptive profiles, not fully opportunity-standardized abundance estimates.
 
-## Place in the suite / cascade
+### Annual responses
 
-This is the **plant (producer) rung** of the climate → plants → consumers cascade, and the app is honest about what it can and cannot contribute:
+Annual richness, total relative cover, introduced-cover share, and nativity trends now use one selected bout per plot-year and recurrent plot panels. The estimand is a mean plot-level response, with plot and sampling-unit support, rather than a site total that changes when effort changes.
 
-- **What it feeds the cascade honestly:** the green-up onset phenology it already carries (`greenup_pct`, 103/121 SRER months populated) — the same metric the suite's one robust pooled link, **temperature → green-up onset**, rides on. And introduced-cover/composition shift as a disturbance covariate. The monthly env machinery in the bundle is also the raw material for "the one move" — a winter/monsoon precip split that flips desert precip→richness sign.
-- **What it must NOT contribute:** any per-site annual richness↔climate correlation as a fitted cascade edge. Those are the false-negative regime (p mostly >0.2; 1/46 sites significant). The cascade integrator must **pool across sites**, not stack per-site verdicts.
-- **The producer-state-variable correction:** richness is the *wrong* producer-state variable for a bottom-up dryland cascade (it can invert). Lead the cascade with temp→green-up; use this app's richness and invasion layers as **descriptive corroboration, not a fitted edge**, with veg-structure basal area as the slow standing-stock floor.
+This is the correct contract for descriptive time series. It does not by itself solve short records, observation error, shared trends, or causal identification.
 
-## Scorecard
+## Taxonomy, nativity, and reference review
 
-| Dimension | Grade | One-line why |
+- Coarse IDs remain available in the all-record export but are excluded from species estimands.
+- A taxon recorded as both Native and Introduced is classified Unknown/review, not resolved by mode and not counted in both categories.
+- USDA lower-48 nativity comparisons do not run at Alaska, Hawaiʻi, or Puerto Rico sites.
+- State-occurrence matches no longer demote observed-not-reference species. Every such record remains review until per-match source, query, confidence, dataset, and license provenance are available.
+- The NRCS list is explicitly scoped to one site reference coordinate and selected soil/ecological unit. It is not a site-wide expected flora.
+
+The scientific framing follows from those constraints: reference overlap is completeness context; reference absence is not a NEON error; and observed-not-reference is a review list rather than proof of misidentification or range expansion.
+
+## Environment review
+
+The former seasonal Driver/Cascade interpretation has been removed from this app. The remaining environment screen is deliberately narrow:
+
+- annual precipitation, temperature, flowering, and green-up only;
+- exactly 12 non-missing monthly values per annual driver;
+- recurrent plot-panel responses with one bout per plot-year;
+- Spearman scans with circular-shift nulls;
+- exploratory language regardless of effect size.
+
+Fruiting intensity and incomplete seasonal aggregates are excluded. The app does not own a suite-level phenology result, does not fit a per-site causal edge, and does not promote its short annual associations to Driver.
+
+## Export and parity review
+
+The export contract is now materially stronger:
+
+- full occurrences and the analysis snapshot are separate files;
+- plot, ground, environment, expected/reference, and release provenance are separately scoped;
+- the strict data dictionary is generated from the emitted frames and fails on unknown or duplicate columns;
+- definitions, units, NA semantics, and estimands accompany every exported field;
+- the PDF uses the same selected snapshot for richness, species-area, and Chao2.
+
+These are implemented safeguards, not yet a release receipt. The candidate still needs an R execution of the hard-assertion fixtures, exact manifest validation, export inspection, and deployed semantic health evidence.
+
+## Current evidence and unresolved validation
+
+Repository inventory currently shows 46 site bundles, 46 environment bundles, and 34 site reference artifacts. That supports coverage accounting only. It does not validate the ecological values previously quoted in this review.
+
+The following remain unresolved until the candidate is frozen and tested:
+
+1. empirical recomputation of site metrics under the new bout, recurrent-panel, cover, nativity, and Chao2 contracts;
+2. an explicit sampled-opportunity artifact for empty 1 m² quadrats;
+3. source vintage and release receipts for every bundled dataset;
+4. deterministic derived-artifact and manifest equality;
+5. cold/offline application boot and export generation;
+6. public Connect deployment identity, semantic readiness, console health, and desktop/mobile review.
+
+Earlier claims such as named site rankings, exact invasion percentages, Chao2 values, or significant/non-significant site correlations are historical calculations, not current candidate findings. They must not be copied into UI, reports, or Driver context without recomputation and a source-byte receipt.
+
+## Product honesty scorecard
+
+| Dimension | Candidate assessment | Remaining condition |
 |---|---|---|
-| Method fidelity (NEON protocol) | **A** | Nesting, cover-at-1m² asymmetry, scale parse, nativity buckets, snapshot-on-(year,bout) all faithful. |
-| Estimator choice | **A** | Incidence Chao2 (not Chao1), Q2<3 flag, direct nested SAR, cover-weighted Hill footnoted. |
-| Cover honesty | **A** | "Relative index, not a share of ground" on every surface; >250% sanity flag respects overlap. |
-| Completeness / Expected-vs-Observed | **A−** | Completeness-never-red enforced, symbol-exact join, coarse-ID surfaced first; dominance convention disclosed. |
-| Pseudoreplication discipline | **A** | `latest_snapshot()` on (year,bout); multi-year table only for the trend. The best single call. |
-| Environment / small-n stats | **B** | Permutation null valid and search-corrected, but the fit line isn't p-gated and per-site verdicts lead. |
-| Composition-vs-productivity framing | **B−** | Carried in data/memory; not stated on the page, and Lab quadrants imply rich=healthy. |
-| Cross-site richness comparison | **B** | Snapshot effort handled within-site; compare-view raw-S not coverage-standardized. |
-| FAIR / export hygiene | **B+** | Genuinely analysis-ready; codebook hand-maintained/out of sync, no provenance stamp. |
-| Cascade role honesty | **A** | Correctly offers green-up + composition, refuses per-site richness↔climate as an edge. |
+| Observation model | Registered and testable | Execute fixtures in R/CI |
+| Nested-scale fidelity | Strong | Recompute candidate values |
+| Chao2 | Correctly labelled lower-bound contract | Validate bundle opportunity/support |
+| Cover interpretation | Honest relative-index framing | Add explicit sampled-empty opportunity data |
+| Nativity/QC | Conflicts and regional limits gated | Preserve authority provenance |
+| Expected/reference flora | Correctly limited to one local reference | Build plot/buffer-matched references before stronger claims |
+| Annual metrics | Recurrent plot-panel estimands | Validate support across all sites |
+| Environment | Descriptive and non-causal | No Driver promotion from this screen |
+| Export/provenance | Strict candidate contract | Inspect generated ZIP/PDF and exact manifest |
+| Release status | Not yet promoted | Complete BUILD-TEST-HANDOFF receipts |
 
-Net: a product I would defend to a journal or an NRCS reviewer on its method and estimator choices today. Harden the Environment fit-line gate, add the one composition sentence, and tidy the codebook, and there is nothing left for a reviewer to catch that the app hasn't already caught itself.
+## Suite and Driver disposition
 
-— Flora
+Plant Diversity is a composition context app, not a productivity or phenology authority. Its eventual suite contribution may include common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, and their support. Those remain contextual until candidate bytes and contracts are validated.
+
+The app must not contribute a productivity vote, management priority, per-site climate–richness edge, or phenology signal owned by the Phenology app. Driver disposition remains **context-only / hold inferential promotion**.
+
+## Final recommendation
+
+Do not publish a “science complete” verdict from code inspection alone. Run the full handoff, recompute empirical summaries from the reviewed commit, inspect the generated exports and PDF, and record the deployed identity. If those receipts pass, the candidate's method contract is defensible. If they do not, preserve the failure as part of the suite learning loop and keep the last known-good release in place.

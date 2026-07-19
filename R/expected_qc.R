@@ -52,6 +52,27 @@ accept_symbol <- function(sym, authority = NULL) {
   s
 }
 
+# The currently bundled expected lists are produced from one site coordinate,
+# one intersecting soil map unit, and its dominant correlated ecological class.
+# Keep that spatial limitation available to reports/exports so "expected" is
+# never read as a site-wide truth claim.
+expected_reference_scope <- function(expected = NULL) {
+  if (is.null(expected)) return("No ecological-site reference is available.")
+  if (!is.null(expected$reference_scope) && length(expected$reference_scope) &&
+      !is.na(expected$reference_scope[1]) && nzchar(expected$reference_scope[1]))
+    return(as.character(expected$reference_scope[1]))
+  "Single NRCS ecological-site flora from the soil map unit at the site reference coordinate; descriptive, not a site-wide expected-flora census."
+}
+
+.nativity_conflict <- function(x) {
+  z <- unique(as.character(x[!is.na(x) & x %in% c("Native", "Introduced")]))
+  all(c("Native", "Introduced") %in% z)
+}
+
+.resolve_nativity <- function(x) {
+  if (.nativity_conflict(x)) "Unknown" else mode_chr(x)
+}
+
 # ---- the observed species set (the comparison's left-hand side) -----------
 # One row per ACCEPTED species symbol from the honest one-survey-per-plot snapshot
 # (same recipe every other site metric uses — no pseudoreplication, agrees with
@@ -68,8 +89,11 @@ observed_species <- function(occ, authority = NULL) {
     dplyr::summarise(
       scientificName = mode_chr(.data$scientificName),
       family         = mode_chr(.data$family),
-      nativity       = mode_chr(.data$nativity),          # NEON's 3-bucket label
-      neon_status    = mode_chr(.data$nativeStatusCode),  # raw N/I/NI/UNK
+      nativity_conflict = .nativity_conflict(.data$nativity),
+      nativity       = .resolve_nativity(.data$nativity), # conflicts route to Unknown/review
+      neon_status    = if (.nativity_conflict(.data$nativity))
+        paste(sort(unique(as.character(.data$nativeStatusCode[!is.na(.data$nativeStatusCode)])),
+                   method = "radix"), collapse = "|") else mode_chr(.data$nativeStatusCode),
       n_plots        = dplyr::n_distinct(.data$plotID),
       .groups = "drop") %>%
     dplyr::mutate(mean_cover = round(as.numeric(cov_by[.data$sym]), 2)) %>%
@@ -117,40 +141,14 @@ expected_vs_observed <- function(occ, expected, authority = NULL) {
   # C — observed but not in the reference list
   C <- obs[!(obs$sym %in% ref$plantsym), , drop = FALSE]
 
-  # STATE-LEVEL PLAUSIBILITY (owner steer): the reference list is ONE NRCS soil-unit
-  # ESD associate list, far narrower than the site's real STATE flora, so a native
-  # genuinely recorded for the state lands in C only because the soil unit didn't
-  # enumerate it. We DEMOTE those to a neutral "regional associate" note (not review),
-  # and keep flagging only (a) the introduced sublane and (b) natives NOT recorded
-  # for the site's state (the obvious errors). Degrades gracefully: when there is no
-  # state distribution (no authority, state not covered, or unknown site state) every
-  # row stays in "review" — exactly today's behaviour, no crash.
-  C$c_class <- "review"; c_state <- NA_character_; c_state_covered <- FALSE
-  if (nrow(C)) {
-    c_state <- tryCatch(site_state(site_of_occ(occ)), error = function(e) NA_character_)
-    auth_tbl <- if (!is.null(authority)) authority$authority else NULL
-    covered  <- if (!is.null(authority)) authority$states_covered else NULL
-    have_states <- !is.null(auth_tbl) && "states_l48" %in% names(auth_tbl) &&
-                   !is.na(c_state) && nzchar(c_state) &&
-                   (is.null(covered) || c_state %in% covered)   # only run where this state is covered
-    c_state_covered <- isTRUE(have_states)
-    if (have_states) {
-      j  <- match(C$sym, auth_tbl$accepted_symbol)
-      sl <- auth_tbl$states_l48[j]
-      in_state <- !is.na(sl) & vapply(sl, function(s) c_state %in% strsplit(s, ";", fixed = TRUE)[[1]], logical(1))
-      is_native <- C$nativity == "Native" & !is.na(C$nativity)
-      # native + recorded for this state  -> regional associate (neutral, NOT review)
-      C$c_class[is_native & in_state] <- "regional"
-      # everything else stays "review": introduced (any state) + natives NOT recorded
-      # for the state + unknown-nativity. (We never demote an introduced species.)
-    }
-  }
-  C_review   <- C[C$c_class != "regional", , drop = FALSE]
-  C_regional <- C[C$c_class == "regional", , drop = FALSE]
+  # Every observed-not-reference species remains in the review lane. A former
+  # GBIF state-occurrence shortcut was removed because it lacked the per-match,
+  # query, dataset, and license receipts needed to alter this classification.
+  C$c_class <- rep("review", nrow(C))
+  C_review <- C
 
   list(
-    A = A, B = B, C = C_review, C_regional = C_regional, C_all = C,
-    state = c_state, state_covered = c_state_covered,
+    A = A, B = B, C = C_review, C_all = C,
     n_ref = nrow(ref), n_obs = nrow(obs),
     n_overlap = nrow(A),
     overlap_pct = round(100 * nrow(A) / nrow(ref), 1),
@@ -159,11 +157,11 @@ expected_vs_observed <- function(occ, expected, authority = NULL) {
     n_review_intro   = sum(C_review$nativity == "Introduced", na.rm = TRUE),
     n_review_native  = sum(C_review$nativity == "Native", na.rm = TRUE),
     n_review_unknown = nrow(C_review) - sum(C_review$nativity %in% c("Introduced", "Native")),  # residual -> always reconciles
-    n_regional = nrow(C_regional),   # natives demoted to "on the state flora, not this soil unit"
     dom_basis = expected$dominance_basis %||% (if (sum(ref$is_dominant %in% TRUE) > 0) "rangeland_production" else "none"),
     dom_rule  = expected$dom_rule %||% NA_character_,
     ecoclassid = expected$ecoclassid, ecosite_name = expected$ecosite_name,
-    mlra = expected$mlra, source = expected$source %||% "esd")
+    mlra = expected$mlra, source = expected$source %||% "esd",
+    reference_scope = expected_reference_scope(expected))
 }
 
 # the site code carried on the occ table (one survey, one site) — for the state lookup.
@@ -227,7 +225,16 @@ flag_coarse_rank <- function(occ) {
 flag_nativity_mismatch <- function(occ, authority = NULL) {
   if (is.null(authority) || is.null(authority$authority) || !nrow(authority$authority)) return(NULL)
   obs <- observed_species(occ, authority)
-  if (is.null(obs) || !nrow(obs)) return(list(rows = obs[0, , drop = FALSE], n = 0L))
+  empty <- data.frame(
+    sym = character(), scientificName = character(), family = character(),
+    nativity = character(), usda_nativity = character(), n_plots = integer(),
+    mean_cover = numeric(), stringsAsFactors = FALSE)
+  if (is.null(obs) || !nrow(obs)) return(list(rows = empty, n = 0L))
+  state <- tryCatch(site_state(site_of_occ(occ)), error = function(e) NA_character_)
+  if (!is.na(state) && state %in% c("AK", "HI", "PR")) {
+    return(list(rows = obs[0, , drop = FALSE], n = 0L, eligible = FALSE,
+                reason = "USDA nativity authority is L48-only", state = state))
+  }
   auth <- authority$authority
   j <- match(obs$sym, auth$accepted_symbol)
   obs$usda_nativity <- auth$nativity_usda[j]
@@ -238,7 +245,7 @@ flag_nativity_mismatch <- function(occ, authority = NULL) {
   conflict <- !is.na(neon_n) & !is.na(usda_n) & neon_n != usda_n
   rows <- obs[conflict, c("sym","scientificName","family","nativity","usda_nativity","n_plots","mean_cover"), drop = FALSE]
   rows <- rows[order(-rows$n_plots), , drop = FALSE]
-  list(rows = rows, n = nrow(rows))
+  list(rows = rows, n = nrow(rows), eligible = TRUE, state = state)
 }
 
 # Flag 4 — cover summing implausibly. Multi-layer canopy legitimately exceeds
@@ -303,10 +310,6 @@ qc_report_table <- function(evo, site = NA_character_) {
   C <- mk(evo$C, "C · observed, not in reference (review)",
           \(d) d$sym, \(d) d$scientificName, \(d) d$family, \(d) d$nativity,
           \(d) NA_real_, \(d) NA, \(d) d$mean_cover)
-  # the state-plausible natives demoted out of review (kept in the report, labelled)
-  Cr <- mk(evo$C_regional, "C · regional associate (on state flora, not this soil unit)",
-          \(d) d$sym, \(d) d$scientificName, \(d) d$family, \(d) d$nativity,
-          \(d) NA_real_, \(d) NA, \(d) d$mean_cover)
-  out <- do.call(rbind, Filter(Negate(is.null), list(A, B, C, Cr)))
+  out <- do.call(rbind, Filter(Negate(is.null), list(A, B, C)))
   if (is.null(out)) data.frame() else out
 }

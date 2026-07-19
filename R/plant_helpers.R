@@ -24,6 +24,25 @@ species_level_only <- function(d) {
   d[ok & !amb, , drop = FALSE]
 }
 
+# Resolve contradictory Native/Introduced labels within a site's taxon
+# records to Unknown.  This prevents one taxon contributing to both sides of a
+# nativity partition while preserving the conflict count as an audit attribute.
+resolve_nativity_records <- function(d) {
+  if (is.null(d) || !nrow(d) || !("nativity" %in% names(d))) return(d)
+  d$nativity <- as.character(d$nativity)
+  tax <- if ("taxonID" %in% names(d)) as.character(d$taxonID) else as.character(d$scientificName)
+  tax[is.na(tax) | !nzchar(tax)] <- as.character(d$scientificName[is.na(tax) | !nzchar(tax)])
+  site <- if ("plotID" %in% names(d)) sub("[_-].*$", "", as.character(d$plotID)) else ""
+  key <- paste(site, tax, sep = "\r")
+  conflicts <- names(which(vapply(split(as.character(d$nativity), key), function(x) {
+    z <- unique(x[!is.na(x) & x %in% c("Native", "Introduced")])
+    all(c("Native", "Introduced") %in% z)
+  }, logical(1))))
+  if (length(conflicts)) d$nativity[key %in% conflicts] <- "Unknown"
+  attr(d, "nativity_conflict_keys") <- conflicts
+  d
+}
+
 # Okabe-Ito colourblind-safe qualitative palette — the categorical key colours
 # (NLCD class, plot type, dominant family in the Diversity Lab, and the species
 # palette below). Distinguishable under deuteranopia/protanopia, unlike Set2/Dark2.
@@ -51,6 +70,67 @@ NATIVITY_COLS <- c(Native = "#2E7D32", Introduced = "#B85C38", Unknown = "#9AA39
 subplot_corner <- function(x) sub("_.*$", "", as.character(x))
 
 # ---------------------------------------------------------------------------
+# snapshot_by_plot_year(): keep one deterministic bout for each plot-year.
+#
+# Bout is part of the sampling event.  Pooling spring and monsoon bouts makes a
+# plot look richer and more heavily sampled than it was at either visit.  When
+# bouts are numeric we select the greatest numeric value; otherwise we select
+# the last value in locale-independent byte order.  An all-missing bout is one
+# valid (unspecified) event and is retained.  The attached support table is an
+# audit trail, not an input to the estimators.
+# ---------------------------------------------------------------------------
+snapshot_by_plot_year <- function(occ, years = NULL) {
+  if (is.null(occ) || !nrow(occ)) return(occ)
+  needed <- c("plotID", "year")
+  if (!all(needed %in% names(occ)))
+    stop("snapshot_by_plot_year() requires plotID and year", call. = FALSE)
+
+  d <- occ
+  if (!is.null(years)) d <- d[d$year %in% years, , drop = FALSE]
+  if (!nrow(d)) return(d)
+
+  # A text key deliberately retains NA years as their own auditable group.
+  yr_key <- ifelse(is.na(d$year), "<NA>", as.character(d$year))
+  gp <- paste(as.character(d$plotID), yr_key, sep = "\r")
+  groups <- split(seq_len(nrow(d)), gp, drop = TRUE)
+  keep <- rep(FALSE, nrow(d))
+  support <- vector("list", length(groups))
+
+  for (i in seq_along(groups)) {
+    ix <- groups[[i]]
+    b <- if ("bout" %in% names(d)) as.character(d$bout[ix]) else rep(NA_character_, length(ix))
+    usable <- !is.na(b) & nzchar(trimws(b))
+    selected <- NA_character_
+    if (any(usable)) {
+      vals <- unique(trimws(b[usable]))
+      nums <- suppressWarnings(as.numeric(vals))
+      select_rows <- if (all(is.finite(nums))) {
+        mx <- max(nums)
+        tied <- sort(vals[nums == mx], method = "radix")
+        selected <- tied[length(tied)]
+        b_num <- suppressWarnings(as.numeric(trimws(b)))
+        usable & is.finite(b_num) & b_num == mx
+      } else {
+        selected <- sort(vals, method = "radix")[length(vals)]
+        usable & trimws(b) == selected
+      }
+      keep[ix[select_rows]] <- TRUE
+    } else {
+      keep[ix] <- TRUE
+    }
+    support[[i]] <- data.frame(
+      plotID = as.character(d$plotID[ix[1]]), year = d$year[ix[1]],
+      selected_bout = selected,
+      n_bouts_observed = length(unique(trimws(b[usable]))),
+      n_records_selected = sum(keep[ix]), stringsAsFactors = FALSE)
+  }
+
+  out <- d[keep, , drop = FALSE]
+  attr(out, "snapshot_support") <- do.call(rbind, support)
+  out
+}
+
+# ---------------------------------------------------------------------------
 # latest_snapshot(): keep, for EACH plot, only its most-recent survey year.
 # Every site-level snapshot metric (richness, species-area, Chao2, Hill, cover,
 # invasion) runs on this — NOT on the year-pooled table. Pooling 7 visits of the
@@ -66,16 +146,20 @@ subplot_corner <- function(x) sub("_.*$", "", as.character(x))
 # (year, bout) per plot — one survey per plot, the honest instantaneous picture.
 latest_snapshot <- function(occ) {
   if (is.null(occ) || !nrow(occ)) return(occ)
-  ly <- occ %>% dplyr::group_by(.data$plotID) %>%
-    dplyr::summarise(.snapyr = max(.data$year, na.rm = TRUE), .groups = "drop")
-  snap <- occ %>% dplyr::inner_join(ly, by = "plotID") %>%
-    dplyr::filter(.data$year == .data$.snapyr) %>% dplyr::select(-".snapyr")
-  if ("bout" %in% names(snap) && any(!is.na(snap$bout))) {
-    lb <- snap %>% dplyr::group_by(.data$plotID) %>%
-      dplyr::summarise(.snapbout = suppressWarnings(max(.data$bout, na.rm = TRUE)), .groups = "drop")
-    snap <- snap %>% dplyr::inner_join(lb, by = "plotID") %>%
-      dplyr::filter(is.na(.data$bout) | !is.finite(.data$.snapbout) | .data$bout == .data$.snapbout) %>%
-      dplyr::select(-".snapbout")
+  py <- snapshot_by_plot_year(occ)
+  groups <- split(seq_len(nrow(py)), as.character(py$plotID), drop = TRUE)
+  keep <- rep(FALSE, nrow(py))
+  for (ix in groups) {
+    yy <- suppressWarnings(as.numeric(as.character(py$year[ix])))
+    if (any(is.finite(yy))) keep[ix[is.finite(yy) & yy == max(yy, na.rm = TRUE)]] <- TRUE
+    else keep[ix] <- TRUE
+  }
+  snap <- py[keep, , drop = FALSE]
+  sup <- attr(py, "snapshot_support")
+  if (!is.null(sup) && nrow(sup)) {
+    keys <- paste(as.character(snap$plotID), ifelse(is.na(snap$year), "<NA>", snap$year), sep = "\r")
+    skeys <- paste(as.character(sup$plotID), ifelse(is.na(sup$year), "<NA>", sup$year), sep = "\r")
+    attr(snap, "snapshot_support") <- sup[skeys %in% unique(keys), , drop = FALSE]
   }
   snap
 }
@@ -101,13 +185,14 @@ unknown_cover_share <- function(occ) {
 }
 
 # ---------------------------------------------------------------------------
-# Per-species mean % cover within a plot, de-pseudoreplicated: mean across the
-# 1 m^2 subplots where the species was scored (NOT all subplots) — matches the
-# mammal app's "mean per unit before per-group" discipline. Returns one row per
-# (plotID, scientificName) with mean_cover + the subplot count it's based on.
+# Per-species mean % cover within a plot, de-pseudoreplicated across distinct
+# 1 m^2 subplots represented by at least one eligible occurrence record. Species
+# absence within those represented subplots contributes zero. Truly sampled but
+# vegetation-empty quadrats cannot enter until a separate survey-opportunity
+# table is bundled, so n_sub is published with the result rather than hidden.
 # ---------------------------------------------------------------------------
 plot_species_cover <- function(occ, year = NULL) {
-  d1 <- species_level_only(occ)
+  d1 <- resolve_nativity_records(species_level_only(occ))
   d1 <- d1[d1$scale == 1, , drop = FALSE]
   if (!is.null(year)) d1 <- d1[d1$year %in% year, , drop = FALSE]
   if (!nrow(d1)) return(NULL)
@@ -131,7 +216,7 @@ plot_species_cover <- function(occ, year = NULL) {
 # come from the 1 m^2 quadrats (the only scale with cover).
 # ---------------------------------------------------------------------------
 plot_summary <- function(occ, year = NULL) {
-  d <- species_level_only(occ)
+  d <- resolve_nativity_records(species_level_only(occ))
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
   # richness (any scale = the 400 m^2 plot list) + native/introduced richness
@@ -155,9 +240,100 @@ plot_summary <- function(occ, year = NULL) {
       dominant_cover = round(max(.data$mean_cover), 1),
       .groups = "drop")
   out <- if (is.null(covagg)) rich else dplyr::left_join(rich, covagg, by = "plotID")
+  for (nm in c("total_cover", "intro_cover", "native_cover", "dominant_cover"))
+    if (!(nm %in% names(out))) out[[nm]] <- NA_real_
+  if (!("dominant" %in% names(out))) out$dominant <- NA_character_
   out$pct_introduced <- ifelse(is.finite(out$total_cover) & out$total_cover > 0,
                                round(100 * out$intro_cover / out$total_cover, 1), NA_real_)
   out %>% dplyr::arrange(dplyr::desc(.data$richness))
+}
+
+# ---------------------------------------------------------------------------
+# Annual plant estimands.  First calculate every response at the plot-year
+# level after deterministic bout selection; then retain the same recurrent
+# plots in every year for the requested response.  This prevents changing plot
+# effort from masquerading as a temporal or environmental signal.
+# ---------------------------------------------------------------------------
+annual_plant_metrics <- function(occ) {
+  d <- resolve_nativity_records(species_level_only(snapshot_by_plot_year(occ)))
+  if (is.null(d) || !nrow(d)) return(NULL)
+  yrs <- sort(unique(d$year[!is.na(d$year)]))
+  if (!length(yrs)) return(NULL)
+
+  one_year <- function(y) {
+    dy <- d[d$year == y, , drop = FALSE]
+    rich <- dy %>% dplyr::group_by(.data$plotID) %>%
+      dplyr::summarise(
+        richness = dplyr::n_distinct(.data$scientificName),
+        n_native = dplyr::n_distinct(.data$scientificName[.data$nativity == "Native"]),
+        n_introduced = dplyr::n_distinct(.data$scientificName[.data$nativity == "Introduced"]),
+        .groups = "drop")
+
+    psc <- plot_species_cover(dy)
+    cov <- if (is.null(psc)) NULL else psc %>%
+      dplyr::group_by(.data$plotID) %>%
+      dplyr::summarise(
+        total_cover = sum(.data$mean_cover, na.rm = TRUE),
+        intro_cover = sum(.data$mean_cover[.data$nativity == "Introduced"], na.rm = TRUE),
+        .groups = "drop")
+    out <- if (is.null(cov)) rich else dplyr::left_join(rich, cov, by = "plotID")
+    if (!("total_cover" %in% names(out))) out$total_cover <- NA_real_
+    if (!("intro_cover" %in% names(out))) out$intro_cover <- NA_real_
+    out$pct_introduced <- ifelse(is.finite(out$total_cover) & out$total_cover > 0,
+                                  100 * out$intro_cover / out$total_cover, NA_real_)
+
+    scale_num <- suppressWarnings(as.numeric(as.character(dy$scale)))
+    scale1 <- dy[is.finite(scale_num) & scale_num == 1, , drop = FALSE]
+    nunit <- if (nrow(scale1)) scale1 %>% dplyr::group_by(.data$plotID) %>%
+      dplyr::summarise(n_sampling_units = dplyr::n_distinct(.data$subplotID), .groups = "drop") else NULL
+    if (!is.null(nunit)) out <- dplyr::left_join(out, nunit, by = "plotID")
+    if (!("n_sampling_units" %in% names(out))) out$n_sampling_units <- 0L
+    out$n_sampling_units[is.na(out$n_sampling_units)] <- 0L
+
+    bout_value <- function(x) {
+      z <- unique(as.character(x[!is.na(x)]))
+      if (length(z)) sort(z, method = "radix")[length(z)] else NA_character_
+    }
+    bouts <- if ("bout" %in% names(dy)) dy %>% dplyr::group_by(.data$plotID) %>%
+      dplyr::summarise(selected_bout = bout_value(.data$bout), .groups = "drop") else
+      data.frame(plotID = unique(dy$plotID), selected_bout = NA_character_, stringsAsFactors = FALSE)
+    out <- dplyr::left_join(out, bouts, by = "plotID")
+    out$year <- y
+    out
+  }
+
+  out <- do.call(rbind, lapply(yrs, one_year))
+  rownames(out) <- NULL
+  attr(out, "estimand") <- "plot-year response after one deterministic bout per plot-year"
+  out
+}
+
+balanced_plant_metric_series <- function(occ, metric = "richness") {
+  pm <- annual_plant_metrics(occ)
+  if (is.null(pm) || !nrow(pm) || !(metric %in% names(pm))) return(NULL)
+  yrs <- sort(unique(pm$year[!is.na(pm$year)]))
+  if (!length(yrs)) return(NULL)
+
+  good <- is.finite(suppressWarnings(as.numeric(pm[[metric]])))
+  support <- pm[good, c("plotID", "year"), drop = FALSE]
+  panel <- names(which(vapply(split(support$year, support$plotID),
+                              function(z) length(unique(z)) == length(yrs), logical(1))))
+  if (!length(panel)) return(NULL)
+  pp <- pm[pm$plotID %in% panel & good, , drop = FALSE]
+
+  rows <- lapply(yrs, function(y) {
+    x <- pp[pp$year == y, , drop = FALSE]
+    bouts <- sort(unique(x$selected_bout[!is.na(x$selected_bout)]), method = "radix")
+    data.frame(
+      year = y, value = mean(as.numeric(x[[metric]])), n_plots = nrow(x),
+      n_sampling_units = sum(x$n_sampling_units, na.rm = TRUE),
+      selected_bouts = if (length(bouts)) paste(bouts, collapse = ";") else NA_character_,
+      stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  attr(out, "panel_plotIDs") <- sort(panel, method = "radix")
+  attr(out, "estimand") <- sprintf("mean plot-level %s over plots observed in every included year", metric)
+  out
 }
 
 # ---------------------------------------------------------------------------
@@ -200,9 +376,13 @@ species_area_site <- function(occ, year = NULL) {
   # summarise() a later expr sees the earlier (already-collapsed) value, which
   # would make sd(scalar) = NA for every area.
   cur %>% dplyr::group_by(.data$area_m2) %>%
-    dplyr::summarise(sd = stats::sd(.data$richness, na.rm = TRUE),
-                     richness = mean(.data$richness, na.rm = TRUE),
-                     n = dplyr::n(), .groups = "drop")
+    dplyr::summarise(
+      n = sum(is.finite(.data$richness)),
+      sd = if (sum(is.finite(.data$richness)) >= 2)
+        stats::sd(.data$richness[is.finite(.data$richness)]) else NA_real_,
+      richness = if (sum(is.finite(.data$richness)))
+        mean(.data$richness[is.finite(.data$richness)]) else NA_real_,
+      .groups = "drop")
 }
 
 # ---------------------------------------------------------------------------
@@ -233,7 +413,9 @@ hill_site <- function(occ, year = NULL) {
 # Chao2 — bias-corrected richness estimate from INCIDENCE (presence across
 # sampling units), the textbook choice for plant nested-quadrat data (NOT the
 # count-based Chao1 the mammal app uses). Units = 1 m^2 subplots within the site.
-# Returns S_obs, Chao2, and a (rough) 95% CI; flags instability when Q2 is tiny.
+# Returns S_obs and the exact bias-corrected lower-bound estimator.  An upper
+# confidence bound is deliberately not fabricated from the incompatible classic
+# Chao2 variance expression; callers receive explicit lower-bound semantics.
 # Chao 1987; Chao & Chiu 2016.
 # ---------------------------------------------------------------------------
 chao2 <- function(occ, year = NULL) {
@@ -249,17 +431,15 @@ chao2 <- function(occ, year = NULL) {
   S <- length(inc); Q1 <- sum(inc == 1); Q2 <- sum(inc == 2)
   if (m < 2 || S == 0) return(NULL)
   corr <- (m - 1) / m
-  chao <- if (Q2 > 0) S + corr * Q1^2 / (2 * Q2) else S + corr * Q1 * (Q1 - 1) / 2
-  # variance (Chao 1987 approx) for a rough CI
-  if (Q2 > 0) {
-    r <- Q1 / Q2
-    v <- Q2 * (corr * 0.5 * r^2 + corr^2 * r^3 + corr^2 * 0.25 * r^4)
-  } else v <- NA_real_
-  se <- if (is.finite(v) && v > 0) sqrt(v) else NA_real_
+  # Bias-corrected Chao2: S + ((m-1)/m) * Q1(Q1-1) / (2(Q2+1)).
+  # This form is defined at Q2 == 0 and avoids switching estimators by branch.
+  chao <- S + corr * Q1 * (Q1 - 1) / (2 * (Q2 + 1))
   list(S_obs = S, chao2 = round(chao, 1),
-       lo = if (is.na(se)) NA else round(max(S, chao - 1.96 * se), 1),
-       hi = if (is.na(se)) NA else round(chao + 1.96 * se, 1),
-       m = m, Q1 = Q1, Q2 = Q2, unstable = Q2 < 3)
+       lo = S, hi = NA_real_,
+       m = m, Q1 = Q1, Q2 = Q2, unstable = Q2 < 3,
+       lower_bound = TRUE,
+       estimator = "bias_corrected_chao2",
+       interval = "observed-richness lower endpoint only; upper confidence bound not estimated")
 }
 
 # ---------------------------------------------------------------------------
@@ -267,19 +447,26 @@ chao2 <- function(occ, year = NULL) {
 # ---------------------------------------------------------------------------
 # site-level: introduced cover share, introduced richness, unknown rate, by year
 native_trend <- function(occ) {
-  sp_all <- species_level_only(occ)
-  psc_year <- function(y) {
-    sp <- sp_all[sp_all$year == y, ]
-    if (!nrow(sp)) return(NULL)                       # truly no records that year -> drop
-    p <- plot_species_cover(occ, year = y)            # records but no cover -> NA gap, keep the year
-    pct <- if (is.null(p)) NA_real_ else {
-      tot <- sum(p$mean_cover); intro <- sum(p$mean_cover[p$nativity == "Introduced"])
-      if (tot > 0) round(100 * intro / tot, 1) else NA_real_ }
-    data.frame(year = y, pct_introduced = pct,
-               n_introduced = dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"]),
-               n_native = dplyr::n_distinct(sp$scientificName[sp$nativity == "Native"]))
+  pct <- balanced_plant_metric_series(occ, "pct_introduced")
+  if (is.null(pct)) return(NULL)
+  panel <- attr(pct, "panel_plotIDs")
+  metrics <- annual_plant_metrics(occ)
+  metrics <- metrics[
+    metrics$plotID %in% panel & metrics$year %in% pct$year &
+      is.finite(metrics$pct_introduced), , drop = FALSE]
+  out <- pct[, c("year", "value", "n_plots", "n_sampling_units", "selected_bouts"), drop = FALSE]
+  names(out)[names(out) == "value"] <- "pct_introduced"
+  panel_mean <- function(column, year) {
+    values <- metrics[[column]][metrics$year == year]
+    if (length(values) && all(is.finite(values))) mean(values) else NA_real_
   }
-  do.call(rbind, lapply(sort(unique(occ$year)), psc_year))
+  out$n_introduced <- vapply(out$year, function(year) panel_mean("n_introduced", year), numeric(1))
+  out$n_native <- vapply(out$year, function(year) panel_mean("n_native", year), numeric(1))
+  out$n_introduced <- round(out$n_introduced, 1)
+  out$n_native <- round(out$n_native, 1)
+  out$pct_introduced <- round(out$pct_introduced, 1)
+  out[order(out$year), c("year", "pct_introduced", "n_introduced", "n_native",
+                         "n_plots", "n_sampling_units", "selected_bouts")]
 }
 
 # the invasive watchlist: introduced species ranked by mean 1 m^2 cover + ubiquity
@@ -288,28 +475,37 @@ invasive_watchlist <- function(occ, year = NULL) {
   if (is.null(psc)) return(NULL)
   inv <- psc[psc$nativity == "Introduced", , drop = FALSE]
   if (!nrow(inv)) return(NULL)
+  d <- species_level_only(occ)
+  if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
+  supported_plots <- unique(d$plotID[d$scale == 1 & !is.na(d$plotID)])
+  n_supported <- length(supported_plots)
+  if (!n_supported) return(NULL)
   inv %>% dplyr::group_by(.data$scientificName, .data$family) %>%
-    dplyr::summarise(mean_cover = round(mean(.data$mean_cover), 1),
-                     n_plots = dplyr::n_distinct(.data$plotID), .groups = "drop") %>%
+    dplyr::summarise(
+      # Species absent from a supported plot contributes zero here; this is not
+      # a mean over only the plots where the introduced species was present.
+      mean_cover = round(sum(.data$mean_cover, na.rm = TRUE) / n_supported, 1),
+      n_plots = dplyr::n_distinct(.data$plotID),
+      n_supported_plots = n_supported, .groups = "drop") %>%
     dplyr::arrange(dplyr::desc(.data$mean_cover), dplyr::desc(.data$n_plots))
 }
 
 # the % of records whose nativity is Unknown — publish it (honesty, like a join rate)
 unknown_rate <- function(occ) {
-  sp <- species_level_only(occ)
+  sp <- resolve_nativity_records(species_level_only(occ))
   if (!nrow(sp)) return(NA_real_)
   round(100 * dplyr::n_distinct(sp$scientificName[sp$nativity == "Unknown"]) /
           dplyr::n_distinct(sp$scientificName), 1)
 }
 
 # ---------------------------------------------------------------------------
-# "Invasion Pressure" — the novel scale-mismatch index (Sarah). For each plot,
-# how many INTRODUCED species are already detectable at the smallest (1 m^2)
-# scale vs only at larger scales: a foothold-detection signal. Returns per-plot
-# introduced richness at 1 m^2 and at 400 m^2 + the native counterpart.
+# Cross-scale occurrence summary. For each plot, report introduced and native
+# richness detectable at 1 m^2 versus anywhere in the nested 400 m^2 plot list.
+# This is a grain/detection comparison only: it does not measure pressure,
+# establishment, spread, impact, or management priority.
 # ---------------------------------------------------------------------------
-invasion_pressure <- function(occ, year = NULL) {
-  d <- species_level_only(occ)
+cross_scale_plot_occurrence <- function(occ, year = NULL) {
+  d <- resolve_nativity_records(species_level_only(occ))
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
   per_plot <- function(p) {
@@ -322,27 +518,30 @@ invasion_pressure <- function(occ, year = NULL) {
                native_1m = dplyr::n_distinct(nat$scientificName[nat$scale == 1]),
                native_400 = dplyr::n_distinct(nat$scientificName))
   }
-  do.call(rbind, lapply(unique(d$plotID), per_plot))
+  out <- do.call(rbind, lapply(unique(d$plotID), per_plot))
+  attr(out, "interpretation") <- "cross-scale occurrence only; no spread, impact, or management inference"
+  out
 }
 
+# Backward-compatible app call; new code should use cross_scale_plot_occurrence().
+invasion_pressure <- function(occ, year = NULL)
+  cross_scale_plot_occurrence(occ, year = year)
+
 # ---------------------------------------------------------------------------
-# Per-INTRODUCED-SPECIES foothold detector — the dot-per-species view the
-# Invasion-pressure scatter draws. For each introduced species: how many plots
-# it's detectable in at the smallest (1 m^2) scale (x) vs across the whole
-# 400 m^2 plot (y). A species above the 1:1 line is turning up across plots far
-# more than its 1 m^2 footholds alone would suggest — a real foothold, not a
-# chance toehold. Carries family, mean 1 m^2 cover, and the plot lists at each
-# scale so a clicked dot can reveal exactly where it was found.
+# Per-introduced-species cross-scale occurrence. It counts plots where a taxon
+# was recorded at 1 m^2 versus anywhere in the nested 400 m^2 plot list. A gap
+# between the counts is a sampling-grain/detection result, not evidence of a
+# foothold, spread, establishment, impact, or management priority. Plot lists
+# are retained so every point is auditable.
 # ---------------------------------------------------------------------------
-species_foothold <- function(occ, year = NULL) {
-  d <- species_level_only(occ)
+species_cross_scale_occurrence <- function(occ, year = NULL) {
+  d <- resolve_nativity_records(species_level_only(occ))
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   intro <- d[d$nativity == "Introduced", , drop = FALSE]
   if (!nrow(intro)) return(NULL)
-  # per-species mean 1 m^2 cover (structural-zero-correct shares live in the
-  # watchlist; here a simple mean of recorded 1 m^2 cover is enough for the tip)
-  cov1 <- intro[intro$scale == 1 & is.finite(intro$percentCover) & intro$percentCover > 0, , drop = FALSE]
-  mean_cov <- if (nrow(cov1)) tapply(cov1$percentCover, cov1$scientificName, mean) else numeric(0)
+  wl <- invasive_watchlist(d)
+  mean_cov <- if (!is.null(wl) && nrow(wl))
+    stats::setNames(wl$mean_cover, wl$scientificName) else numeric(0)
   per_sp <- function(sp) {
     s  <- intro[intro$scientificName == sp, ]
     p1 <- sort(unique(s$plotID[s$scale == 1]))            # plots where seen at 1 m^2
@@ -357,8 +556,14 @@ species_foothold <- function(occ, year = NULL) {
                stringsAsFactors = FALSE)
   }
   out <- do.call(rbind, lapply(sort(unique(intro$scientificName)), per_sp))
-  out[order(-out$plots_400, -out$plots_1m), , drop = FALSE]
+  out <- out[order(-out$plots_400, -out$plots_1m), , drop = FALSE]
+  attr(out, "interpretation") <- "cross-scale occurrence only; no spread, impact, or management inference"
+  out
 }
+
+# Backward-compatible app call; new code should use species_cross_scale_occurrence().
+species_foothold <- function(occ, year = NULL)
+  species_cross_scale_occurrence(occ, year = year)
 
 # ---------------------------------------------------------------------------
 # Ranked species by abundance (summed 1 m^2 cover) — the honest backing list
@@ -368,7 +573,7 @@ species_foothold <- function(occ, year = NULL) {
 # so the modal can say "the top ~N is what 'effectively common' describes".
 # ---------------------------------------------------------------------------
 hill_ranked_species <- function(occ, year = NULL) {
-  d <- species_level_only(occ)
+  d <- resolve_nativity_records(species_level_only(occ))
   d <- d[d$scale == 1 & is.finite(d$percentCover) & d$percentCover > 0, , drop = FALSE]
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
@@ -394,11 +599,15 @@ hill_ranked_species <- function(occ, year = NULL) {
 # One row per SPECIES — the secondary entity (species leaderboard + species card).
 # ---------------------------------------------------------------------------
 species_summary <- function(occ, year = NULL) {
-  d <- species_level_only(occ)
+  d <- resolve_nativity_records(species_level_only(occ))
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  cov1 <- d[d$scale == 1 & is.finite(d$percentCover) & d$percentCover > 0, ]
-  cov_by_sp <- if (nrow(cov1)) tapply(cov1$percentCover, cov1$scientificName, mean) else numeric(0)
+  supported_plots <- unique(d$plotID[d$scale == 1 & !is.na(d$plotID)])
+  psc <- plot_species_cover(d)
+  cov_by_sp <- if (!is.null(psc) && nrow(psc) && length(supported_plots)) {
+    sums <- tapply(psc$mean_cover, psc$scientificName, sum)
+    sums / length(supported_plots)
+  } else numeric(0)
   d %>% dplyr::group_by(.data$scientificName) %>%
     dplyr::summarise(family = mode_chr(.data$family), nativity = mode_chr(.data$nativity),
                      n_plots = dplyr::n_distinct(.data$plotID),
@@ -452,6 +661,8 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
 
 # known-column meaning lookup (one source of truth for descriptions)
 .PLANT_COL_MEANING <- c(
+  site           = "NEON four-character site code",
+  siteID         = "NEON four-character site code carried by the source table",
   plotID         = "NEON plot code",
   subplotID      = "nested subplot code",
   scale_m2       = "quadrat scale (1/10/100 m^2; 1 m^2 is the only cover scale)",
@@ -462,8 +673,10 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   scientificName = "scientific name",
   taxonRank      = "taxonomic rank of the ID",
   family         = "plant family",
+  nativeStatusCode = "raw NEON native-status code retained for classification audit",
   nativity       = "native / introduced / unknown (from NEON nativeStatusCode)",
   percentCover   = "ocular percent cover at 1 m^2 (bin midpoint/ocular, NA at presence-only scales)",
+  groundCoverPct = "ocular percent cover of the named abiotic ground-cover class",
   is_species     = "TRUE if resolved to species level",
   richness       = "species richness (400 m^2 plot list)",
   n_native       = "native species count",
@@ -480,25 +693,56 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   lat            = "plot latitude (decimal degrees)",
   lng            = "plot longitude (decimal degrees)",
   otherVariables = "abiotic ground-cover class (soil/litter/rock/...)",
+  ym             = "calendar month key in YYYY-MM form",
+  date           = "calendar date representing the monthly environmental record",
+  precip_mm      = "monthly precipitation total",
+  temp_c         = "monthly mean air temperature",
+  temp_min       = "monthly minimum air temperature",
+  temp_max       = "monthly maximum air temperature",
+  rh_pct         = "monthly relative humidity",
+  vswc_pct       = "monthly volumetric soil-water content",
+  flowering_pct  = "monthly share of monitored plants in the flowering phenophase",
+  flowering_pct_n = "number of monthly flowering observations behind flowering_pct",
+  greenup_pct    = "monthly share of monitored plants in the green-up phenophase",
+  greenup_pct_n  = "number of monthly green-up observations behind greenup_pct",
+  fruiting_pct   = "sparse monthly fruiting-status/intensity summary; descriptive only",
+  fruiting_pct_n = "number of monthly fruiting observations behind fruiting_pct",
+  source         = "source system or reference-list construction route",
   # provenance.csv
+  artifact       = "artifact class described by this provenance row",
   builtAt        = "build provenance: date this bundle was built",
   exportedAt     = "date this CSV export was generated",
   neonRelease    = "build provenance: NEON release tag for the source product (NA if untagged)",
   dpid           = "NEON data product id (DP1.10058.001)",
   fetchedAt      = "build provenance: date this bundle was fetched/built",
+  bundleFile     = "runtime artifact path used by the app",
+  bundleMd5      = "MD5 checksum of the exact runtime artifact used by the app",
+  snapshotContract = "registered rule used to select one current survey per plot",
+  estimatorContract = "registered science-estimator contract version/description",
+  sourceLicense  = "license or public-domain status for the source represented by the row",
   # expected_vs_observed.csv
   bucket               = "A = expected & observed, B = expected not detected, C = observed not in reference",
   symbol               = "USDA PLANTS symbol",
-  reference_production = "NRCS reference-community expected production for the species",
+  reference_production = "NRCS reference-community expected production (air-dry lb/ac at normal precipitation; NA where not production-ranked)",
   is_dominant          = "TRUE if in the top 50% of reference production (app-defined dominance convention)",
   observed_cover       = "mean 1 m^2 observed cover (relative index; NA where not observed)",
   reference_role       = "dominant (top 50% of reference production) or associated",
-  reference_production = "NRCS reference-community expected production (air-dry lb/ac at normal precip; NA for forest sites)",
   observed_cover_pct   = "mean 1 m^2 observed cover, percent (relative index)",
   n_plots              = "number of plots the species was observed in",
   common_name          = "USDA PLANTS common name",
   commonName           = "USDA PLANTS common name",
   mean_cover_pct       = "mean 1 m^2 cover, percent (relative index)",
+  classification       = "review classification; observed-not-reference records remain review until provenance supports another class",
+  note                 = "human-readable explanation emitted when a requested comparison is unavailable",
+  # reference_provenance.csv
+  referenceScope       = "spatial scope and limitation of the ecological-site reference list",
+  referenceLatitude    = "latitude of the single coordinate used to select the reference soil map unit",
+  referenceLongitude   = "longitude of the single coordinate used to select the reference soil map unit",
+  ecoclassid           = "NRCS ecological-class identifier selected for the reference list",
+  ecositeName          = "NRCS ecological-site name selected for the reference list",
+  ecosite_name         = "NRCS ecological-site name selected for the reference list",
+  mlra                  = "Major Land Resource Area identifier parsed from the ecological-class id",
+  queryDate             = "date the external reference query was executed, when recorded",
   # environment matched-series export (env_matched.csv)
   plant_metric         = "the chosen annual plant signal (richness / % introduced cover / total cover)",
   metric_value         = "the plant signal value for that survey year",
@@ -510,7 +754,84 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   spearman_r           = "Spearman rank-correlation of the plant signal vs this driver at its best lag",
   best_lag_years       = "the lag (0-2 yr) that maximised |r| for this driver",
   matched_years        = "number of year-matched points behind the correlation",
-  permutation_p        = "permutation p over the full driver x lag search (fraction of shuffles whose best |r| beats the observed); honest p for a max-over-search statistic")
+  permutation_p        = "circular-shift p over the active registered search scope (full series × lag screen for Best; selected-series lag screen otherwise)",
+  lag_search_p         = "per-driver circular-shift p corrected across that driver's registered 0–2 year lag screen",
+  permutation_scope    = "human-readable search family corrected by the reported circular-shift p")
+
+.plant_col_units <- function(cols) {
+  out <- rep("not applicable", length(cols))
+  names(out) <- cols
+  out[cols %in% c("scale", "scale_m2")] <- "m^2"
+  out[cols %in% c("percentCover", "groundCoverPct", "pct_introduced", "observed_cover", "observed_cover_pct",
+                  "mean_cover_pct", "rh_pct", "vswc_pct", "flowering_pct", "greenup_pct",
+                  "fruiting_pct")] <- "%"
+  out[cols %in% c("total_cover", "intro_cover", "native_cover", "dominant_cover")] <-
+    "relative cover index (summed percentage-point means)"
+  out[cols %in% c("precip_mm")] <- "mm/month"
+  out[cols %in% c("temp_c", "temp_min", "temp_max")] <- "degrees C"
+  out[cols %in% c("lat", "lng", "referenceLatitude", "referenceLongitude")] <- "decimal degrees"
+  out[cols %in% c("reference_production")] <- "air-dry lb/acre at normal precipitation"
+  out[cols %in% c("richness", "n_native", "n_introduced", "n_unknown", "n_plots",
+                  "matched_years", "flowering_pct_n", "greenup_pct_n", "fruiting_pct_n")] <- "count"
+  out[cols %in% c("spearman_r")] <- "unitless correlation"
+  out[cols %in% c("permutation_p", "lag_search_p")] <- "unitless probability"
+  unname(out)
+}
+
+.plant_col_na <- function(cols) {
+  out <- rep("NA means the source did not record or the app could not derive this field.", length(cols))
+  out[cols %in% c("plotID", "subplotID", "year", "taxonID", "scientificName", "scale", "scale_m2")] <-
+    "NA is invalid for analysis keys and should be retained only in the all-record audit export."
+  out[cols %in% c("bout")] <- "NA means the within-year visit was not identified; it is retained only when the entire plot-year has no identified bout."
+  out[cols %in% c("percentCover")] <- "NA is expected at presence-only 10/100 m^2 scales or when 1 m^2 cover was not recorded; it is not zero."
+  out[cols %in% c("groundCoverPct")] <- "NA means abiotic ground cover was not recorded for that ground-cover class and sampling unit; it is not zero."
+  out[cols %in% c("nativity")] <- "Unknown is the analysis category for unresolved/conflicting status; NA means no derived category was supplied."
+  out[cols %in% c("neonRelease", "queryDate")] <- "NA means the release/query date was not captured, not that no release/query occurred."
+  out[cols %in% c("reference_production")] <- "NA is expected where NRCS provides no production ranking, including many forest ecological sites."
+  out[cols %in% c("total_cover", "intro_cover", "native_cover", "dominant", "dominant_cover", "pct_introduced") ] <-
+    "NA means no eligible 1 m^2 cover estimate was available for the selected plot snapshot; it is not zero."
+  out[cols %in% c("precip_mm", "temp_c", "temp_min", "temp_max", "rh_pct", "vswc_pct",
+                  "flowering_pct", "greenup_pct", "fruiting_pct", "flowering_pct_n",
+                  "greenup_pct_n", "fruiting_pct_n")] <-
+    "NA means that monthly environmental value is unavailable; annual inference requires 12 non-missing monthly values."
+  out[cols %in% c("observed_cover", "observed_cover_pct", "mean_cover_pct")] <-
+    "NA means the species lacks an eligible observed 1 m^2 cover estimate; absence and missing cover are not interchangeable."
+  out[cols %in% c("referenceLatitude", "referenceLongitude")] <-
+    "NA means the historical reference artifact did not persist its query coordinate."
+  unname(out)
+}
+
+.plant_col_estimand <- function(cols) {
+  out <- rep("metadata or row-level source value; interpret in the context of the named export file.", length(cols))
+  out[cols %in% c("plotID", "subplotID", "scale", "scale_m2", "year", "bout", "taxonID",
+                  "scientificName", "taxonRank", "family", "nativeStatusCode", "nativity", "percentCover", "is_species")] <-
+    "one bundled NEON taxon record; analysis_snapshot.csv restricts this to one selected bout in each plot's latest year."
+  out[cols %in% c("richness", "n_native", "n_introduced", "n_unknown", "total_cover", "intro_cover",
+                  "native_cover", "dominant", "dominant_cover", "pct_introduced", "plotType", "nlcdClass",
+                  "lat", "lng")] <-
+    "one plot at its latest deterministic year/bout snapshot; cover is a relative index over recorded 1 m^2 occurrence units."
+  out[cols %in% c("otherVariables")] <- "one bundled abiotic ground-cover class record; the all-data file may span years/bouts."
+  out[cols %in% c("groundCoverPct")] <- "ocular cover for one abiotic ground-cover class in one bundled ground-cover record; not plant composition."
+  out[cols %in% c("ym", "date", "precip_mm", "temp_c", "temp_min", "temp_max", "rh_pct", "vswc_pct",
+                  "flowering_pct", "greenup_pct", "fruiting_pct", "flowering_pct_n",
+                  "greenup_pct_n", "fruiting_pct_n")] <-
+    "one site-month environmental context record; only complete 12-month windows are eligible for annual exploratory association."
+  out[cols %in% c("bucket", "symbol", "reference_production", "is_dominant", "observed_cover",
+                  "reference_role", "observed_cover_pct", "common_name", "commonName", "mean_cover_pct",
+                  "classification")] <-
+    "species comparison against one NRCS ecological-site list selected at a single site reference coordinate; not a site-wide flora census."
+  out[cols %in% c("referenceScope", "referenceLatitude", "referenceLongitude", "ecoclassid", "ecositeName",
+                  "ecosite_name", "mlra", "queryDate")] <-
+    "provenance for the single-coordinate NRCS ecological-site reference artifact."
+  out[cols %in% c("artifact", "builtAt", "exportedAt", "neonRelease", "dpid", "fetchedAt", "bundleFile", "bundleMd5",
+                  "snapshotContract", "estimatorContract", "sourceLicense")] <-
+    "release/provenance metadata for the exported artifact, not an ecological estimand."
+  out[cols %in% c("plant_metric", "metric_value", "driver", "driver_value", "driver_label", "lag_years",
+                  "spearman_r", "best_lag_years", "matched_years", "permutation_p",
+                  "lag_search_p", "permutation_scope")] <-
+    "exploratory annual association over the recurrent plot panel and complete 12-month driver windows; no causal inference."
+  unname(out)
+}
 
 # r class -> short codebook type
 .plant_col_type <- function(x) {
@@ -524,24 +845,34 @@ plant_codebook <- function(frames = NULL) {
   # canonical fallback (used when no frames are supplied) — mirrors the export
   if (is.null(frames)) {
     frames <- list(
-      "occ_long.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 12)),
+      "occurrences_all.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 13)),
         c("plotID","subplotID","scale_m2","year","bout","taxonID","scientificName",
-          "taxonRank","family","nativity","percentCover","is_species")),
-      "plots.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 15)),
+          "taxonRank","family","nativeStatusCode","nativity","percentCover","is_species")),
+      "plots_snapshot.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 15)),
         c("plotID","richness","n_native","n_introduced","n_unknown","plotType","nlcdClass",
           "lat","lng","total_cover","intro_cover","native_cover","dominant","dominant_cover","pct_introduced")),
-      "ground_cover.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 5)),
-        c("plotID","subplotID","year","otherVariables","percentCover")))
+      "ground_cover_all.csv" = stats::setNames(data.frame(matrix(nrow = 0, ncol = 6)),
+        c("plotID","subplotID","year","bout","otherVariables","groundCoverPct")))
   }
   rows <- lapply(names(frames), function(fn) {
     df <- frames[[fn]]; if (is.null(df)) return(NULL)
     cols <- names(df)
+    if (!length(cols)) return(NULL)
+    if (anyDuplicated(cols))
+      stop(sprintf("plant_codebook(): duplicate exported columns in %s: %s", fn,
+                   paste(unique(cols[duplicated(cols)]), collapse = ", ")), call. = FALSE)
+    unknown <- setdiff(cols, names(.PLANT_COL_MEANING))
+    if (length(unknown))
+      stop(sprintf("plant_codebook(): undocumented exported columns in %s: %s",
+                   fn, paste(sort(unique(unknown)), collapse = ", ")), call. = FALSE)
     data.frame(
       file    = fn,
       column  = cols,
-      meaning = ifelse(cols %in% names(.PLANT_COL_MEANING),
-                       unname(.PLANT_COL_MEANING[cols]), "(see app docs)"),
+      meaning = unname(.PLANT_COL_MEANING[cols]),
       type    = vapply(df, .plant_col_type, character(1), USE.NAMES = FALSE),
+      units = .plant_col_units(cols),
+      na_semantics = .plant_col_na(cols),
+      estimand = .plant_col_estimand(cols),
       stringsAsFactors = FALSE)
   })
   rows <- rows[!vapply(rows, is.null, logical(1))]

@@ -15,7 +15,7 @@ server <- function(input, output, session) {
     legc <- if (dark) "#c3cedd" else "#344049"
     p %>% plotly::layout(
       paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
-      font = list(color = ink, family = "Rubik"),
+      font = list(color = ink, family = "system-ui, Segoe UI, sans-serif"),
       xaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
       yaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
       legend = list(bgcolor = "rgba(0,0,0,0)", orientation = "h", y = -0.2, font = list(color = legc)),
@@ -23,7 +23,7 @@ server <- function(input, output, session) {
       hoverlabel = list(
         bgcolor = if (dark) "rgba(20,51,34,0.96)" else "rgba(47,154,79,0.96)",
         bordercolor = if (dark) "#5fd16a" else DDL$gold,
-        font = list(color = "#ffffff", family = "Rubik", size = 13))) %>%
+        font = list(color = "#ffffff", family = "system-ui, Segoe UI, sans-serif", size = 13))) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   }
   note_plot <- function(msg, icon = "\U0001F33F") {
@@ -102,11 +102,19 @@ server <- function(input, output, session) {
     # export provenance: prefer the bundle's own build stamp; fall back to the
     # site .rds mtime (= the build vintage on already-shipped bundles, so this
     # works with no rebuild). neon_release is NA until a release-tagged refresh.
-    rv$built_at <- b$meta$built_at %||% {
+    bundle_built_at <- b$meta$built_at
+    if (is.null(bundle_built_at) || length(bundle_built_at) != 1L ||
+        is.na(bundle_built_at) || !nzchar(trimws(as.character(bundle_built_at)))) {
       f <- file.path(SITE_DIR, paste0(b$meta$site, ".rds"))
-      if (file.exists(f)) format(as.Date(file.info(f)$mtime), "%Y-%m-%d") else NA_character_
+      bundle_built_at <- if (file.exists(f))
+        format(as.Date(file.info(f)$mtime), "%Y-%m-%d") else "date unavailable"
     }
-    rv$neon_release <- b$meta$neon_release %||% NA_character_
+    bundle_release <- b$meta$neon_release
+    if (is.null(bundle_release) || length(bundle_release) != 1L ||
+        is.na(bundle_release) || !nzchar(trimws(as.character(bundle_release))))
+      bundle_release <- NA_character_
+    rv$built_at <- as.character(bundle_built_at)
+    rv$neon_release <- as.character(bundle_release)
     rv$plot   <- NULL
     yrs <- range(b$occ$year, na.rm = TRUE)
     rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1] == yrs[2]) yrs[1] else paste0(yrs[1], "–", yrs[2]))
@@ -118,7 +126,7 @@ server <- function(input, output, session) {
       selected = "", server = TRUE)
     nav_select("tabs", "overview")
     session$sendCustomMessage("countUp", list())
-    session$sendCustomMessage("loadDone", list())
+    session$sendCustomMessage("loadDone", list(site = b$meta$site %||% "site"))
     invisible(TRUE)
   }
 
@@ -126,7 +134,7 @@ server <- function(input, output, session) {
     if (is.null(site) || site == "") { session$sendCustomMessage("loadDone", list()); return() }
     b <- load_site_bundle(site)
     if (is.null(b)) { session$sendCustomMessage("loadDone", list())
-      showNotification("That site isn't bundled in this demo.", type = "error"); return() }
+      showNotification("That site is not available in this release.", type = "error"); return() }
     row <- site_table[site_table$site == site, ]
     ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site))
   }
@@ -234,7 +242,8 @@ server <- function(input, output, session) {
             div(class = "si-row si-star", "Top family: ", tags$i(row$dominant_family[1])) else NULL)))
   }
 
-  # national site-picker map on the splash: dot size = richness; colour toggles
+  # National site-picker map on the splash: dot size = sampling support (plots),
+  # never raw richness. Colour toggles
   # between invasion (% introduced cover) and completeness (% of the NRCS reference
   # flora detected — the Expected-vs-Observed spatial read). Tap a dot for the
   # Explore | About choice popup; the load comes from the popup's Explore button.
@@ -243,11 +252,11 @@ server <- function(input, output, session) {
     pip_pal  <- leaflet::colorNumeric("YlOrBr", domain = c(0, mx), na.color = "#c9d3bb")
     comp_pal <- leaflet::colorNumeric(c("#E7E0CC", "#7FB07A", "#1F5C3D"), domain = c(0, 100), na.color = "#c9d3bb")
     color_by <- function() input$splashColorBy %||% "invasion"
-    mapPickerServer("picker", site_table = site_table, radius_metric = "richness",
+    mapPickerServer("picker", site_table = site_table, radius_metric = "n_plots",
       color_fn = function(st) if (identical(color_by(), "completeness"))
           comp_pal(st$pct_detected) else pip_pal(st$pct_introduced),
-      label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> species · <b>%s</b> introduced cover · <b>%s</b> reference flora detected",
-        r$site, r$name %||% r$site, r$state %||% "", r$richness %||% "?",
+      label_fn = function(r) sprintf("<b>%s</b> · %s, %s<br><b>%s</b> sampled plots · <b>%s</b> species · <b>%s</b> introduced cover · <b>%s</b> reference flora detected",
+        r$site, r$name %||% r$site, r$state %||% "", r$n_plots %||% "?", r$richness %||% "?",
         if (is.finite(r$pct_introduced)) paste0(round(r$pct_introduced), "%") else "n/a",
         if (is.finite(r$pct_detected)) paste0(round(r$pct_detected), "%") else "no ref list"),
       popup_fn = site_popup_html)
@@ -290,8 +299,8 @@ server <- function(input, output, session) {
     showModal(modalDialog(easyClose = TRUE, title = tagList(bs_icon("question-circle"), " How it works"),
       tags$ul(
         tags$li(HTML("Pick a <b>site</b> on the map (or by name in the panel below it). Numbers describe the <b>most recent survey</b> of each plot. Use <b>change site</b> in the hero band to switch.")),
-        tags$li(HTML("<b>Diversity</b>: the nested species-area curve (1→400 m²), the Hill profile, and a Chao2 estimate of undetected species.")),
-        tags$li(HTML("<b>Native vs Invasive</b>: how much cover is introduced, which species, and where invasion has a foothold at the finest scale.")),
+        tags$li(HTML("<b>Diversity</b>: the nested species-area curve (1→400 m²), the Hill profile, and a bias-corrected Chao2 lower bound with an estimated unseen component—not a confirmed missing-species count.")),
+        tags$li(HTML("<b>Native vs Invasive</b>: introduced-cover composition plus a cross-scale occurrence view; neither is proof of spread or management priority.")),
         tags$li(HTML("<b>Diversity Lab</b>: every plot as a dot; <b>tap one</b> to pin its card, then “Open plot profile” for the full, downloadable drill-down.")),
         tags$li(HTML("Cover is an <b>ocular estimate</b> and layers overlap, so cover figures are a relative index, not a share of ground."))),
       footer = modalButton("Got it")))
@@ -481,15 +490,27 @@ server <- function(input, output, session) {
     site_intro <- site_invasion(snap)
     ucs <- unknown_cover_share(snap)
     # each KPI is a nav door — clicking jumps to the tab that explains it
-    hero <- function(v, l, suf = "", icon, tone, ttl = NULL, nav = NULL, sub = NULL)
+    hero <- function(v, l, suf = "", icon, tone, ttl = NULL, nav = NULL, sub = NULL) {
+      nav_action <- if (!is.null(nav))
+        sprintf("Shiny.setInputValue('heroNav','%s',{priority:'event'});", nav) else NULL
       div(class = paste0("hero-stat hero-", tone, if (!is.null(nav)) " hero-clickable" else ""), title = ttl,
-        onclick = if (!is.null(nav)) sprintf("Shiny.setInputValue('heroNav','%s',{priority:'event'});", nav),
+        role = if (!is.null(nav)) "button" else NULL,
+        tabindex = if (!is.null(nav)) "0" else NULL,
+        `aria-label` = if (!is.null(nav)) sprintf("Open %s details", l) else NULL,
+        onclick = nav_action,
+        onkeydown = if (!is.null(nav)) sprintf(
+          "if(event.key==='Enter'||event.key===' '){event.preventDefault();%s}", nav_action),
         div(class = "hs-icon", bs_icon(icon)),
         div(div(class = "hs-v count-up", `data-target` = v, `data-suffix` = suf, "0"),
             div(class = "hs-l", l),
             if (!is.null(sub)) div(class = "hs-sub", sub)))
+    }
     div(class = "hero-band",
       div(class = "hero-title", bs_icon("broadcast"), tags$b(rv$label),
+        tags$span(class = "hero-receipt", bs_icon("database-check"),
+          sprintf(" bundle %s%s", rv$built_at %||% "date unavailable",
+            if (!is.na(rv$neon_release %||% NA_character_) && nzchar(rv$neon_release %||% ""))
+              paste0(" · NEON ", rv$neon_release) else " · release not tagged")),
         actionLink("changeSite", tagList(bs_icon("arrow-left-circle"), " change site"),
                    class = "hero-change"),
         downloadLink("reportPdf", tagList(bs_icon("file-earmark-arrow-down"), " report card (PDF)"),
@@ -507,25 +528,27 @@ server <- function(input, output, session) {
   output$coverBar <- renderPlotly({
     occ <- rv$snap; req(occ)
     psc <- plot_species_cover(occ); if (is.null(psc)) return(note_plot("No cover data to summarise"))
+    n_supported_plots <- dplyr::n_distinct(psc$plotID)
     nat1 <- psc %>% dplyr::group_by(.data$scientificName) %>%
-      dplyr::summarise(nativity = mode_chr(.data$nativity), .groups = "drop")   # one status per species
+      dplyr::summarise(nativity = if (all(c("Native", "Introduced") %in% unique(.data$nativity))) "Unknown" else mode_chr(.data$nativity), .groups = "drop")
     agg <- psc %>% dplyr::group_by(.data$scientificName) %>%
-      dplyr::summarise(cover = sum(.data$mean_cover), .groups = "drop") %>%
+      dplyr::summarise(cover = sum(.data$mean_cover) / n_supported_plots, .groups = "drop") %>%
       dplyr::left_join(nat1, by = "scientificName") %>%
       dplyr::arrange(dplyr::desc(.data$cover)) %>% head(20)
     agg$scientificName <- factor(agg$scientificName, levels = rev(agg$scientificName))
     cols <- NATIVITY_COLS[agg$nativity]
     plot_ly(agg, x = ~cover, y = ~scientificName, type = "bar", orientation = "h",
       marker = list(color = unname(cols)),
-      hovertemplate = paste0("%{y}<br>", agg$nativity, " · %{x:.1f} relative cover<extra></extra>")) %>%
+      hovertemplate = paste0("%{y}<br>", agg$nativity, " · %{x:.1f} mean relative cover per supported plot<extra></extra>")) %>%
       plotly_theme(legend = FALSE) %>%
-      plotly::layout(showlegend = FALSE, xaxis = list(title = "Relative cover (summed across plots)"),
+      plotly::layout(showlegend = FALSE, xaxis = list(title = "Mean relative cover per supported plot"),
         yaxis = list(title = ""), margin = list(l = 200))
   })
   output$overviewInsight <- renderUI({
     occ <- rv$snap; req(occ); psc <- plot_species_cover(occ); req(!is.null(psc))
+    n_supported_plots <- dplyr::n_distinct(psc$plotID)
     top <- psc %>% dplyr::group_by(.data$scientificName, .data$nativity) %>%
-      dplyr::summarise(c = sum(.data$mean_cover), .groups = "drop") %>% dplyr::arrange(dplyr::desc(.data$c))
+      dplyr::summarise(c = sum(.data$mean_cover) / n_supported_plots, .groups = "drop") %>% dplyr::arrange(dplyr::desc(.data$c))
     dom <- top$scientificName[1]; dom_nat <- top$nativity[1]
     insight_banner("stars", tone = if (dom_nat == "Introduced") "terra" else "pine",
       HTML(sprintf("<b><i>%s</i></b> is the most dominant plant across the site (%s). The site holds <span class='ci-hero'>%d</span> plant species across %d plots.",
@@ -536,7 +559,7 @@ server <- function(input, output, session) {
     sa <- species_area_site(occ); ch <- chao2(occ); wl <- invasive_watchlist(occ); ur <- unknown_rate(occ)
     pts <- c()
     if (!is.null(sa)) pts <- c(pts, sprintf("In the latest survey, a 1 m² quadrat holds about <b>%.0f</b> species; the full 400 m² plot reaches <b>%.0f</b>.", sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400]))
-    if (!is.null(ch)) pts <- c(pts, sprintf("Across the plots, <b>%d</b> species were recorded; Chao2 estimates at least <b>%.0f</b> are present%s.", ch$S_obs, ch$chao2, if (ch$unstable) " (a rough floor)" else ""))
+    if (!is.null(ch)) pts <- c(pts, sprintf("Across the registered 1 m² incidence units, <b>%d</b> species were recorded; the bias-corrected Chao2 lower-bound estimate is <b>%.0f</b>%s.", ch$S_obs, ch$chao2, if (ch$unstable) " (few doubletons; interpret cautiously)" else ""))
     if (!is.null(wl) && nrow(wl)) pts <- c(pts, sprintf("The most widespread introduced plant is <b><i>%s</i></b>, in <b>%d</b> of %d plots.", wl$scientificName[1], wl$n_plots[1], nrow(lb)))
     pts <- c(pts, sprintf("Native status is unknown for %.0f%% of species; read the native/invasive numbers with that in mind.", ur))
     div(class = "insight-list", lapply(pts, function(t) div(class = "il-item", bs_icon("dot"), HTML(t))))
@@ -586,9 +609,10 @@ server <- function(input, output, session) {
     slope <- (sa$richness[sa$area_m2==400] - sa$richness[sa$area_m2==100])
     n400 <- sa$n[sa$area_m2==400]; if (!length(n400) || !is.finite(n400)) n400 <- 0
     shape <- if (n400 < 5)
-        sprintf(" Based on just <b>%.0f</b> plot%s, so read the shape as a rough floor, not a firm curve.", n400, ifelse(n400 == 1, "", "s"))
-      else if (slope > 15) " Still rising steeply at 400 m²; the site is undersampled, there's more out there."
-      else " The curve is flattening; most species are being caught."
+        sprintf(" Based on just <b>%.0f</b> plot%s at 400 m², so treat the shape as low-support descriptive context.", n400, ifelse(n400 == 1, "", "s"))
+      else if (!length(slope) || !is.finite(slope))
+        " The 100-to-400 m² change is unavailable for this snapshot; no completeness claim is made."
+      else sprintf(" Mean richness changes by <b>%+.0f</b> species between 100 and 400 m². That is a measured grain response, not evidence that the wider site is complete or undersampled.", slope)
     insight_banner("graph-up", tone = "pine",
       HTML(sprintf("Richness climbs from <b>%.0f</b> species/m² to <span class='ci-hero'>%.0f</span> per 400 m² plot.%s",
         sa$richness[sa$area_m2==1], sa$richness[sa$area_m2==400], shape)))
@@ -624,9 +648,10 @@ server <- function(input, output, session) {
   output$chaoBanner <- renderUI({
     occ <- rv$snap; req(occ); ch <- chao2(occ); req(!is.null(ch))
     insight_banner("calculator", tone = "gold",
-      HTML(sprintf("In the latest survey, <b>%d</b> species were seen across %d 1 m² quadrats. <b>Chao2</b> estimates <span class='ci-hero'>%.0f</span> species present%s (95%% CI %s–%s), so roughly <b>%.0f</b> remain undetected.",
-        ch$S_obs, ch$m, ch$chao2, if (ch$unstable) ", a lower bound (few doubletons)" else "",
-        ifelse(is.na(ch$lo),"—",ch$lo), ifelse(is.na(ch$hi),"—",ch$hi), max(0, round(ch$chao2 - ch$S_obs)))))
+      HTML(sprintf("In the latest survey, <b>%d</b> species were recorded across %d represented 1 m² incidence units. The bias-corrected <b>Chao2 lower-bound estimate</b> is <span class='ci-hero'>%.0f</span>%s. Its estimated unseen component is about <b>%.0f</b> species; that is an estimator output, not a confirmed missing-species count. No upper confidence bound is reported.",
+        ch$S_obs, ch$m, ch$chao2,
+        if (ch$unstable) " and is unstable because doubletons are scarce" else "",
+        max(0, round(ch$chao2 - ch$S_obs)))))
   })
 
   # ---- Hill member-reveal: click a q0/q1/q2 bar -> the species behind it ----
@@ -687,9 +712,12 @@ server <- function(input, output, session) {
   # ---- NATIVE vs INVASIVE -------------------------------------------------
   output$invTrend <- renderPlotly({
     occ <- rv$occ; req(occ); nt <- native_trend(occ); if (is.null(nt) || !nrow(nt)) return(note_plot("No introduced-cover trend"))
+    nt$hover <- sprintf("%d<br>%.1f%% introduced cover<br>%d recurrent plots · %d sampled 1 m² units<br>selected bout(s): %s",
+      nt$year, nt$pct_introduced, nt$n_plots, nt$n_sampling_units,
+      ifelse(is.na(nt$selected_bouts), "not recorded", nt$selected_bouts))
     plot_ly(nt, x = ~year, y = ~pct_introduced, type = "scatter", mode = "lines+markers",
       line = list(color = DDL$introduced, width = 3), marker = list(color = DDL$introduced, size = 9),
-      hovertemplate = "%{x}<br>%{y:.1f}% introduced cover<extra></extra>") %>%
+      text = ~hover, hovertemplate = "%{text}<extra></extra>") %>%
       plotly_theme(legend = FALSE) %>%
       plotly::layout(showlegend = FALSE, xaxis = list(title = "", dtick = 1),
         yaxis = list(title = "% of cover introduced", rangemode = "tozero"))
@@ -701,8 +729,8 @@ server <- function(input, output, session) {
     dir <- if (nrow(fin) < 2 || last$pct_introduced == first$pct_introduced) "about the same as"
            else if (last$pct_introduced > first$pct_introduced) "up from" else "down from"
     insight_banner("shield-exclamation", tone = "terra",
-      HTML(sprintf("Introduced plants make up <span class='ci-hero'>%.1f%%</span> of cover in %d, %s %.1f%% in %d. Native status is unknown for %.0f%% of species.",
-        last$pct_introduced, last$year, dir, first$pct_introduced, first$year, ur)))
+      HTML(sprintf("Within the recurrent panel of <b>%d plots</b>, introduced plants make up <span class='ci-hero'>%.1f%%</span> of relative cover in %d, %s %.1f%% in %d. These are descriptive registered endpoints; native status is unknown for %.0f%% of species.",
+        last$n_plots, last$pct_introduced, last$year, dir, first$pct_introduced, first$year, ur)))
   })
   output$invTable <- DT::renderDT({
     occ <- rv$snap; req(occ); wl <- invasive_watchlist(occ)
@@ -757,27 +785,25 @@ server <- function(input, output, session) {
         yaxis = list(title = "Plots the species reaches in the 400 m² plot", rangemode = "tozero"),
         shapes = list(list(type = "line", x0 = 0, y0 = 0, x1 = mx, y1 = mx,
           line = list(color = "rgba(120,130,140,0.5)", dash = "dot", width = 1))),
-        annotations = list(list(text = "each dot = one introduced species · above the 1:1 line = spread past its 1 m² footholds (points jittered to separate ties)",
+        annotations = list(list(text = "each dot = one introduced species · above 1:1 = more broad-grain than 1 m² detections (points jittered only to separate ties)",
           x = 0, y = 1.06, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
           font = list(color = if (is_dark()) "#9fb0c4" else "#6b7a85", size = 11))))
   })
 
-  # ---- Foothold member-reveal: click a dot (or its "Where is it?" chip) ------
-  # reveal ONE introduced species' detail — the plots it reaches at 1 m² vs across
-  # the 400 m² plot, family, mean cover — + a CSV. Two entry points resolve to the
-  # same species name: a direct plotly_click (species rides in the pin-card HTML's
-  # data-tag, inside customdata) and the .smt-open-foothold chip (footballRequest).
+  # ---- Cross-scale member reveal: explicit "Where is it?" chip only ---------
+  # A plot tap pins a card. The user then chooses the explicit, keyboard-accessible
+  # chip to open the detail; a tap never both pins and launches a modal.
   rv_foothold <- reactiveVal(NULL)
   show_foothold <- function(sp) {
     occ <- rv$snap; req(occ); fh <- species_foothold(occ); req(!is.null(fh))
     row <- fh[fh$scientificName == sp, , drop = FALSE]
     if (!nrow(row)) return(invisible())
     rv_foothold(sp)
-    only1m  <- setdiff(strsplit(row$plotlist_400, ", ")[[1]], strsplit(row$plotlist_1m, ", ")[[1]])
+    broader_only <- setdiff(strsplit(row$plotlist_400, ", ")[[1]], strsplit(row$plotlist_1m, ", ")[[1]])
     gap <- row$plots_400 - row$plots_1m
-    reach <- if (gap > 0) sprintf("It turns up in <b>%d</b> more plot%s across the whole 400 m\U00B2 plot than its 1 m\U00B2 footholds alone (%s) — the signature of spread past a chance toehold.",
-                                  gap, ifelse(gap == 1, "", "s"), if (length(only1m)) paste(only1m, collapse = ", ") else "—")
-             else "Every plot it reaches, it's already detectable at the finest 1 m\U00B2 scale — no hidden spread."
+    reach <- if (gap > 0) sprintf("The species was detected in <b>%d</b> more plot%s at the broader 400 m\U00B2 grain than in sampled 1 m\U00B2 quadrats (%s). Review detectability, patchiness, and sampling support before interpreting the gap; it is not evidence of temporal spread.",
+                                  gap, ifelse(gap == 1, "", "s"), if (length(broader_only)) paste(broader_only, collapse = ", ") else "—")
+             else "Every plot-level detection was also represented at the finest sampled 1 m\U00B2 grain. This describes cross-scale occurrence only, not trend or impact."
     tile <- function(v, l) div(class = "qc-tile", div(class = "qc-tile-v", v), div(class = "qc-tile-l", l))
     showModal(modalDialog(
       title = tagList(bs_icon("search"), HTML(sprintf(" <i>%s</i>", sp))),
@@ -794,20 +820,6 @@ server <- function(input, output, session) {
         p(tags$b("At 1 m\U00B2 (finest scale): "), if (nzchar(row$plotlist_1m)) row$plotlist_1m else em("not detected at 1 m\U00B2")),
         p(tags$b("Across the 400 m\U00B2 plot: "), if (nzchar(row$plotlist_400)) row$plotlist_400 else em("\U2014")))))
   }
-  observeEvent(plotly::event_data("plotly_click", source = "footholdSrc"), {
-    cd <- plotly::event_data("plotly_click", source = "footholdSrc")$customdata
-    # the customdata is the pin-card HTML; pull the species out of its data-tag.
-    # regmatches (NOT a greedy sub: the class='…' quote upstream makes a greedy
-    # .* capture the wrong quote-pair and return empty).
-    sp <- NA_character_
-    if (length(cd)) {
-      m <- regmatches(as.character(cd)[1], regexpr("data-tag='[^']+'", as.character(cd)[1]))
-      # strip the fixed wrapper by length, not a quote-in-regex sub (the embedded
-      # single-quotes make a sub pattern fragile across engines/escaping)
-      if (length(m) && nchar(m) > 11) sp <- substr(m, 11L, nchar(m) - 1L)
-    }
-    if (!is.na(sp) && nzchar(sp)) show_foothold(sp)
-  })
   observeEvent(input$footholdRequest, if (nzchar(input$footholdRequest %||% "")) show_foothold(input$footholdRequest), ignoreInit = TRUE)
   output$footholdCsv <- downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_foothold-%s_%s.csv",
@@ -821,7 +833,7 @@ server <- function(input, output, session) {
              else data.frame(
                scientificName = row$scientificName, family = row$family, nativity = "Introduced",
                plots_at_1m2 = row$plots_1m, plots_in_400m2 = row$plots_400,
-               foothold_gap = row$plots_400 - row$plots_1m,
+               broad_minus_1m_detection_gap = row$plots_400 - row$plots_1m,
                mean_cover_pct_1m2 = row$mean_cover_1m,
                plots_at_1m2_list = row$plotlist_1m, plots_in_400m2_list = row$plotlist_400,
                stringsAsFactors = FALSE)
@@ -832,8 +844,8 @@ server <- function(input, output, session) {
   # Env data loads lazily per site (only when something on this tab renders).
   cur_env <- reactive({ s <- rv$site; if (is.null(s) || !nzchar(s)) return(NULL); load_env(s) })
 
-  observe({                                       # populate the driver picker from this site's data
-    e <- cur_env(); ch <- c("Strongest driver" = "best")
+  observe({                                       # populate the context-series picker
+    e <- cur_env(); ch <- c("Largest screened association" = "best")
     if (!is.null(e)) ch <- c(ch, env_layer_choices(e)[-1])
     sel <- input$envLayer %||% "best"; if (!(sel %in% ch)) sel <- "best"
     updateSelectInput(session, "envLayer", choices = ch, selected = sel)
@@ -849,9 +861,7 @@ server <- function(input, output, session) {
   env_metric_lab <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$label)
   env_metric_dig <- reactive(PLANT_METRICS[[input$envMetric %||% "richness"]]$dig %||% 1)
 
-  # ---- Environment exports (matched annual series + driver-rank w/ perm p) ---
-  # The matched series and the driver-rank table are the two frames behind the
-  # Environment tab; export them so a reader can replay the correlation by hand.
+  # ---- Short-record context exports (matched annual series + scan) ----------
   output$envSeriesCsv <- downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_env-matched-series_%s.csv",
                                   rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
@@ -882,7 +892,7 @@ server <- function(input, output, session) {
     }, contentType = "text/csv")
 
   output$envRankCsv <- downloadHandler(
-    filename = function() sprintf("NEON-PlantDiversity_%s_env-driver-rank_%s.csv",
+    filename = function() sprintf("NEON-PlantDiversity_%s_context-association-scan_%s.csv",
                                   rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
     content = function(file) {
       rk <- env_rank(); ms <- env_series(); e <- cur_env()
@@ -900,19 +910,20 @@ server <- function(input, output, session) {
           spearman_r     = rk$r,
           best_lag_years = rk$lag,
           matched_years  = rk$n,
-          permutation_p  = round(pvals, 3),
+          lag_search_p   = round(pvals, 3),
+          permutation_scope = "within-driver 0–2 year lag screen",
           stringsAsFactors = FALSE)
         out <- out[order(-abs(out$spearman_r)), , drop = FALSE]
       }
       if (!nrow(out))
-        out <- data.frame(note = "No co-located environmental data, or too few survey years, to rank drivers for this site.")
+        out <- data.frame(note = "No complete co-located context series, or too few registered survey years, to scan associations for this site.")
       utils::write.csv(out, file, row.names = FALSE, na = "")
     }, contentType = "text/csv")
 
   output$envSourceNote <- renderUI({
     if (is.null(cur_env())) return(NULL)
     div(class = "env-source env-real", bs_icon("patch-check-fill"),
-        tags$span(HTML(sprintf(" Live from co-located NEON sensors at <b>%s</b>: precipitation, air temperature, and plant phenology, aggregated to one value per year.",
+        tags$span(HTML(sprintf(" Bundled from co-located NEON records at <b>%s</b>: only complete annual precipitation, temperature, and phenology windows are eligible for this descriptive view.",
                                rv$site %||% "this site"))))
   })
 
@@ -922,7 +933,7 @@ server <- function(input, output, session) {
       div(class = "ci-text", "No co-located environmental data is bundled for this site yet.")))
     if (is.null(ms) || nrow(ms) < MIN_ENV_YEARS)
       return(div(class = "chart-insight ci-muted", bs_icon("hourglass-split"),
-        div(class = "ci-text", HTML(sprintf("Only <b>%d</b> survey year%s here, too few to test a climate link (need %d+). The series below still show the raw context.",
+        div(class = "ci-text", HTML(sprintf("Only <b>%d</b> registered survey year%s here, too few even for the screened association view (need %d+). The raw series remain context only.",
           if (is.null(ms)) 0L else nrow(ms), if (!is.null(ms) && nrow(ms) == 1) "" else "s", MIN_ENV_YEARS)))))
     pm <- env_perm(); if (is.null(pm)) return(NULL); pk <- pm$top
     v <- env_verdict(pk$r, pm$p, pk$n); pos <- pk$r >= 0
@@ -931,8 +942,8 @@ server <- function(input, output, session) {
     metricLab <- env_metric_lab()
     div(class = paste("ec", rail),
       style = sprintf("--ec-driver-hue:%s;", ENV_LAYERS[[pk$layer]]$color %||% "#8a97a8"),
-      div(class = "ec-eyebrow", bs_icon("graph-up-arrow"), tags$span("climate & phenology tracking"),
-          tags$span(class = "ec-demo", "exploratory")),
+      div(class = "ec-eyebrow", bs_icon("graph-up-arrow"), tags$span("short-record association scan"),
+          tags$span(class = "ec-demo", "descriptive only")),
       div(class = "ec-hero",
         div(class = "ec-hero-text",
           tags$span(class = "ec-strength", tools::toTitleCase(v$word)), " · ", tolower(metricLab), " vs ",
@@ -947,17 +958,25 @@ server <- function(input, output, session) {
         tags$span(class = "ec-meta-dot"),
         tags$span(class = "ec-meta", bs_icon("shuffle"), HTML(sprintf("permutation <b>p = %.2f</b>", pm$p))),
         tags$span(class = paste("ec-meta ec-dir", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
-          HTML(sprintf("more %s \U2192 <b>%s</b> %s", tolower(pk$label), if (pos) "more" else "less", tolower(metricLab))))))
+          HTML(sprintf("higher %s appears with <b>%s</b> %s", tolower(pk$label), if (pos) "higher" else "lower", tolower(metricLab))))))
   })
 
   output$envCaveat <- renderUI({
     pm <- env_perm(); if (is.null(pm)) return(NULL); pk <- pm$top
     n_drv <- if (is.null(env_rank())) 0L else nrow(env_rank())
+    selected <- input$envLayer %||% "best"
+    n_lags <- length(ENV_LAGS)
+    scope <- if (identical(selected, "best"))
+      sprintf("largest of %d context series × %d screened lags", n_drv, n_lags) else
+      sprintf("largest association for the selected %s series across %d screened lags",
+              tolower(pk$label), n_lags)
+    correction <- if (identical(selected, "best"))
+      "the full series × lag search" else "this selected series's lag search"
     sig <- !is.na(pm$p) && pm$p < 0.05
     div(class = "pop-caveat", style = "margin: 0 0 14px;", bs_icon("exclamation-triangle"),
-      HTML(sprintf(" The r above is the <b>strongest of %d driver%s \U00D7 3 lags</b>; the permutation p (%.2f) already accounts for that search. %s With only %d survey years, climate and vegetation can also drift together over time, so even a strong-looking r is a hypothesis, not proof of cause.",
-        n_drv, if (n_drv == 1) "" else "s", pm$p,
-        if (sig) "It clears the chance bar here." else "It does <b>not</b> clear the chance bar here.",
+      HTML(sprintf(" The r above is the <b>%s</b>; the circular-shift p (%.2f) accounts for %s. %s With only %d registered survey years and shared time trends, this remains descriptive and is never promoted as a Driver Cascade edge.",
+        scope, pm$p, correction,
+        if (sig) "It clears the search-corrected chance bar in this short record, but no fit or causal claim is drawn." else "It does <b>not</b> clear the search-corrected chance bar.",
         pk$n)))
   })
 
@@ -967,7 +986,7 @@ server <- function(input, output, session) {
     if (is.null(pm)) return(note_plot("Too few survey years to compare", "\U0001F326"))
     pk <- pm$top; meta <- ENV_LAYERS[[pk$layer]]
     pts <- plant_env_points(ms, e, pk$layer, pk$lag)
-    if (is.null(pts) || nrow(pts) < 3) return(note_plot("Not enough year-matched data for this driver", "\U0001F326"))
+    if (is.null(pts) || nrow(pts) < 3) return(note_plot("Not enough year-matched data for this context series", "\U0001F326"))
     metricLab <- env_metric_lab(); mdig <- env_metric_dig()
     p <- plot_ly(pts, x = ~driver, y = ~metric, type = "scatter", mode = "markers+text",
       text = ~year, textposition = "top center",
@@ -975,25 +994,15 @@ server <- function(input, output, session) {
       marker = list(size = 12, color = meta$color, opacity = 0.85, line = list(color = "#fff", width = 1)),
       hovertemplate = paste0("year %{text}<br>", meta$label, ": %{x:.", (meta$dig %||% 0), "f} ", meta$unit,
                              "<br>", metricLab, ": %{y:.", mdig, "f}<extra></extra>"))
-    # Draw the OLS fit line ONLY when the permutation test clears significance.
-    # On 6-10 survey years a visually authoritative line can otherwise sit
-    # directly under a "no clear link / p=0.76" banner (e.g. SRER green-up
-    # r=-0.67, p=0.758) and overclaim. Gate on pm$p — no line when chance can
-    # explain it. (Across 46 sites only 1 clears p<0.05, the null rate.)
-    if (!is.na(pm$p) && pm$p < 0.05 && stats::sd(pts$driver) > 0) {
-      fit <- stats::lm(metric ~ driver, data = pts); xs <- range(pts$driver)
-      yh <- stats::predict(fit, newdata = data.frame(driver = xs))
-      p <- p %>% add_trace(x = xs, y = yh, type = "scatter", mode = "lines", inherit = FALSE,
-        showlegend = FALSE, hoverinfo = "skip",
-        line = list(color = ec_corr_color(pk$layer, pk$r, is_dark()), width = 2, dash = "dash"))
-    }
+    # No fitted line: even the one site that clears the scan-corrected threshold
+    # has too short a record for a visually authoritative ecological fit.
     p %>% plotly_theme(legend = FALSE) %>% plotly::layout(
       xaxis = list(title = sprintf("%s (%s)%s", meta$label, meta$unit, if (pk$lag) sprintf(" \U00B7 %d-yr lead", pk$lag) else "")),
       yaxis = list(title = metricLab))
   })
 
   output$envDriverRank <- renderPlotly({
-    r <- env_rank(); if (is.null(r) || !nrow(r)) return(note_plot("Too few survey years to rank drivers", "\U0001F326"))
+    r <- env_rank(); if (is.null(r) || !nrow(r)) return(note_plot("Too few registered years to scan context associations", "\U0001F326"))
     r <- r[order(abs(r$r)), ]
     r$lab <- ifelse(r$lag == 0, "same yr", sprintf("%d-yr lead", r$lag))
     r$ccol <- mapply(ec_corr_color, r$layer, r$r, MoreArgs = list(dark = is_dark()))
@@ -1008,97 +1017,10 @@ server <- function(input, output, session) {
                      range = c(-1, 1), zeroline = TRUE, zerolinecolor = "rgba(31,42,48,0.30)"),
         yaxis = list(title = ""), margin = list(b = 72),
         annotations = list(list(
-          text = sprintf("best of %d driver%s \U00D7 3 lags \U00B7 sorted by strength \U00B7 NOT independent evidence",
+          text = sprintf("largest of %d context series%s \U00D7 3 lags \U00B7 sorted by |r| \U00B7 descriptive, not independent evidence",
                          n_drv, if (n_drv == 1) "" else "s"),
           x = 0, y = -0.30, xref = "paper", yref = "paper", xanchor = "left", yanchor = "top",
           showarrow = FALSE, font = list(color = if (is_dark()) "#9fb0c4" else "#8a97a8", size = 10))))
-  })
-
-  # ---- The SEASONAL driver read (Driver Cascade's seasonal-aggregate question) -
-  # The annual precip layer above sums the cool-season rain (Oct-Mar) and the
-  # summer monsoon (Jul-Sep) into one number, even though those two seasons feed
-  # different plants. This card splits the year by season and correlates RICHNESS
-  # against this site's yearly winter / monsoon rain + spring warmth at LAG 0
-  # (plants respond the same year), the way the Driver Cascade does. The biome
-  # dictates the lead driver: in drylands it is WINTER rain (germinates the spring
-  # forbs). Per-site n is a handful of years, so this is SUGGESTIVE, not a verdict;
-  # the honest pooled test lives in the Driver Cascade app.
-  output$seasonalDriver <- renderUI({
-    e <- cur_env(); if (is.null(e)) return(NULL)
-    resp <- plant_metric_series(rv$occ, "richness")          # year, value = species richness
-    if (is.null(resp) || nrow(resp) < 3) return(NULL)
-    site_code <- rv$site %||% (if (!is.null(rv$occ) && "siteID" %in% names(rv$occ)) mode_chr(rv$occ$siteID) else NULL)
-    biome <- seasonal_biome(site_code)
-    # plants respond SAME-year -> lag 0 for every seasonal driver (NOT the mammal monsoon lag-1).
-    # to = "richness" makes `expected` honour the cascade's (driver, biome, RESPONSE) allow-list:
-    # the ONLY sanctioned plant prior is precip_winter -> richness in water-limited biomes. Monsoon
-    # and spring temp are still computed + shown for richness, but expected=FALSE ("tested, no plant
-    # prior") so the lead can never headline a monsoon->richness link the cascade never sanctioned.
-    links <- tryCatch(seasonal_driver_links(e, resp, biome = biome, to = "richness",
-               lags = c(precip_winter = 0L, precip_monsoon = 0L, temp_spring = 0L)),
-               error = function(err) NULL)
-    eyebrow <- div(class = "ec-eyebrow", bs_icon("calendar-range"),
-                   tags$span("seasonal climate \U00B7 the cascade read"),
-                   info_pop("The seasonal read",
-                     p("A single annual rain total blends two seasons that feed different plants: ", tags$b("winter rain"), " (Oct-Mar) germinates the spring annual forbs, while the ", tags$b("summer monsoon"), " (Jul-Sep) drives the warm-season grasses. The ranking above ranks the annual TOTAL, which averages them together."),
-                     p("Here we aggregate rain by season and correlate it against this site's yearly species richness, the way the Driver Cascade does. ", tags$b("Per-site n is only a handful of survey years"), ", so this is suggestive, not significant. The honest test pools many sites in the Driver Cascade app.")))
-    if (is.null(links) || !nrow(links)) {
-      return(div(class = "ec ec-seasonal rail-weak", style = "margin-top:14px;", eyebrow,
-        div(class = "ec-hero", div(class = "ec-hero-text",
-          "No co-located seasonal rain record at this site, so the winter and monsoon seasons can't be split out here. That is missing climate data, not a missing signal."))))
-    }
-    lead <- links[links$expected, , drop = FALSE]; if (!nrow(lead)) lead <- links
-    L <- lead[1, ]; pos <- L$r >= 0
-    strength <- abs(L$r)
-    rail <- if (strength >= 0.6) "rail-strong" else if (strength >= 0.35) "rail-mod" else "rail-weak"
-    sub  <- tolower(L$label)
-    lead_txt <- if (grepl("precip", L$driver))
-      sprintf("A wetter %s tracks %s plant diversity the same year", sub, if (pos) "more" else "less")
-      else sprintf("A warmer %s tracks %s plant diversity the same year", sub, if (pos) "more" else "less")
-    # the contrast: what the plain ANNUAL precip total shows for richness here
-    mr <- tryCatch({ sc <- plant_env_scan(resp, e, "precip"); if (is.null(sc)) NA_real_ else sc$r },
-                   error = function(err) NA_real_)
-    pstr <- if (is.finite(L$p)) sprintf("p = %.2f", L$p) else sprintf("%d yrs, too few for a p", L$n)
-    div(class = paste("ec ec-seasonal", rail), style = "margin-top:14px;",
-      eyebrow,
-      div(class = "ec-hero",
-        div(class = "ec-hero-text", lead_txt, "."),
-        div(class = paste("ec-rvalue", if (pos) "ec-sgn-pos" else "ec-sgn-neg"),
-          bs_icon(if (pos) "arrow-up-right" else "arrow-down-right"),
-          HTML(sprintf("r&nbsp;%+.2f", L$r)))),
-      div(class = "ec-foot",
-        tags$span(class = "ec-meta", bs_icon("calendar3"), HTML(sprintf("<b>%d</b> survey years", L$n))),
-        tags$span(class = "ec-meta-dot"), tags$span(class = "ec-meta", bs_icon("shuffle"), pstr),
-        if (is.finite(L$p_adj)) tagList(tags$span(class = "ec-meta-dot"),
-          tags$span(class = "ec-meta", title = "p after accounting for testing several seasons",
-                    HTML(sprintf("season-corrected p = %.2f", L$p_adj))))),
-      div(class = "ec-seasonal-note",
-        HTML(paste0(
-          "In drylands the cool-season (Oct-Mar) rain germinates the spring forbs, so winter rain tracks plant diversity better than the annual total, which averages winter and monsoon rain together even though they feed different plants.",
-          if (is.finite(mr)) sprintf(" The annual rain total shows only about <b>r %+.2f</b> for richness here.", mr) else ""))),
-      # the OTHER seasons: computed + shown, but greyed and labelled "tested, no plant
-      # prior" — the cascade's "computed everywhere, only the tally respects expected"
-      # rule. The summer monsoon and spring temperature carry no sanctioned richness
-      # prior, so they never get to headline the card even when |r| is larger.
-      local({
-        others <- links[!(links$driver %in% L$driver), , drop = FALSE]
-        if (!nrow(others)) return(NULL)
-        others <- others[order(-abs(others$r)), , drop = FALSE]
-        div(class = "ec-seasonal-others",
-          div(class = "ec-seasonal-others-h", bs_icon("dot"),
-              "Also tested here, but with no cascade plant prior for richness:"),
-          tags$div(class = "ec-seasonal-others-row",
-            lapply(seq_len(nrow(others)), function(i) {
-              o <- others[i, ]
-              tags$span(class = "ec-seasonal-chip", title = "computed for completeness; not a sanctioned plant prior, so it is excluded from the lead",
-                tags$span(class = "ec-chip-label", o$label),
-                HTML(sprintf(" <b>r&nbsp;%+.2f</b>", o$r)),
-                tags$span(class = "ec-chip-tag", "tested, no plant prior"))
-            })))
-      }),
-      div(class = "ec-seasonal-caveat", bs_icon("info-circle"),
-        HTML(" One site, a handful of years, so suggestive not settled. The cross-site test that pools many sites is in the "),
-        tags$a(href = "https://tgilbert14.github.io/NEON-Driver-Cascade/", target = "_blank", "Driver Cascade app"), "."))
   })
 
   output$envTrend <- renderPlotly({
@@ -1201,6 +1123,26 @@ server <- function(input, output, session) {
       annotations = ann, hovermode = "closest")
   })
 
+  output$labTable <- DT::renderDT({
+    lb <- rv$lb; req(lb)
+    open_btn <- vapply(lb$plotID, function(pid) sprintf(
+      "<button type='button' class='sp-btn sp-go plot-table-open' aria-label='Open profile for plot %s' data-plot-id=\"%s\">Open profile</button>",
+      htmltools::htmlEscape(short_plot(pid), attribute = TRUE),
+      htmltools::htmlEscape(as.character(pid), attribute = TRUE)), character(1))
+    tbl <- data.frame(
+      Plot = vapply(lb$plotID, short_plot, character(1)),
+      Richness = lb$richness,
+      Native = lb$n_native,
+      Introduced = lb$n_introduced,
+      `Introduced cover (relative %)` = lb$pct_introduced,
+      `Dominant plant` = lb$dominant,
+      Action = open_btn,
+      check.names = FALSE, stringsAsFactors = FALSE)
+    DT::datatable(tbl, rownames = FALSE, escape = seq_len(ncol(tbl) - 1L), selection = "none",
+      options = list(pageLength = 10, scrollX = TRUE, dom = "tip",
+        columnDefs = list(list(orderable = FALSE, targets = ncol(tbl) - 1L))))
+  })
+
   output$plotCardSlot <- renderUI({
     if (is.null(rv$plot)) return(div(class = "qc-empty",
       div(class = "qc-empty-icon", "\U0001F33F"),
@@ -1231,7 +1173,6 @@ server <- function(input, output, session) {
         div(class = "piv-native", style = sprintf("width:%d%%", np), if (np>12) paste0(np,"% native")),
         div(class = "piv-intro", style = sprintf("width:%d%%", ip), if (ip>12) paste0(ip,"% intro")))
     }
-    sparkid <- paste0("spark_", gsub("[^A-Za-z0-9]", "", pid))
     body <- div(id = "qcCardNode", class = "qc-card", `data-short` = short_plot(pid),
       div(class = "qc-head",
         span(class = "qc-emoji", "\U0001F33E"),
@@ -1248,7 +1189,7 @@ server <- function(input, output, session) {
         tile(ifelse(is.na(row$total_cover), "—", row$total_cover), "total cover")),
       div(class = "qc-section-h", bs_icon("layout-split"), " Native vs introduced cover"), pivbar,
       div(class = "qc-section-h", bs_icon("graph-up"), " Species–area (1→400 m²)"),
-      if (!is.null(sa)) plotlyOutput(sparkid, height = "150px") else p(class = "qc-cap-note", "—"),
+      if (!is.null(sa)) plotlyOutput("plotSpark", height = "150px") else p(class = "qc-cap-note", "—"),
       div(class = "qc-section-h", bs_icon("flower2"), " Top plants by cover"),
       if (!is.null(psc) && nrow(psc)) {
         top <- psc[order(-psc$mean_cover), ][seq_len(min(10, nrow(psc))), ]
@@ -1263,12 +1204,10 @@ server <- function(input, output, session) {
       tags$button(class = "smt-snap-btn", type = "button", onclick = "smtSaveQcCard()", bsicons::bs_icon("download"), " Save plot card (PNG)"),
       downloadButton("plotCsv", "Download plot data (CSV)", class = "smt-clear-btn")))
   }
-  # spark renderers for both compact + full cards (same output id; only one card in DOM per render path is fine
-  # because compact (Lab) and full (Plot) live in different tabs but share #qcCardNode id — guard below)
-  observe({
-    pid <- rv$plot; req(pid)
-    sparkid <- paste0("spark_", gsub("[^A-Za-z0-9]", "", pid))
-    output[[sparkid]] <- renderPlotly({
+  # One stable output id. Plot changes invalidate this renderer instead of
+  # registering a new output object for every plot visited during the session.
+  output$plotSpark <- renderPlotly({
+      pid <- rv$plot; req(pid)
       sa <- species_area_plot(rv$snap, pid); if (is.null(sa)) return(note_plot("—"))
       plot_ly(sa, x = ~area_m2, y = ~richness, type = "scatter", mode = "lines+markers",
         line = list(color = DDL$green, width = 2.5), marker = list(color = DDL$green2, size = 7),
@@ -1276,7 +1215,6 @@ server <- function(input, output, session) {
         plotly_theme(legend = FALSE) %>%
         plotly::layout(xaxis = list(title = "", type = "log", tickvals = c(1,10,100,400), ticktext = c("1","10","100","400")),
           yaxis = list(title = "species"), margin = list(l = 40, r = 10, t = 10, b = 30))
-    })
   })
   observeEvent(input$goPlotFromCard, nav_select("tabs", "plot"))
 
@@ -1311,52 +1249,106 @@ server <- function(input, output, session) {
       occ <- rv$occ; req(occ); site <- rv$site %||% "site"
       tmp <- tempfile("pdeexport"); dir.create(tmp)
       keep <- intersect(c("plotID","subplotID","scale","year","bout","taxonID","scientificName",
-        "taxonRank","family","nativity","percentCover","is_species"), names(occ))
-      occ_long <- species_level_only(occ)[, keep, drop = FALSE]
-      names(occ_long)[names(occ_long) == "scale"] <- "scale_m2"
-      pl <- plot_summary(latest_snapshot(occ))
+        "taxonRank","family","nativeStatusCode","nativity","percentCover","is_species"), names(occ))
+      occ_all <- occ[, keep, drop = FALSE]
+      names(occ_all)[names(occ_all) == "scale"] <- "scale_m2"
+      analysis_snapshot <- rv$snap[, keep, drop = FALSE]
+      names(analysis_snapshot)[names(analysis_snapshot) == "scale"] <- "scale_m2"
+      pl <- rv$lb
       gr <- rv$ground
+      if (!is.null(gr) && "percentCover" %in% names(gr))
+        names(gr)[names(gr) == "percentCover"] <- "groundCoverPct"
+      env <- tryCatch(load_env(site), error = function(e) NULL)
+      bundle_file <- file.path(SITE_DIR, paste0(site, ".rds"))
+      env_file <- file.path(ENV_DIR, paste0(site, ".rds"))
       # provenance stamp — when this bundle was built + (if tagged) the NEON release
-      built_at <- rv$built_at %||% format(Sys.Date(), "%Y-%m-%d")
+      built_at <- rv$built_at
+      if (is.null(built_at) || length(built_at) != 1L || is.na(built_at) ||
+          !nzchar(trimws(as.character(built_at)))) built_at <- NA_character_
       neon_rel <- rv$neon_release %||% NA_character_
+      exported_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
       prov <- data.frame(
+        artifact = "plant_occurrence_bundle",
         site = site, builtAt = built_at, neonRelease = neon_rel,
-        dpid = "DP1.10058.001", exportedAt = format(Sys.Date(), "%Y-%m-%d"),
+        dpid = "DP1.10058.001", exportedAt = exported_at,
+        bundleFile = file.path("data", "sites", basename(bundle_file)),
+        bundleMd5 = if (file.exists(bundle_file)) unname(tools::md5sum(bundle_file)) else NA_character_,
+        snapshotContract = "latest registered year/bout per plot; annual tables use one deterministic bout per plot-year",
+        estimatorContract = "plant-diversity-v3",
+        sourceLicense = "NEON DP1.10058.001 CC BY 4.0",
         stringsAsFactors = FALSE)
+      if (!is.null(env) && nrow(env)) prov <- rbind(prov, data.frame(
+        artifact = "environment_context_overlay",
+        site = site, builtAt = NA_character_, neonRelease = NA_character_,
+        dpid = "multiple co-located context products; see environment_context.csv source",
+        exportedAt = exported_at,
+        bundleFile = file.path("data", "env", basename(env_file)),
+        bundleMd5 = if (file.exists(env_file)) unname(tools::md5sum(env_file)) else NA_character_,
+        snapshotContract = "monthly context; annual summaries require 12 complete monthly values",
+        estimatorContract = "environment-context-v1; partial upstream query receipt; context only",
+        sourceLicense = "NEON CC BY 4.0; exact upstream product/query receipt not preserved here",
+        stringsAsFactors = FALSE))
       readme <- c(
         sprintf("NEON Plant Diversity Explorer · data export for site %s", site),
         sprintf("Generated %s by an unofficial Desert Data Labs explorer.", format(Sys.Date(), "%Y-%m-%d")),
         "Source: NEON Plant presence & percent cover DP1.10058.001 (div_1m2Data + div_10m2Data100m2Data).",
         "License: NEON DP1.10058.001, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); aggregated and derived by this app.",
-        sprintf("Bundle built: %s%s", built_at,
+        sprintf("Bundle built: %s%s", ifelse(is.na(built_at), "date unavailable", built_at),
                 if (!is.na(neon_rel) && nzchar(neon_rel)) sprintf(" | NEON release %s", neon_rel) else " | NEON release not tagged"),
         "", "FILES",
-        " occ_long.csv          - one row per taxon occurrence at a quadrat scale (the raw record).",
-        " plots.csv             - one row per plot: richness + native/introduced + cover summary.",
-        " ground_cover.csv      - abiotic ground cover (soil/litter/rock/...) at 1 m^2.",
+        " occurrences_all.csv   - every bundled taxon record, including coarse IDs; is_species marks analysis eligibility.",
+        " analysis_snapshot.csv - the exact latest registered plot snapshots used by current-state analyses.",
+        " plots_snapshot.csv    - one row per plot: richness, nativity, cover, coordinates, and support.",
+        " ground_cover_all.csv  - bundled abiotic ground-cover records; historical unless snapshot keys are present.",
+        " environment_context.csv - bundled co-located climate/phenology context, when available.",
         " expected_vs_observed.csv - NRCS reference flora vs observed (only if a reference list is bundled).",
-        " provenance.csv        - build/vintage stamp (site, builtAt, neonRelease, dpid) so you can cite the exact source.",
-        " data_dictionary.csv   - column definitions, types, units (derived from the actual exported frames).",
+        " reference_provenance.csv - single-point NRCS reference scope and identifiers, when available.",
+        " provenance.csv        - build/vintage, bundle checksum, estimator contract, product and license.",
+        " data_dictionary.csv   - column definitions, types, units, NA semantics, and estimands for every shipped frame.",
         "", "NOTES",
-        " * 'snapshot' analyses in the app use each plot's LATEST (year, bout); occ_long gives every record.",
-        " * percentCover is an ocular estimate at 1 m^2 (bin midpoint/ocular, NA at presence-only 10/100 m^2 scales);",
+        " * Current-state analyses use each plot's latest registered (year, bout); occurrences_all.csv retains all records.",
+        " * Annual estimates select one deterministic bout per plot-year and report sampling support.",
+        " * percentCover is plant ocular cover at 1 m^2 (NA at presence-only 10/100 m^2 scales); groundCoverPct is abiotic ground cover;",
         "   layers overlap, so site-summed cover is a relative index, not a share of ground.",
-        " * nativity is NEON's nativeStatusCode collapsed to native/introduced/unknown.")
-      utils::write.csv(occ_long, file.path(tmp, "occ_long.csv"), row.names = FALSE, na = "")
-      if (!is.null(pl)) utils::write.csv(pl, file.path(tmp, "plots.csv"), row.names = FALSE, na = "")
-      if (!is.null(gr) && nrow(gr)) utils::write.csv(gr, file.path(tmp, "ground_cover.csv"), row.names = FALSE, na = "")
+        " * nativity is NEON's nativeStatusCode collapsed to native/introduced/unknown; contradictory statuses route to review.",
+        " * the NRCS comparison is one reference point/soil unit near the site centre, not a complete site-wide flora.",
+        " * environment context is a separately versioned suite overlay. Its per-row source is retained, but the original product/query receipt is partial;",
+        "   it is descriptive only and excluded from Driver/Cascade promotion.")
+      utils::write.csv(occ_all, file.path(tmp, "occurrences_all.csv"), row.names = FALSE, na = "")
+      utils::write.csv(analysis_snapshot, file.path(tmp, "analysis_snapshot.csv"), row.names = FALSE, na = "")
+      if (!is.null(pl)) utils::write.csv(pl, file.path(tmp, "plots_snapshot.csv"), row.names = FALSE, na = "")
+      if (!is.null(gr) && nrow(gr)) utils::write.csv(gr, file.path(tmp, "ground_cover_all.csv"), row.names = FALSE, na = "")
+      if (!is.null(env) && nrow(env)) utils::write.csv(env, file.path(tmp, "environment_context.csv"), row.names = FALSE, na = "")
       utils::write.csv(prov, file.path(tmp, "provenance.csv"), row.names = FALSE, na = "")
       e <- load_expected(site)
       ev_tbl <- NULL
+      ref_prov <- NULL
       if (!is.null(e)) { ev <- tryCatch(expected_vs_observed(occ, e, PLANT_AUTHORITY), error = function(err) NULL)
         if (!is.null(ev)) { ev_tbl <- qc_report_table(ev, site)
-          utils::write.csv(ev_tbl, file.path(tmp, "expected_vs_observed.csv"), row.names = FALSE, na = "") } }
+          utils::write.csv(ev_tbl, file.path(tmp, "expected_vs_observed.csv"), row.names = FALSE, na = "") }
+        site_row <- neon_sites[neon_sites$site == site, , drop = FALSE]
+        ref_prov <- data.frame(
+          site = site,
+          referenceScope = expected_reference_scope(e),
+          referenceLatitude = if (nrow(site_row)) site_row$lat[1] else NA_real_,
+          referenceLongitude = if (nrow(site_row)) site_row$lng[1] else NA_real_,
+          source = e$source %||% "NRCS Soil Data Access / Ecological Site Descriptions",
+          ecoclassid = e$ecoclassid %||% NA_character_,
+          ecositeName = e$ecosite_name %||% NA_character_,
+          mlra = e$mlra %||% NA_character_,
+          queryDate = e$query_date %||% NA_character_,
+          sourceLicense = "U.S. federal public-domain source; app-derived comparison",
+          stringsAsFactors = FALSE)
+        utils::write.csv(ref_prov, file.path(tmp, "reference_provenance.csv"), row.names = FALSE, na = "")
+      }
       # codebook DERIVED from exactly the frames shipped, so it can never drift
-      frames <- list("occ_long.csv" = occ_long)
-      if (!is.null(pl)) frames[["plots.csv"]] <- pl
-      if (!is.null(gr) && nrow(gr)) frames[["ground_cover.csv"]] <- gr
+      frames <- list("occurrences_all.csv" = occ_all, "analysis_snapshot.csv" = analysis_snapshot)
+      if (!is.null(pl)) frames[["plots_snapshot.csv"]] <- pl
+      if (!is.null(gr) && nrow(gr)) frames[["ground_cover_all.csv"]] <- gr
+      if (!is.null(env) && nrow(env)) frames[["environment_context.csv"]] <- env
       frames[["provenance.csv"]] <- prov
       if (!is.null(ev_tbl)) frames[["expected_vs_observed.csv"]] <- ev_tbl
+      if (!is.null(ref_prov)) frames[["reference_provenance.csv"]] <- ref_prov
       utils::write.csv(plant_codebook(frames), file.path(tmp, "data_dictionary.csv"), row.names = FALSE, na = "")
       writeLines(readme, file.path(tmp, "README.txt"))
       fs <- list.files(tmp, full.names = TRUE)
@@ -1381,7 +1373,9 @@ server <- function(input, output, session) {
     snap2 <- latest_snapshot(b2$occ)
     metrics <- function(snap) { sp <- species_level_only(snap)
       ch <- chao2(snap)
+      ps <- plot_summary(snap)
       list(rich = dplyr::n_distinct(sp$scientificName),
+           mean_plot_rich = if (!is.null(ps) && nrow(ps)) mean(ps$richness, na.rm = TRUE) else NA_real_,
            intro = site_invasion(snap), plots = dplyr::n_distinct(snap$plotID),
            fam = mode_chr(sp$family),
            intro_n = dplyr::n_distinct(sp$scientificName[sp$nativity == "Introduced"]),
@@ -1389,9 +1383,9 @@ server <- function(input, output, session) {
     a <- metrics(rv$snap); b <- metrics(snap2)
     pc <- function(v) if (!is.null(v) && is.finite(v)) paste0(v, "%") else "—"
     row <- function(l, va, vb) tags$tr(tags$td(class = "cmp-l", l), tags$td(va), tags$td(vb))
-    # Raw observed richness is effort-dependent (sites differ in plots/years/bouts);
-    # the caveat is clickable (ⓘ) so the default table stays clean. Chao2 — the
-    # comparable, effort-corrected estimate — is surfaced as its own row.
+    # Raw site richness remains visible but explicitly non-standardized. Mean
+    # 400 m² plot richness gives a common grain; Chao2 remains a site-specific
+    # lower-bound estimator, not an effort-correction or coverage standardizer.
     tags$table(class = "compare-tbl",
       tags$thead(tags$tr(tags$th(""), tags$th(rv$site), tags$th(s2))),
       tags$tbody(
@@ -1399,9 +1393,11 @@ server <- function(input, output, session) {
           tags$td(class = "cmp-l", "Species (snapshot)",
             info_pop("Comparing richness fairly",
               p("This row is ", tags$b("raw observed richness"), " (S_obs) at each site's own sampling effort; plots, survey years and bouts differ between sites, and more effort finds more species."),
-              p("For a fair side-by-side, read the ", tags$b("Chao2"), " row below: it estimates total richness from the incidence data and is the effort-corrected, comparable number. An asterisk flags a rough lower bound (few doubletons)."))),
+              p("Mean richness per 400 m² plot below uses a common spatial grain and is the safer descriptive comparison. Chao2 is a lower-bound estimate of total richness within each site's incidence sample; its difference from observed richness is the estimated unseen component, and it does not standardize sites to equal coverage or effort."))),
           tags$td(a$rich), tags$td(b$rich)),
-        row("Chao2 (estimated)", a$chao %||% "—", b$chao %||% "—"),
+        row("Mean species / 400 m² plot", if (is.finite(a$mean_plot_rich)) sprintf("%.1f", a$mean_plot_rich) else "—",
+                                           if (is.finite(b$mean_plot_rich)) sprintf("%.1f", b$mean_plot_rich) else "—"),
+        row("Chao2 lower-bound estimate (not standardized)", a$chao %||% "—", b$chao %||% "—"),
         row("Introduced species", a$intro_n, b$intro_n),
         row("Introduced cover", pc(a$intro), pc(b$intro)),
         row("Plots sampled", a$plots, b$plots),
@@ -1483,7 +1479,7 @@ server <- function(input, output, session) {
     req(rv$occ)
     e <- expected_for_site()
     if (is.null(e)) return(insight_banner("info-circle", tone = "navy",
-      HTML("No NRCS ecological-site reference list is bundled for this site <i>yet</i>. The completeness comparison is live for Santa Rita (SRER) and a growing set of sites. Everything else on this page still works.")))
+      HTML("No NRCS ecological-site reference list is bundled for this site in this release. Reference comparisons are available for 34 of 46 sites; every non-reference analysis still works here.")))
     src <- e$source %||% "esd"
     badge <- if (identical(src, "esd")) glow_badge("ecological site", DDL$navy) else glow_badge("MLRA union", DDL$gold)
     # only link to EDIT for a standard rangeland/forest ecoclassid that will resolve
@@ -1553,43 +1549,11 @@ server <- function(input, output, session) {
       DT::formatStyle("Role", target = "row", fontWeight = DT::styleEqual("dominant", "700"))
   })
 
-  # the state-plausibility note: how many natives were set aside as regional
-  # associates (on the state flora, not this soil unit), or why the check didn't run.
-  output$evoRegionalNote <- renderUI({
-    ev <- evo(); if (is.null(ev)) return(NULL)
-    if (!isTRUE(ev$state_covered)) {
-      st <- ev$state %||% NA
-      msg <- if (is.na(st) || !nzchar(st))
-        "State-level plausibility check unavailable for this site, so every unexpected species below stays in the review lane (today's behaviour)."
-      else sprintf("State-level plausibility check not yet available for %s, so every unexpected species below stays in the review lane.", state_names[st] %||% st)
-      return(div(class = "evo-flag evo-flag-muted", bs_icon("hourglass-split"), HTML(paste0(" ", msg))))
-    }
-    n <- ev$n_regional %||% 0L
-    if (n == 0) return(div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
-      HTML(sprintf(" Every unexpected species here is either introduced or a native not recorded for %s, so none were set aside. The list below is the genuine review lane.",
-                   state_names[ev$state] %||% ev$state))))
-    cr <- ev$C_regional
-    rows <- utils::head(cr[order(-cr$n_plots), , drop = FALSE], 12)
-    div(class = "evo-flag evo-flag-info",
-      div(class = "evo-flag-h", bs_icon("geo-alt-fill"),
-        sprintf(" %d native species set aside: on the %s state flora, just not this soil unit's reference list", n, state_names[ev$state] %||% ev$state)),
-      tags$table(class = "evo-flag-tbl",
-        tags$thead(tags$tr(tags$th("Species"), tags$th("Symbol"), tags$th("# plots"))),
-        tags$tbody(lapply(seq_len(nrow(rows)), function(i) tags$tr(
-          tags$td(tags$i(rows$scientificName[i])), tags$td(rows$sym[i]), tags$td(rows$n_plots[i]))))),
-      if (n > 12) div(class = "evo-flag-more", sprintf("+ %d more in the full report (CSV)", n - 12)),
-      div(class = "evo-flag-note", "These are regional associates the soil-unit reference list didn't enumerate, not data-quality issues. They're kept in the downloadable report, labelled, but left out of the review lane below."))
-  })
-
   # Bucket C — observed, not in reference (clay; the review lane)
   output$evoTableC <- DT::renderDT({
     ev <- evo(); if (is.null(ev)) return(evo_empty_dt("No reference comparison is available for this site."))
-    C <- ev$C; if (!nrow(C)) {
-      msg <- if (isTRUE(ev$state_covered) && (ev$n_regional %||% 0) > 0)
-        sprintf("Nothing to review: the unexpected species here are all natives on the %s state flora (set aside above as regional associates), with no introduced species and no out-of-state records.", state_names[ev$state] %||% ev$state)
-      else "Every observed species is on the reference list; nothing to review."
-      return(evo_empty_dt(msg))
-    }
+    C <- ev$C
+    if (!nrow(C)) return(evo_empty_dt("Every observed species is on the reference list; nothing to review."))
     df <- data.frame(Symbol = C$sym, Species = C$scientificName, Family = C$family,
       Nativity = C$nativity, `Mean cover %` = ifelse(is.finite(C$mean_cover), C$mean_cover, NA),
       `# plots` = C$n_plots, check.names = FALSE)
@@ -1620,6 +1584,11 @@ server <- function(input, output, session) {
     nm_ui <- if (is.null(nm)) {
       div(class = "evo-flag evo-flag-muted", bs_icon("hourglass-split"),
         HTML(" <b>Nativity cross-check (NEON vs USDA):</b> needs the USDA PLANTS authority file, being added in a follow-up build. NEON's own native/introduced labels are used everywhere else on the page."))
+    } else if (identical(nm$eligible, FALSE)) {
+      div(class = "evo-flag evo-flag-muted", bs_icon("info-circle"),
+        HTML(sprintf(" <b>Nativity cross-check (NEON vs USDA):</b> not applied for %s because %s. No match claim is made.",
+                     htmltools::htmlEscape(nm$state %||% "this geography"),
+                     htmltools::htmlEscape(nm$reason %||% "the authority is outside its registered scope"))))
     } else if (nm$n == 0) {
       div(class = "evo-flag evo-flag-clean", bs_icon("check2-circle"),
         HTML(" <b>Nativity cross-check (NEON vs USDA):</b> no disagreements; every species' native/introduced label matches USDA PLANTS."))
@@ -1656,11 +1625,24 @@ server <- function(input, output, session) {
   # Each standalone QC bucket ships as a ZIP that bundles its CSV WITH a
   # data_dictionary.csv built from plant_codebook() over the EXACT frame
   # emitted, so the columns can never drift from their documentation.
+  .evo_empty_frames <- list(
+    "expected-observed" = data.frame(
+      symbol = character(), scientificName = character(), commonName = character(),
+      reference_role = character(), reference_production = numeric(),
+      observed_cover_pct = numeric(), n_plots = integer(), stringsAsFactors = FALSE),
+    "expected-absent" = data.frame(
+      symbol = character(), scientificName = character(), commonName = character(),
+      reference_role = character(), reference_production = numeric(), stringsAsFactors = FALSE),
+    "observed-not-expected" = data.frame(
+      symbol = character(), scientificName = character(), family = character(),
+      nativity = character(), classification = character(), mean_cover_pct = numeric(),
+      n_plots = integer(), stringsAsFactors = FALSE)
+  )
   .evo_dl <- function(getdf, tag) downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_%s_%s.zip", rv$site %||% "site", tag, format(Sys.Date(), "%Y%m%d")),
     content = function(file) {
-      ev <- evo(); df <- if (is.null(ev)) data.frame() else getdf(ev)
-      df <- df %||% data.frame()
+      ev <- evo(); df <- if (is.null(ev)) .evo_empty_frames[[tag]] else getdf(ev)
+      if (is.null(df) || !ncol(df)) df <- .evo_empty_frames[[tag]]
       tmp <- tempfile("evozip"); dir.create(tmp)
       csv_name <- sprintf("%s.csv", tag)
       utils::write.csv(df, file.path(tmp, csv_name), row.names = FALSE, na = "")
@@ -1681,15 +1663,11 @@ server <- function(input, output, session) {
       reference_role = ifelse(B$is_dominant %in% TRUE, "dominant", "associated"),
       reference_production = B$rangeprod) }, "expected-absent")
   output$evoCsvC <- .evo_dl(function(ev) {
-    # ship the FULL observed-not-in-reference set, with the state-plausibility class
-    # so review (introduced + native-not-in-state) and the demoted regional associates
-    # (on the state flora, not this soil unit) are both present and labelled.
+    # Ship the full observed-not-reference set. Every row remains review until
+    # exact per-match geographic source/query/license provenance is registered.
     C <- ev$C_all %||% ev$C; if (is.null(C) || !nrow(C)) return(data.frame())
-    cls <- if ("c_class" %in% names(C))
-      ifelse(C$c_class == "regional", "regional associate (state flora, not this soil unit)", "review")
-    else "review"
     data.frame(symbol = C$sym, scientificName = C$scientificName, family = C$family,
-      nativity = C$nativity, classification = cls,
+      nativity = C$nativity, classification = "review",
       mean_cover_pct = C$mean_cover, n_plots = C$n_plots) }, "observed-not-expected")
   output$evoReport <- downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_completeness-report_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
@@ -1715,21 +1693,22 @@ server <- function(input, output, session) {
           "). NEON surveys plants in nested quadrats: 1 m² subplots (presence + percent cover), 10 m² and 100 m² subplots (presence), combined into a 400 m² plot list, at peak greenness each year.")),
       div(class = "about-card", h4(bs_icon("rulers"), " How richness is measured"),
         p("Species–area curves come straight from the nested design: a 1 m² quadrat, a 10 m² subplot, a 100 m² corner, the whole 400 m² plot. ",
-          tags$b("Chao2"), " (incidence-based) estimates how many species remain undetected, the right estimator for presence/quadrat data."),
+          tags$b("Bias-corrected Chao2"), " is an incidence-based lower-bound estimate of total richness within the sampled incidence units. Chao2 minus observed richness is the estimated unseen component; it does not standardize sites to equal effort or coverage."),
         p(class = "caveat", bs_icon("exclamation-triangle"), " Cover is an ocular estimate and vegetation layers overlap, so site-summed cover is relative, not a share of ground.")),
       div(class = "about-card", h4(bs_icon("shield-exclamation"), " Native vs invasive"),
         p("Status is NEON's ", tags$code("nativeStatusCode"), " (N native / I introduced / others → unknown). We publish the ", tags$b("unknown rate"),
-          " so the invasion numbers are read honestly. The ", tags$b("invasion-pressure"), " index uses the nested scales to flag invaders established at the finest grain.")),
+          " so the invasion numbers are read honestly; contradictory statuses route to Unknown/review. The ", tags$b("cross-scale occurrence"), " view compares detections at 1 m² with the full 400 m² grain. It is not a spread, impact, or management-priority estimate.")),
       div(class = "about-card", h4(bs_icon("clipboard-check"), " Expected vs Observed"),
-        p("We resolve each site's coordinates to its NRCS ", tags$b("Ecological Site"), " and pull that site's ",
-          tags$b("reference plant community"), " (the plants the soil and climate can support), then compare it to what NEON actually recorded, the ", tags$b("EcoPlot"), " recipe."),
+        p("The current bundle resolves one reference coordinate near each site's centre to one NRCS soil map unit and dominant ecological class, then compares that ",
+          tags$b("single-point reference plant community"), " with NEON plot records. It is context, not a site-wide expected-flora census."),
         p("Because NEON samples ~400 m² per plot at peak greenness, a reference species not detected is read as ",
-          tags$b("completeness"), " (or a real state-transition), ", tags$b("never as error"), ". Only two lanes are true data-quality signals: coarse IDs and nativity disagreements with USDA PLANTS."),
+          tags$b("completeness"), " (or a real state-transition), ", tags$b("never as error"), ". Review lanes retain observed-but-unlisted taxa; no undocumented fuzzy state-occurrence match silently dismisses them."),
         p(tags$b("Dominant"), " = the core species making up the top 50% of the ecological site's reference production (NRCS air-dry lb/ac at normal precipitation), an app-defined, list-length-invariant convention, not an official NRCS designation. Forest ecological sites carry no per-species production (their dominants are canopy trees, scored by site index), so dominance isn't ranked there."),
-        p(class = "caveat", bs_icon("info-circle"), " Reference flora: USDA-NRCS Soil Data Access / Ecological Site Descriptions (public domain). Nativity authority: USDA, NRCS, ",
-          tags$a(href = "https://plants.usda.gov", target = "_blank", "The PLANTS Database"), ". NEON taxonomy follows USDA PLANTS symbols, so the match is an exact symbol join.")),
-      div(class = "about-card", h4(bs_icon("diagram-3"), " A NEONize sibling"),
-        p("Built to the NEON Small Mammal Tracker quality bar (same Desert Data Labs design system, bundling, and pin-card interaction), but the analyses are plant-native (there are no individuals to track in cover data). See the NEONize playbook."),
+        p(class = "caveat", bs_icon("info-circle"), " Reference flora: USDA-NRCS Soil Data Access / Ecological Site Descriptions (public domain). Nativity authority: ",
+          tags$a(href = "https://plants.usda.gov", target = "_blank", rel = "noopener", "USDA PLANTS"), "; lower-48 authority checks are disabled outside their valid geography.")),
+      div(class = "about-card", h4(bs_icon("diagram-3"), " Role in the NEON Explorer Suite"),
+        p("Plant Diversity contributes ", tags$b("composition and invasion context"), ". It does not cast a productivity vote and its per-site short-record associations do not become Cascade edges. ",
+          tags$a(href = "https://tgilbert14.github.io/NEON-Driver-Cascade/", target = "_blank", rel = "noopener", "Driver Cascade"), " is the suite's evidence-grading integrator."),
         p(bs_icon("envelope"), " ", tags$a(href = "mailto:desertdatalabs@gmail.com", "desertdatalabs@gmail.com"),
           " · ", tags$a(href = "https://data.neonscience.org/data-products/DP1.10058.001", target = "_blank", "NEON data product"))),
       div(class = "about-card", h4(bs_icon("award"), " Data attribution & license"),

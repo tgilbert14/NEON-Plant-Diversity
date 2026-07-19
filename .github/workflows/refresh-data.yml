@@ -1,168 +1,372 @@
-name: Refresh NEON plant data bundle
+name: Propose NEON plant-diversity refresh
 
-# Automated rebuild of the per-site PLANT .rds bundles (data/sites/*.rds, the
-# species-area / cover / nativity database for all 46 NEON terrestrial sites)
-# plus the precomputed indexes (data/site_index.rds, data-sample/demo.rds) and
-# manifest.json — then redeploy by pushing the refreshed data to `master`.
-#
-# DEPLOY MODEL: this app lives on Posit Connect Cloud with a GIT-BACKED deploy,
-# so "deploy" IS the push to master — Connect Cloud watches master and auto-
-# redeploys on every push. That's why there are NO shinyapps.io secrets and NO
-# deploy.R step here (unlike the mammal sibling): the commit at the end of this
-# workflow is the deploy.
-#
-# CADENCE — MONTHLY, first Saturday night (Arizona), matching the Small Mammal
-# reference and every other NEON sibling (suite consistency). Cron can't express
-# "first Saturday of the month", so we fire every Saturday 06:00 UTC and let the
-# `gate` job proceed only on the FIRST Saturday (Arizona time, America/Phoenix —
-# no DST). NOTE: NEON plant presence & % cover (DP1.10058.001) publishes ~annually
-# and a full 46-site loadByProduct sweep runs ~1–2h, so most monthly runs re-pull
-# unchanged data; it's off-peak + gated so harmless, but switch the gate back to
-# quarter-months (Jan/Apr/Jul/Oct) if CI minutes matter more than uniformity.
-# Manual runs (workflow_dispatch) always proceed; tick `skip_download` to
-# rebundle + redeploy the already-committed raw/bundle fast (a deploy test that
-# skips the long NEON re-pull).
-#
-# REQUIRED SECRET (Settings → Secrets and variables → Actions):
-#   NEON_TOKEN   a NEON API token from your NEON "My Account" page. From 2026-06-30
-#                NEON REQUIRES a token for downloads (before that it only raised the
-#                rate limit). Without it the re-pull fails after that date; the app
-#                keeps its last committed bundle. fetch_plant_all.R reads $NEON_TOKEN.
-#
-# FLOW: gate (monthly check) → checkout → setup-r + deps → fetch raw to
-# ../plant-data-fetch (resumable, time-boxed, non-fatal) → bundle every raw dump
-# present into data/sites/*.rds + indexes → regenerate manifest.json → guarded
-# commit + push to master (no-ops cleanly when nothing changed). The raw dumps
-# live OUTSIDE the repo (../plant-data-fetch is gitignored), so CI re-pulls from
-# scratch each run.
-#
-# NOT refreshed here (deliberately): the STATIC reference data behind the
-# "Expected vs Observed" tab -- data/expected/*.rds (NRCS Ecological Site flora)
-# and data/authority/plants_lookup.rds (USDA PLANTS nativity + synonyms). Those
-# are public-domain reference layers that change ~never, so they ship committed
-# and are rebuilt only on demand (scripts/build_expected_lists.R +
-# scripts/build_plant_authority.R) -- e.g. when NEON adds a site. A new site with
-# no expected list degrades gracefully (the tab shows an honest "not bundled yet"
-# state), so the monthly NEON refresh never needs to touch SDA/USDA.
+# Fetch, build, validation, and publication are separate trust boundaries. The
+# fetch job has no write token. The validator builds twice under pinned R 4.5.2.
+# Only the final job can write, and it publishes a review branch—never master.
 
 on:
   schedule:
-    # Every Sunday 06:00 UTC == Saturday 23:00 America/Phoenix (Arizona, no DST) —
-    # the SAME off-peak slot as every other NEON sibling. Cron can't say "first
-    # Saturday of the month", so we fire weekly and let the gate proceed only on
-    # the first one (monthly), matching the Small Mammal reference.
     - cron: "0 6 * * 0"
   workflow_dispatch:
     inputs:
       skip_download:
-        description: "Skip the NEON re-pull and just rebundle/redeploy the committed data (fast test)"
+        description: "Revalidate committed bundles and rebuild search/manifest only"
         type: boolean
         default: false
+      cutoff_month:
+        description: "Closed NEON data cutoff (YYYY-MM); blank uses the previous month"
+        type: string
+        required: false
+      release_id:
+        description: "Immutable source receipt; blank derives it from the cutoff"
+        type: string
+        required: false
 
 permissions:
-  contents: write          # push the refreshed data bundles to master
+  contents: read
+
+concurrency:
+  group: plant-diversity-refresh
+  cancel-in-progress: false
 
 jobs:
-  # Gate: only the FIRST Saturday (Arizona time) of each month runs the heavy
-  # refresh — the same monthly off-peak cadence as the Small Mammal reference and
-  # the other siblings. Manual runs (workflow_dispatch) always proceed.
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       run: ${{ steps.check.outputs.run }}
+      cutoff: ${{ steps.receipt.outputs.cutoff }}
+      build_date: ${{ steps.receipt.outputs.build_date }}
+      release: ${{ steps.receipt.outputs.release }}
     steps:
       - id: check
+        shell: bash
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run — proceeding."
-            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          dow=$(TZ='America/Phoenix' date +%u)    # 6 = Saturday
-          day=$(TZ='America/Phoenix' date +%-d)   # day-of-month, no leading zero
+          dow=$(TZ='America/Phoenix' date +%u)
+          day=$(TZ='America/Phoenix' date +%-d)
           if [ "$dow" = "6" ] && [ "$day" -le 7 ]; then
-            echo "First Saturday in Arizona (day $day) — proceeding."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Not the first Saturday in Arizona (dow=$dow day=$day) — skipping."
+            echo "SKIPPED_BY_CALENDAR: dow=$dow day=$day"
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-  refresh:
+      - id: receipt
+        if: steps.check.outputs.run == 'true'
+        shell: bash
+        env:
+          REQUESTED_CUTOFF: ${{ github.event.inputs.cutoff_month }}
+          REQUESTED_RELEASE: ${{ github.event.inputs.release_id }}
+        run: |
+          set -euo pipefail
+          cutoff="${REQUESTED_CUTOFF:-}"
+          if [ -z "$cutoff" ]; then
+            cutoff=$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)
+          fi
+          if [[ ! "$cutoff" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
+            echo "::error title=Invalid cutoff::cutoff_month must use YYYY-MM"
+            exit 1
+          fi
+          build_date=$(date -u -d "${cutoff}-01 +1 month -1 day" +%F)
+          release="${REQUESTED_RELEASE:-}"
+          if [ -z "$release" ]; then
+            release="NEON-DP1.10058.001-through-${cutoff}"
+          fi
+          if [[ ! "$release" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error title=Invalid release::release_id uses unsupported characters"
+            exit 1
+          fi
+          echo "cutoff=$cutoff" >> "$GITHUB_OUTPUT"
+          echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Candidate receipt: cutoff=$cutoff build_date=$build_date release=$release"
+
+  fetch_raw:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-latest
+    if: needs.gate.outputs.run == 'true' && github.event.inputs.skip_download != 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    env:
+      RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
+      RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
     steps:
-      # Checkout with a token so the final push to master can trigger the
-      # Connect Cloud (and GitHub Pages) redeploy.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          use-public-rspm: true
+          r-version: '4.1.1'
+          use-public-rspm: false
 
-      - name: Install R packages
-        uses: r-lib/actions/setup-r-dependencies@v2
+      - name: Install fetch-only dependencies
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          packages: neonUtilities, dplyr, tibble, tidyr, stringr, RColorBrewer
+          pak-version: repo
+          dependencies: '"hard"'
+          cache-version: plant-diversity-fetch-r411-2024-12-31-v2
+          cache: always
+          install-pandoc: 'false'
+          install-quarto: 'false'
+
+      - name: Fetch exactly 46 sites into empty staging
+        env:
+          NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
+          PDE_RAW_OUT_DIR: ${{ runner.temp }}/plant-raw
+          PDE_FETCH_END: ${{ needs.gate.outputs.cutoff }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEON_TOKEN:-}" ]; then
+            echo "::error title=Missing NEON token::NEON_TOKEN is required for the scheduled fetch"
+            exit 1
+          fi
+          mkdir -p "$PDE_RAW_OUT_DIR"
+          Rscript --vanilla scripts/fetch_plant_all.R
+          count=$(find "$PDE_RAW_OUT_DIR" -maxdepth 1 -name '*_raw.rds' -type f | wc -l)
+          test "$count" -eq 46
+
+      - name: Upload immutable raw staging
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-diversity-raw-${{ github.sha }}
+          path: ${{ runner.temp }}/plant-raw
+          if-no-files-found: error
+          retention-days: 1
+
+  build_candidate:
+    needs: [gate, fetch_raw]
+    if: >-
+      always() && needs.gate.outputs.run == 'true' &&
+      (github.event.inputs.skip_download == 'true' || needs.fetch_raw.result == 'success')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 100
+    permissions:
+      contents: read
+    env:
+      RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+      RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+      OPENBLAS_CORETYPE: Haswell
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PDE_LIVE: "0"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: '4.5.2'
+          use-public-rspm: false
+
+      - name: Install pinned build and runtime closure
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           packages: >
-            neonUtilities, dplyr, tibble, tidyr, stringr, rsconnect,
-            shiny, bslib, bsicons, plotly, leaflet, DT, shinyjs,
-            shinycssloaders, RColorBrewer, htmltools, cpp11
+            shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly,
+            leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
+            jsonlite, rsconnect, cpp11,
+            url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sf_1.1-1.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/s2_1.1.11.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/units_1.0-1.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/wk_0.9.5.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/classInt_0.4-11.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/raster_3.6-32.tar.gz,
+            url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sp_2.2-1.tar.gz
+          pak-version: repo
+          dependencies: '"hard"'
+          cache-version: plant-diversity-refresh-geo-closure-v2
+          cache: always
+          install-pandoc: 'false'
+          install-quarto: 'false'
 
-      # Pull the raw NEON dumps for all 46 sites into ../plant-data-fetch (OUTSIDE
-      # the repo, gitignored). RESUMABLE — skips any site whose _raw.rds already
-      # exists — but CI starts clean each run, so it re-pulls from scratch. Time-
-      # boxed generously (under the 6h job cap; public repo = free Actions
-      # minutes) and continue-on-error so a partial pull never blocks the rebundle
-      # below — the bundler simply packages whatever raw dumps landed.
-      - name: Fetch raw NEON plant data (all sites, resumable)
+      - name: Verify deterministic OpenBLAS runtime
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("libopenblas.so.0")
+          lib.openblas_get_corename.restype = ctypes.c_char_p
+          core = lib.openblas_get_corename().decode("ascii")
+          threads = lib.openblas_get_num_threads()
+          print(f"OpenBLAS core={core} threads={threads}")
+          if core.lower() != "haswell" or threads != 1:
+              raise SystemExit("numeric runtime contract failed")
+          PY
+
+      - name: Download raw staging
         if: ${{ github.event.inputs.skip_download != 'true' }}
-        continue-on-error: true
-        timeout-minutes: 330
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plant-diversity-raw-${{ github.sha }}
+          path: ${{ runner.temp }}/plant-raw
+
+      - name: Build twice in isolated staging and compare exact bytes
         env:
-          NEON_TOKEN: ${{ secrets.NEON_TOKEN }}   # optional — anonymous works (slower)
+          CANDIDATE_CUTOFF: ${{ needs.gate.outputs.cutoff }}
+          CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
+          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
-          Rscript scripts/fetch_plant_all.R
+          set -euo pipefail
+          for pass in first second; do
+            stage="$RUNNER_TEMP/plant-stage-$pass"
+            mkdir -p "$stage/data" "$stage/data-sample"
+            cp -R data/env data/expected data/authority "$stage/data/"
+            if [ "$SKIP_DOWNLOAD" = "true" ]; then
+              cp -R data/sites "$stage/data/sites"
+              cp data/site_index.rds "$stage/data/site_index.rds"
+              cp data-sample/demo.rds "$stage/data-sample/demo.rds"
+              PDE_OUTPUT_ROOT="$stage" Rscript --vanilla scripts/build_search_index.R
+            else
+              PDE_RAW_DIR="$RUNNER_TEMP/plant-raw" PDE_OUTPUT_ROOT="$stage" \
+                PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" NEON_RELEASE="$CANDIDATE_RELEASE" \
+                Rscript --vanilla scripts/bundle_plant_data.R
+              PDE_OUTPUT_ROOT="$stage" PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
+                NEON_RELEASE="$CANDIDATE_RELEASE" \
+                Rscript --vanilla scripts/build_search_index.R
+            fi
+            PDE_SITE_DIR="$stage/data/sites" \
+              PDE_EXPECTED_DIR="$GITHUB_WORKSPACE/data/expected" \
+              PDE_AUTHORITY_RDS="$GITHUB_WORKSPACE/data/authority/plants_lookup.rds" \
+              PDE_COMPLETENESS_OUT="$stage/data/expected/completeness_index.rds" \
+              Rscript --vanilla scripts/build_completeness_index.R
+            PDE_RUNTIME_DATA_ROOT="$stage" \
+              PDE_RUNTIME_RECEIPT_OUT="$stage/runtime-receipt.txt" \
+              PDE_SKIP_COVER_RECEIPT=1 node scripts/write_release_receipts.mjs
+            (cd "$stage" && find data/sites data/env data/expected data/authority data-sample -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum && sha256sum data/site_index.rds data/search_index.rds data/expected/completeness_index.rds runtime-receipt.txt) \
+              > "$RUNNER_TEMP/plant-$pass.sha256"
+          done
+          diff -u "$RUNNER_TEMP/plant-first.sha256" "$RUNNER_TEMP/plant-second.sha256"
 
-      # Bundle every raw dump present → lean data/sites/*.rds + data/site_index.rds
-      # + the SRER demo sample, then regenerate manifest.json (R 4.3.x here has
-      # the full runtime toolchain the manifest scanner needs).
-      - name: Bundle the per-site plant data
-        if: ${{ github.event.inputs.skip_download != 'true' }}
+      - name: Promote staged bytes and validate the complete candidate
+        env:
+          CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
+          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
-          Rscript scripts/bundle_plant_data.R
-
-      # Rebuild the "Search the network" precomputed index (data/search_index.rds)
-      # FROM the committed per-site bundles + site_index — runs on every refresh
-      # (incl. skip_download, which still rebundles from the committed raw) so the
-      # in-app search can never drift behind the data. Reads bundles, no live fetch.
-      - name: Rebuild the search index
-        run: |
-          Rscript scripts/build_search_index.R
-
-      - name: Regenerate manifest.json
-        run: |
-          Rscript scripts/write_manifest.R
-
-      # Commit + push the refreshed bundles directly to master. THIS is the
-      # deploy: the push makes Connect Cloud auto-redeploy. Guarded so it no-ops
-      # cleanly when nothing changed (no empty commit, no failed push).
-      - name: Commit & push refreshed bundles to master
-        run: |
-          git config user.name  "neon-data-bot"
-          git config user.email "neon-data-bot@users.noreply.github.com"
-          git add -A \
-            data/sites \
-            data/env \
-            data/site_index.rds \
-            data/search_index.rds \
-            data-sample/demo.rds \
-            manifest.json
-          if git diff --cached --quiet; then
-            echo "No data changes — nothing to commit or deploy."
+          set -euo pipefail
+          rsync -a --delete "$RUNNER_TEMP/plant-stage-first/data/sites/" data/sites/
+          cp "$RUNNER_TEMP/plant-stage-first/data/site_index.rds" data/site_index.rds
+          cp "$RUNNER_TEMP/plant-stage-first/data/search_index.rds" data/search_index.rds
+          cp "$RUNNER_TEMP/plant-stage-first/data-sample/demo.rds" data-sample/demo.rds
+          cp "$RUNNER_TEMP/plant-stage-first/data/expected/completeness_index.rds" \
+            data/expected/completeness_index.rds
+          cp "$RUNNER_TEMP/plant-stage-first/runtime-receipt.txt" www/runtime-receipt.txt
+          Rscript --vanilla scripts/write_manifest.R
+          sha256sum manifest.json > "$RUNNER_TEMP/manifest-first.txt"
+          Rscript --vanilla scripts/write_manifest.R
+          sha256sum manifest.json > "$RUNNER_TEMP/manifest-second.txt"
+          diff -u "$RUNNER_TEMP/manifest-first.txt" "$RUNNER_TEMP/manifest-second.txt"
+          if [ "$SKIP_DOWNLOAD" = "true" ]; then
+            Rscript --vanilla scripts/verify_bundle.R
           else
-            git commit -m "data: monthly NEON plant refresh (bundles + manifest) [bot]"
-            git push origin HEAD:master
-            echo "Pushed refreshed bundles to master — Connect Cloud will redeploy."
+            PDE_EXPECT_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
+              PDE_EXPECT_RELEASE="$CANDIDATE_RELEASE" \
+              Rscript --vanilla scripts/verify_bundle.R
+          fi
+          node scripts/check_custom_message_handlers.mjs
+          node scripts/check_cover.mjs
+          Rscript --vanilla scripts/test_science_contracts.R
+          Rscript --vanilla scripts/test_build_script_portability.R
+          Rscript --vanilla -e 'Sys.setenv(PDE_LIVE="0"); source("global.R"); source("ui.R"); source("server.R"); stopifnot((inherits(ui,"shiny.tag.list") || inherits(ui,"shiny.tag")), is.function(server), length(BUNDLED) == 46L)'
+          git diff --check
+
+      - name: Package the validated candidate
+        run: tar -czf "$RUNNER_TEMP/plant-diversity-refresh.tgz" data data-sample www/runtime-receipt.txt manifest.json
+
+      - name: Upload immutable validated candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-diversity-refresh-${{ github.sha }}
+          path: ${{ runner.temp }}/plant-diversity-refresh.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish_candidate:
+    needs: [gate, build_candidate]
+    if: needs.gate.outputs.run == 'true' && needs.build_candidate.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Download validated candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plant-diversity-refresh-${{ github.sha }}
+          path: ${{ runner.temp }}/refresh-candidate
+
+      - name: Publish or update the review branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_CUTOFF: ${{ needs.gate.outputs.cutoff }}
+          CANDIDATE_RELEASE: ${{ needs.gate.outputs.release }}
+          SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          remote_master=$(git rev-parse origin/master)
+          if [ "$remote_master" != "$GITHUB_SHA" ]; then
+            echo "::error title=Stale refresh base::master moved from $GITHUB_SHA to $remote_master; rebuild the candidate."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/validated-release"
+          tar -xzf "$RUNNER_TEMP/refresh-candidate/plant-diversity-refresh.tgz" -C "$RUNNER_TEMP/validated-release"
+          rsync -a --delete "$RUNNER_TEMP/validated-release/data/" data/
+          rsync -a --delete "$RUNNER_TEMP/validated-release/data-sample/" data-sample/
+          cp "$RUNNER_TEMP/validated-release/www/runtime-receipt.txt" www/runtime-receipt.txt
+          cp "$RUNNER_TEMP/validated-release/manifest.json" manifest.json
+          changed=$(git diff --name-only)
+          if [ -n "$changed" ] && echo "$changed" | grep -Ev '^(data/|data-sample/|www/runtime-receipt[.]txt$|manifest[.]json$)' >/dev/null; then
+            echo "::error title=Candidate allowlist violation::validated artifact changed a non-release path"
+            echo "$changed"
+            exit 1
+          fi
+          if git diff --quiet -- data data-sample www/runtime-receipt.txt manifest.json; then
+            echo "No validated release-byte change; no review branch created."
+            exit 0
+          fi
+          branch="automation/plant-diversity-data-refresh"
+          remote_head=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+          git switch -C "$branch"
+          git config user.name "neon-data-bot"
+          git config user.email "neon-data-bot@users.noreply.github.com"
+          git add -A -- data data-sample www/runtime-receipt.txt manifest.json
+          if [ "$SKIP_DOWNLOAD" = "true" ]; then
+            receipt="revalidation-only; committed source receipts unchanged"
+          else
+            receipt="cutoff ${CANDIDATE_CUTOFF}; release ${CANDIDATE_RELEASE}"
+          fi
+          git commit -m "data: propose validated plant-diversity refresh [bot]" \
+                     -m "Source ${GITHUB_SHA}; ${receipt}; two exact plant builds, 46 static environment-context byte/schema checks, runtime receipt, manifest, and offline source passed."
+          if [ -n "$remote_head" ]; then
+            git push --force-with-lease="refs/heads/$branch:$remote_head" origin "$branch:refs/heads/$branch"
+          else
+            git push origin "$branch:refs/heads/$branch"
+          fi
+          pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
+          body="Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. Merging this review PR is the explicit production/deployment decision."
+          if [ -z "$pr_url" ]; then
+            gh pr create --base master --head "$branch" \
+              --title "data: validated NEON plant-diversity refresh" --body "$body"
+          else
+            gh pr comment "$pr_url" --body "$body"
           fi

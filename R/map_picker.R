@@ -1,8 +1,9 @@
 # ==========================================================================
 # map_picker.R — the reusable national site-PICKER map for the NEON suite.
 # The feature that defines the flagship: a US map of every bundled site, tap a
-# dot to load it. Marker size = a headline count (log1p-scaled), colour = a
-# headline metric. CRITICAL: the leafletOutput is STATIC in ui.R (placed via
+# dot to load it. Marker size = sampling support (log1p-scaled), colour = a
+# headline context metric. Raw biodiversity outcomes must never drive national
+# marker size because site effort differs. CRITICAL: the leafletOutput is STATIC in ui.R (placed via
 # mapPickerUI) — NEVER inside a renderUI — because a leaflet htmlwidget delivered
 # through renderUI loses the dependency-deliver → re-bind race on Posit Connect
 # Cloud and the spinner hangs forever. mapPickerServer keeps it alive while the
@@ -45,7 +46,7 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, p
     output$map <- leaflet::renderLeaflet({
       st <- site_table[is.finite(site_table$lat) & is.finite(site_table$lng), , drop = FALSE]
       shiny::validate(shiny::need(nrow(st) > 0,
-        "The national site map couldn't load its data. Use the site list below, or the demo."))
+        "The national site map couldn't load its data. Use the site list below or the by-name selector."))
       labs <- lapply(seq_len(nrow(st)), function(i) htmltools::HTML(label_fn(st[i, , drop = FALSE])))
       pops <- if (!is.null(popup_fn))
         vapply(seq_len(nrow(st)), function(i) as.character(popup_fn(st[i, , drop = FALSE])), character(1))
@@ -61,7 +62,7 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, p
           weight = 1.4, opacity = 1, fillColor = color_fn(st), fillOpacity = 0.85,
           label = labs, popup = pops, popupOptions = pop_opts,
           labelOptions = leaflet::labelOptions(direction = "auto", textsize = "13px",
-            style = list("font-family" = "Rubik, sans-serif", "box-shadow" = "0 3px 12px rgba(0,0,0,.18)")),
+            style = list("font-family" = "system-ui, sans-serif", "box-shadow" = "0 3px 12px rgba(0,0,0,.18)")),
           options = leaflet::markerOptions(riseOnHover = TRUE)) %>%
         # Self-fix sizing: the splash leaflet binds before its container has a width
         # (the map has no intrinsic width, so the container can resolve to 0 until a

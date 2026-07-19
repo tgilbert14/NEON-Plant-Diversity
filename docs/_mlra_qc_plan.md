@@ -1,3 +1,5 @@
+> **Historical implementation plan — superseded for release decisions.** This file records earlier design intent and may contain stale source, authority, estimator, UI, or validation claims. Use [SCIENCE-CONTRACT.md](SCIENCE-CONTRACT.md) for the normative analysis rules and [BUILD-TEST-HANDOFF.md](BUILD-TEST-HANDOFF.md) for the current release gates. Do not treat unchecked items or historical findings below as implemented or validated.
+
 The two load-bearing facts check out: `latest_snapshot()` and `species_level_only()` exist as described, `NATIVITY_COLS`/`OKABE_ITO` are present, and `neon_sites` carries lat/lng for all 46 sites with SRER at 31.9107, -110.8355 (AZ, D14). Now I have what I need to write the design.
 
 ---

@@ -17,7 +17,6 @@ suppressPackageStartupMessages({
 source("R/site_metadata.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
-source("R/seasonal_env.R",  local = FALSE)   # Driver Cascade's seasonal-aggregate driver read (winter vs monsoon rain)
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
 source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
 source("R/report_pdf.R",    local = FALSE)   # one-page site report PDF (base graphics)
@@ -128,25 +127,20 @@ MASCOT_CRITTER <- htmltools::HTML(paste0(
 
 # Light desert-DAY hexes for bslib (the app PAGE defaults to light; only the
 # prominent info-boxes go dark via CSS). Keep these readable on the light paper.
-# Fonts are named as plain CSS families here, NOT font_google(). font_google()
-# defaults to local = TRUE, which downloads the font from Google's servers and
-# compiles it into the theme AT APP STARTUP (server-side). On Connect Cloud that
-# live fetch runs on every cold start against an empty cache and, when Google Fonts
-# is slow/unreachable, blocks/fails the boot -> "start-up error". Naming the family
-# as a string does zero network at boot; the glyphs still reach the browser via the
-# non-blocking client-side <link> in ui.R (display=swap), with a system fallback.
+# Runtime typography is intentionally system-local. No Google font or CDN request
+# is needed to boot, paint, export, or recover after a Connect worker recycle.
 rubik_stack <- bslib::font_collection(
-  "Rubik", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
+  "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
 )
 fraunces_stack <- bslib::font_collection(
-  "Fraunces", "Georgia", "Cambria", "Times New Roman", "serif"
+  "Georgia", "Cambria", "Times New Roman", "serif"
 )
 app_theme <- bs_theme(
   version = 5, bg = "#ffffff", fg = "#16243a",
   primary = "#2f9a4f", secondary = "#e0685a",
   success = "#3f9a52", info = "#2f8fc4", warning = "#d6a31c", danger = "#e0685a",
   base_font = rubik_stack,
-  heading_font = fraunces_stack,   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
+  heading_font = fraunces_stack,
   "border-radius" = "10px")
 
 # ---- static-asset cache-busting (mtime query) -----------------------------

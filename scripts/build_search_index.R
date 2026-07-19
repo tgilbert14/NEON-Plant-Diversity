@@ -1,93 +1,104 @@
-# ===========================================================================
-# build_search_index.R — the "Search the network" precomputed index.
-#
-# READS the committed per-site bundles (data/sites/*.rds) — NOT a live fetch —
-# and the precomputed data/site_index.rds, and writes ONE small file
-# data/search_index.rds that the app loads once at boot (like site_index) and
-# filters in memory. No live calls, instant search.
-#
-# search_index.rds is list(taxa=, sites=):
-#   taxa  — one row per (scientificName, site) the taxon occurs at:
-#             scientificName, site, family, nativity, mean_cover (the app's
-#             honest per-site % cover unit, NA where presence-only),
-#             n_plots, year_min, year_max. Drives FIND-A-TAXON.
-#   sites — reuse of site_index (site, richness, n_plots, pct_introduced,
-#             dominant_family, lat, lng). Drives the THRESHOLD query.
-#
-# The cover unit is the SAME recipe the app uses everywhere: plot_species_cover()
-# = mean over a plot's sampled 1 m^2 subplots, then mean across plots. Computed on
-# the honest latest_snapshot() (one survey per plot), species-level IDs only — so
-# the index can never disagree with what a site's Overview shows.
-#
-# Run:  "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" scripts/build_search_index.R
-# (plain readRDS/saveRDS + dplyr; any modern R works.)
-# ===========================================================================
-suppressWarnings(suppressMessages({ library(dplyr) }))
-source("R/plant_helpers.R")   # the EXACT cover / snapshot recipe the app uses
+#!/usr/bin/env Rscript
 
-SITE_DIR <- "data/sites"
-sites <- sub("\\.rds$", "", list.files(SITE_DIR, pattern = "\\.rds$"))
-if (!length(sites)) stop("No site bundles in ", SITE_DIR, " — run scripts/bundle_plant_data.R first.")
+# Deterministically rebuild the network search index from a complete site bundle
+# root. PDE_OUTPUT_ROOT permits isolated candidate builds; the default is the repo.
 
-# per-site taxon rows: species-level, on the honest one-survey-per-plot snapshot.
-# mean_cover = mean across plots of the plot's mean 1 m^2 cover for the taxon
-# (the same plot_species_cover() the Overview / leaderboard use). Presence-only
-# taxa (never scored at 1 m^2) carry NA cover but still appear (they ARE present).
+suppressWarnings(suppressMessages(library(dplyr)))
+source("R/site_metadata.R")
+source("R/plant_helpers.R")
+
+root <- Sys.getenv("PDE_OUTPUT_ROOT", ".")
+site_dir <- file.path(root, "data", "sites")
+search_path <- file.path(root, "data", "search_index.rds")
+site_index_path <- file.path(root, "data", "site_index.rds")
+expected_sites <- sort(as.character(neon_sites$site))
+sites <- sort(sub("[.]rds$", "", list.files(site_dir, pattern = "[.]rds$")))
+if (!identical(sites, expected_sites))
+  stop(sprintf("SEARCH SITE GATE FAILED: missing=[%s] extra=[%s]",
+               paste(setdiff(expected_sites, sites), collapse = ","),
+               paste(setdiff(sites, expected_sites), collapse = ",")),
+       call. = FALSE)
+
 taxa_for_site <- function(site) {
-  b <- tryCatch(readRDS(file.path(SITE_DIR, paste0(site, ".rds"))), error = function(e) NULL)
-  if (is.null(b) || is.null(b$occ) || !nrow(b$occ)) return(NULL)
-  snap <- latest_snapshot(b$occ)
-  sp   <- species_level_only(snap)
-  if (is.null(sp) || !nrow(sp)) return(NULL)
+  bundle <- readRDS(file.path(site_dir, paste0(site, ".rds")))
+  if (is.null(bundle$occ) || !nrow(bundle$occ))
+    stop(sprintf("%s has no occurrence table", site), call. = FALSE)
+  snapshot <- latest_snapshot(bundle$occ)
+  species <- species_level_only(snapshot)
+  if (is.null(species) || !nrow(species))
+    stop(sprintf("%s has no species-level snapshot", site), call. = FALSE)
 
-  # the per-(plot,species) cover, then mean across plots -> the site cover unit
-  psc <- plot_species_cover(sp)
-  cover_by_sp <- if (is.null(psc)) NULL else psc %>%
-    dplyr::group_by(.data$scientificName) %>%
+  plot_cover <- plot_species_cover(species)
+  cover_by_species <- if (is.null(plot_cover)) NULL else plot_cover |>
+    dplyr::group_by(.data$scientificName) |>
     dplyr::summarise(mean_cover = round(mean(.data$mean_cover), 2), .groups = "drop")
-
-  # one row per species: family / nativity (modal), plots present, year span.
-  # year span from the FULL bundle (not just the snapshot) so "first/last seen"
-  # reflects every survey the taxon appears in.
-  yr_by_sp <- species_level_only(b$occ) %>%
-    dplyr::group_by(.data$scientificName) %>%
-    dplyr::summarise(year_min = suppressWarnings(min(.data$year, na.rm = TRUE)),
-                     year_max = suppressWarnings(max(.data$year, na.rm = TRUE)),
-                     .groups = "drop")
-
-  out <- sp %>%
-    dplyr::group_by(.data$scientificName) %>%
-    dplyr::summarise(family   = mode_chr(.data$family),
-                     nativity = mode_chr(.data$nativity),
-                     n_plots  = dplyr::n_distinct(.data$plotID),
-                     .groups  = "drop") %>%
+  years <- species_level_only(bundle$occ) |>
+    dplyr::group_by(.data$scientificName) |>
+    dplyr::summarise(
+      year_min = suppressWarnings(min(.data$year, na.rm = TRUE)),
+      year_max = suppressWarnings(max(.data$year, na.rm = TRUE)),
+      .groups = "drop"
+    )
+  output <- species |>
+    dplyr::group_by(.data$scientificName) |>
+    dplyr::summarise(
+      family = mode_chr(.data$family), nativity = mode_chr(.data$nativity),
+      n_plots = dplyr::n_distinct(.data$plotID), .groups = "drop"
+    ) |>
     dplyr::mutate(site = site)
-  if (!is.null(cover_by_sp)) out <- dplyr::left_join(out, cover_by_sp, by = "scientificName")
-  if (!"mean_cover" %in% names(out)) out$mean_cover <- NA_real_
-  out <- dplyr::left_join(out, yr_by_sp, by = "scientificName")
-  out[, c("scientificName", "site", "family", "nativity", "mean_cover",
-          "n_plots", "year_min", "year_max")]
+  if (!is.null(cover_by_species))
+    output <- dplyr::left_join(output, cover_by_species, by = "scientificName")
+  if (!"mean_cover" %in% names(output)) output$mean_cover <- NA_real_
+  output <- dplyr::left_join(output, years, by = "scientificName")
+  output[, c("scientificName", "site", "family", "nativity", "mean_cover",
+             "n_plots", "year_min", "year_max")]
 }
 
-cat("Building taxon-occurrence index from", length(sites), "site bundles...\n")
-taxa <- dplyr::bind_rows(lapply(sites, function(s) { cat("  ", s, "\n"); taxa_for_site(s) }))
+bundles <- lapply(sites, function(site) readRDS(file.path(site_dir, paste0(site, ".rds"))))
+receipts <- vapply(bundles, function(bundle) as.character(bundle$meta$built_at), character(1))
+release_ids <- vapply(bundles, function(bundle) {
+  value <- bundle$meta$neon_release
+  if (is.null(value) || !length(value) || is.na(value)) "" else as.character(value)
+}, character(1))
+
+requested_date <- trimws(Sys.getenv("PDE_BUILD_DATE", ""))
+requested_release <- trimws(Sys.getenv("NEON_RELEASE", ""))
+if (nzchar(requested_date) && any(receipts != requested_date))
+  stop("Site bundle build receipts do not match PDE_BUILD_DATE", call. = FALSE)
+if (nzchar(requested_release) && any(release_ids != requested_release))
+  stop("Site bundle release receipts do not match NEON_RELEASE", call. = FALSE)
+parsed_receipts <- suppressWarnings(as.Date(receipts, format = "%Y-%m-%d"))
+if (any(is.na(parsed_receipts)))
+  stop("Every site bundle must carry a valid built_at receipt", call. = FALSE)
+
+built_at <- if (nzchar(requested_date)) requested_date else max(receipts)
+nonempty_releases <- sort(unique(release_ids[nzchar(release_ids)]))
+if (length(nonempty_releases) > 1L)
+  stop("Site bundles contain mixed NEON release receipts", call. = FALSE)
+neon_release <- if (nzchar(requested_release)) requested_release else
+  if (length(nonempty_releases)) nonempty_releases[[1L]] else NA_character_
+
+taxa <- dplyr::bind_rows(lapply(sites, taxa_for_site))
 taxa <- taxa[!is.na(taxa$scientificName) & nzchar(taxa$scientificName), , drop = FALSE]
 taxa$year_min[!is.finite(taxa$year_min)] <- NA_integer_
 taxa$year_max[!is.finite(taxa$year_max)] <- NA_integer_
-taxa <- taxa[order(taxa$scientificName, -dplyr::coalesce(taxa$mean_cover, -1)), ]
+taxa <- taxa[order(taxa$scientificName, taxa$site,
+                   -dplyr::coalesce(taxa$mean_cover, -1), method = "radix"), , drop = FALSE]
+rownames(taxa) <- NULL
 
-# the site-level table for the threshold query: reuse the canonical site_index so
-# the % introduced numbers are IDENTICAL to the hero / picker (never re-derive).
-sites_tbl <- tryCatch(readRDS("data/site_index.rds"), error = function(e) NULL)
-if (is.null(sites_tbl)) stop("data/site_index.rds missing — run scripts/bundle_plant_data.R first.")
+site_index <- readRDS(site_index_path)
+if (!is.data.frame(site_index) ||
+    !identical(sort(as.character(site_index$site)), expected_sites))
+  stop("data/site_index.rds is not the complete 46-site index", call. = FALSE)
+site_index <- site_index[match(expected_sites, site_index$site), , drop = FALSE]
+rownames(site_index) <- NULL
 
-idx <- list(taxa = tibble::as_tibble(taxa),
-            sites = tibble::as_tibble(sites_tbl),
-            built_at = format(Sys.Date(), "%Y-%m-%d"))
-saveRDS(idx, "data/search_index.rds", compress = "xz")
-
-cat(sprintf("\nsearch_index.rds written: %s\n  %d taxon-site rows | %d distinct taxa | %d sites | size %s\n",
-            "data/search_index.rds", nrow(idx$taxa),
-            dplyr::n_distinct(idx$taxa$scientificName), nrow(idx$sites),
-            format(file.size("data/search_index.rds"), big.mark = ",")))
-cat("DONE\n")
+index <- list(
+  taxa = tibble::as_tibble(taxa),
+  sites = tibble::as_tibble(site_index),
+  built_at = built_at,
+  neon_release = neon_release
+)
+saveRDS(index, search_path, compress = "xz")
+cat(sprintf("SEARCH INDEX PASSED: %d taxon-site rows, 46/46 sites, built_at=%s.\n",
+            nrow(index$taxa), built_at))
