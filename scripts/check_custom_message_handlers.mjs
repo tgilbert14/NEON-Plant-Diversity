@@ -37,6 +37,9 @@ if (!/id\s*=\s*["']appStatus["']/.test(ui) || !/data-app-ready/.test(ui)) {
 if (!/dataset\.appReady\s*=\s*["']true["']/.test(app)) {
   throw new Error("www/app.js must promote the semantic readiness state after connection");
 }
+if (!/jQuery\(document\)\.on\(\s*["']shiny:connected["']\s*,\s*smtHandleShinyConnected\s*\)/.test(app)) {
+  throw new Error("www/app.js must subscribe to Shiny's jQuery lifecycle event for readiness and deep links");
+}
 if (!server.includes('observeEvent(input[["plotly_click-hillSrc"]], {')) {
   throw new Error("the lazy Hill plot must defer event_data() until an actual Plotly input arrives");
 }
