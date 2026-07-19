@@ -3524,13 +3524,13 @@
       "checksum": "65e7e20d02875550730649c4af5f6d52"
     },
     "server.R": {
-      "checksum": "88e083973edce9b069b33eb2e9acbb62"
+      "checksum": "587a81b3c738b09acf5b999fdcebcfad"
     },
     "ui.R": {
       "checksum": "73f68f617992ec633b43b5792751929b"
     },
     "www/app.js": {
-      "checksum": "9d36c43b1275c8cd933ba555f2226638"
+      "checksum": "11577bab59040be7423586de195fdba3"
     },
     "www/pincards.js": {
       "checksum": "18099f6709f10545d0c3d475c4565c90"
@@ -3539,7 +3539,7 @@
       "checksum": "215e84315374467d4aab4d93bb353402"
     },
     "www/runtime-receipt.txt": {
-      "checksum": "bdc7409540132243b29747bf8001ebb9"
+      "checksum": "443b6404061245109413fd142ed359da"
     },
     "www/styles.css": {
       "checksum": "68474b4ee53da06045cb40c740a2bfcf"

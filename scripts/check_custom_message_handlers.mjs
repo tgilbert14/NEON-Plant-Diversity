@@ -30,11 +30,24 @@ if (invalid.length) {
 
 const ui = readFileSync("ui.R", "utf8");
 const app = readFileSync("www/app.js", "utf8");
+const server = readFileSync("server.R", "utf8");
 if (!/id\s*=\s*["']appStatus["']/.test(ui) || !/data-app-ready/.test(ui)) {
   throw new Error("ui.R must expose the appStatus semantic readiness element");
 }
 if (!/dataset\.appReady\s*=\s*["']true["']/.test(app)) {
   throw new Error("www/app.js must promote the semantic readiness state after connection");
 }
+if (!/jQuery\(document\)\.on\(\s*["']shiny:connected["']\s*,\s*smtHandleShinyConnected\s*\)/.test(app)) {
+  throw new Error("www/app.js must subscribe to Shiny's jQuery lifecycle event for readiness and deep links");
+}
+if (!server.includes('observeEvent(input[["plotly_click-hillSrc"]], {')) {
+  throw new Error("the lazy Hill plot must defer event_data() until an actual Plotly input arrives");
+}
+const hillEventReads = server.match(
+  /plotly::event_data\(\s*["']plotly_click["']\s*,\s*source\s*=\s*["']hillSrc["']\s*\)/g,
+) || [];
+if (hillEventReads.length !== 1) {
+  throw new Error(`expected one deferred hillSrc event_data() read, found ${hillEventReads.length}`);
+}
 
-console.log(`OK: ${seen} handlers have one payload and the semantic readiness contract exists.`);
+console.log(`OK: ${seen} handlers, semantic readiness, and deferred Plotly event wiring passed.`);

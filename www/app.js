@@ -101,7 +101,7 @@ function smtMarkConnected() {
   status.dataset.appReady = "true";
 }
 var smtDeepLinkSent = false;
-document.addEventListener("shiny:connected", function () {
+function smtHandleShinyConnected() {
   smtMarkConnected();
   if (smtDeepLinkSent || !window.Shiny) return;
   var requested = new URLSearchParams(window.location.search).get("site");
@@ -110,7 +110,19 @@ document.addEventListener("shiny:connected", function () {
   smtDeepLinkSent = true;
   smtLoadStart(requested + " · loading…");
   Shiny.setInputValue("pickSite", requested, { priority: "event" });
-});
+}
+
+// Shiny emits lifecycle notifications through jQuery. A native
+// addEventListener() callback does not receive Shiny's synthetic
+// `shiny:connected` event, which can leave both the readiness receipt and
+// deep-link site selection stuck even though the socket itself is healthy.
+// app.js loads after jQuery in Shiny's dependency order; keep a native
+// fallback for static/non-Shiny harnesses that dispatch a real DOM event.
+if (window.jQuery) {
+  window.jQuery(document).on("shiny:connected", smtHandleShinyConnected);
+} else {
+  document.addEventListener("shiny:connected", smtHandleShinyConnected);
+}
 
 // (The site report card is now a server-side PDF streamed by a Shiny
 //  downloadHandler — output$reportPdf, via the hero downloadLink — so the old
