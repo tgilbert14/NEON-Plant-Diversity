@@ -26,8 +26,8 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
 
   sp   <- ok(species_summary(snap))
   pl   <- ok(plot_summary(snap))
-  cv   <- ok(chao2(occ))
-  sa   <- ok(species_area_site(occ))
+  cv   <- ok(chao2(snap))
+  sa   <- ok(species_area_site(snap))
   intro <- ok(site_invasion(snap))
 
   # ---- hero strip --------------------------------------------------------
@@ -39,7 +39,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
   n_plots <- if (!is.null(pl)) nrow(pl) else NA
   chip(3,  if (is.finite(n_sp)) format(n_sp, big.mark = ",") else "—", "SPECIES (snapshot)")
   chip(27, if (!is.null(intro) && is.finite(intro)) paste0(intro, "%") else "—", "INTRODUCED COVER")
-  chip(51, if (!is.null(cv) && is.finite(cv$chao2)) paste0(cv$chao2) else "—", "CHAO2 (est. total)")
+  chip(51, if (!is.null(cv) && is.finite(cv$chao2)) paste0(cv$chao2) else "—", "CHAO2 LOWER BOUND")
   chip(75, if (is.finite(n_plots)) format(n_plots, big.mark = ",") else "—", "PLOTS SAMPLED")
 
   # ---- composition: top species by mean cover ----------------------------
@@ -78,23 +78,21 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
   } else graphics::text(50, 40, "—", col = P$muted)
 
   # ---- completeness (Expected vs Observed), if a reference list exists ----
-  graphics::text(3, 28, "Expected vs observed (NRCS reference flora)", col = P$pine2, cex = 1.0, font = 2, adj = 0)
+  graphics::text(3, 28, "Observed vs a local NRCS ecological-site reference", col = P$pine2, cex = 1.0, font = 2, adj = 0)
   evo <- if (!is.null(expected)) ok(expected_vs_observed(occ, expected, if (exists("PLANT_AUTHORITY")) PLANT_AUTHORITY else NULL)) else NULL
   if (!is.null(evo)) {
     graphics::text(3, 24.5, sprintf("Reference flora detected: %.0f%%  (%d of %d species)", evo$overlap_pct, evo$n_overlap, evo$n_ref), col = P$ink, cex = 0.72, adj = 0)
     dom <- if (evo$dom_total > 0) sprintf("%d of %d reference dominants observed", evo$dom_obs, evo$dom_total) else "dominants not production-ranked for this ecological site"
     graphics::text(3, 22.4, dom, col = P$ink, cex = 0.72, adj = 0)
     graphics::text(3, 20.3, sprintf("%d observed but not in the reference list (%d introduced · %d native), the review lane.", nrow(evo$C), evo$n_review_intro, evo$n_review_native), col = P$muted, cex = 0.62, adj = 0)
-    if (isTRUE(evo$state_covered) && (evo$n_regional %||% 0) > 0)
-      graphics::text(3, 19.0, sprintf("+ %d native(s) on the %s state flora but not this soil unit (regional associate, set aside).", evo$n_regional, evo$state %||% ""), col = P$muted, cex = 0.58, adj = 0)
-    graphics::text(3, 17.6, sprintf("Reference community: %s (%s).", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.6, adj = 0)
+    graphics::text(3, 17.6, sprintf("Reference community: %s (%s) · single site-coordinate soil unit.", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.56, adj = 0)
   } else graphics::text(3, 23, "No NRCS reference list bundled for this site.", col = P$muted, cex = 0.7, adj = 0)
 
   # ---- honesty footer ----------------------------------------------------
   graphics::abline(h = 11, col = P$line)
   graphics::text(3, 9.4, "Numbers describe the most-recent survey of each plot (one survey per plot, species level). Cover is an ocular estimate and", col = P$muted, cex = 0.55, adj = 0)
-  graphics::text(3, 7.8, "vegetation layers overlap, so site-summed cover is a relative index, not a share of ground. Chao2 is a bias-corrected minimum.", col = P$muted, cex = 0.55, adj = 0)
-  graphics::text(3, 6.0, "Expected-but-absent reference species reflect completeness (NEON samples ~400 m²/plot), not error.", col = P$muted, cex = 0.55, adj = 0)
+  graphics::text(3, 7.8, "vegetation layers overlap, so site-summed cover is a relative index, not a share of ground. Chao2 is a bias-corrected lower bound.", col = P$muted, cex = 0.55, adj = 0)
+  graphics::text(3, 6.0, "Reference-but-absent species reflect completeness against one local soil unit, not site-wide truth or error.", col = P$muted, cex = 0.55, adj = 0)
   graphics::text(3, 2.0, "Built by Desert Data Labs · unofficial · not affiliated with NEON, Battelle, or the NSF · desertdatalabs.com", col = P$muted, cex = 0.55, adj = 0)
   invisible(TRUE)
 }

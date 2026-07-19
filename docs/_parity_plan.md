@@ -1,3 +1,5 @@
+> **Historical implementation plan — superseded for release decisions.** This file records an earlier parity roadmap and may contain stale feature, code-location, science, or deployment claims. Use [SCIENCE-CONTRACT.md](SCIENCE-CONTRACT.md) for the normative analysis rules and [BUILD-TEST-HANDOFF.md](BUILD-TEST-HANDOFF.md) for the current release gates. Do not treat planned items or historical findings below as current product evidence.
+
 I have everything I need. The key claims are verified: both apps have lat/lng in `site_index`, identical `load_site()`/`pickSite` wiring, Plant has 46 env files (the `insight_banner` machinery + `plant_env_perm` exist), Veg has no `data/env` and no QC flags exist in Plant (Veg has `tree_qc` in veg_helpers). The "Explore the NEON series" grep hit is in docs/README cross-promo only, not in the in-app About panel. Here is the consolidated plan.
 
 ---

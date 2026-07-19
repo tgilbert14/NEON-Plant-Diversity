@@ -15,9 +15,9 @@ suppressPackageStartupMessages({
 
 # ---- helpers + metadata ---------------------------------------------------
 source("R/site_metadata.R", local = FALSE)
+source("R/source_receipt.R", local = FALSE)
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
-source("R/seasonal_env.R",  local = FALSE)   # Driver Cascade's seasonal-aggregate driver read (winter vs monsoon rain)
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
 source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
 source("R/report_pdf.R",    local = FALSE)   # one-page site report PDF (base graphics)
@@ -66,8 +66,27 @@ SEARCH_TAXON_CHOICES <- if (!is.null(SEARCH_TAXA))
 SEARCH_INVADER_CHOICES <- if (!is.null(SEARCH_TAXA))
   sort(unique(SEARCH_TAXA$scientificName[SEARCH_TAXA$nativity == "Introduced"])) else character(0)
 
-# bundled sites only (the demo deploy ships these); join site metadata for the picker
-BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
+# Bundled sites only (the deploy ships all 46). The canonical metadata—not the
+# derived index—defines the required inventory so a duplicated/missing index row
+# cannot redefine the receipt boundary.
+EXPECTED_PLANT_SITES <- sort(as.character(neon_sites$site))
+if (!is.data.frame(SITE_INDEX) || nrow(SITE_INDEX) != length(EXPECTED_PLANT_SITES) ||
+    anyDuplicated(as.character(SITE_INDEX$site)) ||
+    !identical(sort(as.character(SITE_INDEX$site)), EXPECTED_PLANT_SITES))
+  stop("data/site_index.rds does not match the canonical 46-site inventory",
+       call. = FALSE)
+BUNDLED <- EXPECTED_PLANT_SITES
+SOURCE_BUNDLE_METAS <- stats::setNames(lapply(BUNDLED, function(site) {
+  bundle <- readRDS(file.path(SITE_DIR, paste0(site, ".rds")))
+  bundle$meta
+}), BUNDLED)
+PLANT_SOURCE_STATUS <- resolve_plant_source_set(
+  SITE_DIR, SITE_INDEX, EXPECTED_PLANT_SITES, SOURCE_BUNDLE_METAS,
+  require_bundle_metas = TRUE
+)
+rm(SOURCE_BUNDLE_METAS)
+verify_plant_durable_source_inventory(PLANT_SOURCE_STATUS, EXPECTED_PLANT_SITES)
+verify_plant_search_receipt(SEARCH_INDEX, PLANT_SOURCE_STATUS)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), c("richness","n_plots","pct_introduced","dominant_family")])
@@ -128,25 +147,20 @@ MASCOT_CRITTER <- htmltools::HTML(paste0(
 
 # Light desert-DAY hexes for bslib (the app PAGE defaults to light; only the
 # prominent info-boxes go dark via CSS). Keep these readable on the light paper.
-# Fonts are named as plain CSS families here, NOT font_google(). font_google()
-# defaults to local = TRUE, which downloads the font from Google's servers and
-# compiles it into the theme AT APP STARTUP (server-side). On Connect Cloud that
-# live fetch runs on every cold start against an empty cache and, when Google Fonts
-# is slow/unreachable, blocks/fails the boot -> "start-up error". Naming the family
-# as a string does zero network at boot; the glyphs still reach the browser via the
-# non-blocking client-side <link> in ui.R (display=swap), with a system fallback.
+# Runtime typography is intentionally system-local. No Google font or CDN request
+# is needed to boot, paint, export, or recover after a Connect worker recycle.
 rubik_stack <- bslib::font_collection(
-  "Rubik", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
+  "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
 )
 fraunces_stack <- bslib::font_collection(
-  "Fraunces", "Georgia", "Cambria", "Times New Roman", "serif"
+  "Georgia", "Cambria", "Times New Roman", "serif"
 )
 app_theme <- bs_theme(
   version = 5, bg = "#ffffff", fg = "#16243a",
   primary = "#2f9a4f", secondary = "#e0685a",
   success = "#3f9a52", info = "#2f8fc4", warning = "#d6a31c", danger = "#e0685a",
   base_font = rubik_stack,
-  heading_font = fraunces_stack,   # soft-serif botanical headings — de-couples from the all-Rubik mammal app
+  heading_font = fraunces_stack,
   "border-radius" = "10px")
 
 # ---- static-asset cache-busting (mtime query) -----------------------------

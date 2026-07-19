@@ -12,6 +12,7 @@
 .DS_Store
 Thumbs.db
 .claude/
+/work/
 
 # transient data-fetch staging (raw NEON pulls live outside the repo)
 /plant-data-fetch/

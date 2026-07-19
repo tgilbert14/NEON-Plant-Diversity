@@ -102,8 +102,11 @@
     var a = anchorPx(gd, box, dx, dy) || { ax: bR.width / 2, ay: bR.height / 2 };
     var pin = document.createElement("div");
     pin.className = "smt-pin";
+    pin.setAttribute("role", "group");
+    pin.setAttribute("aria-label", "Pinned chart detail for " + String(key || "selected point"));
+    pin.tabIndex = 0;
     pin.__box = box; pin.__key = key; pin.__dx = dx; pin.__dy = dy;
-    pin.innerHTML = "<button class='smt-pin-close' title='Close'>&times;</button>" + html;
+    pin.innerHTML = "<button class='smt-pin-close' type='button' title='Close pinned detail' aria-label='Close pinned detail'>&times;</button>" + html;
     pin.querySelectorAll("em.smt-pin-hint").forEach(function (em) {
       var br = em.previousElementSibling;
       if (br && br.tagName === "BR") br.remove();
@@ -112,6 +115,7 @@
     var grip = document.createElement("div");
     grip.className = "smt-pin-resize";
     grip.title = "Drag to resize · double-tap to reset";
+    grip.setAttribute("aria-hidden", "true");
     pin.appendChild(grip);
 
     /* position the card near the dot, clamped on BOTH axes so the close button
@@ -401,7 +405,7 @@
   (function registerReveal() {
     try {
       if (window.Shiny && Shiny.addCustomMessageHandler) {
-        Shiny.addCustomMessageHandler("smtRevealQc", function () { revealQcCard(); });
+        Shiny.addCustomMessageHandler("smtRevealQc", function (_message) { revealQcCard(); });
         Shiny.addCustomMessageHandler("plantSite", function (msg) {
           if (msg && msg.site) window.__plantSite = String(msg.site);
         });

@@ -91,9 +91,8 @@ site_label <- function(code) {
   sprintf("%s · %s, %s · NEON %s", row$name[1], row$site[1], row$state[1], row$domain[1])
 }
 
-# the site's USPS state code (used by the Expected-vs-Observed QC for state-level
-# plausibility of an observed species). NA for an unknown code. PR/AK are valid codes
-# but carry no L48 state distribution, so the plausibility check there is a no-op.
+# The site's USPS state code. The nativity QC uses it only to keep the lower-48
+# USDA authority out of Alaska, Hawaii, and Puerto Rico; it is not a range test.
 site_state <- function(code) {
   if (is.null(code) || !nzchar(code)) return(NA_character_)
   row <- neon_sites[neon_sites$site == toupper(code), ]

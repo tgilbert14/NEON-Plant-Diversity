@@ -8,9 +8,44 @@
 # Re-runnable: refetches only sites missing/failed. See docs/_mlra_qc_plan.md.
 # ===========================================================================
 suppressPackageStartupMessages({ library(httr); library(jsonlite) })
-setwd("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Diversity")
-source("R/site_metadata.R")   # neon_sites (site, lat, lng)
-dir.create("data/expected", showWarnings = FALSE, recursive = TRUE)
+
+# Resolve the repository independently of the caller's working directory. An
+# explicit override supports unusual launchers; normal Rscript use resolves from
+# this file, with an upward search from getwd() as an interactive fallback.
+resolve_repo_root <- function() {
+  override <- trimws(Sys.getenv("PDE_REPO_ROOT", ""))
+  script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+  starts <- character()
+  if (nzchar(override)) starts <- c(starts, override)
+  if (length(script_arg)) {
+    script_file <- sub("^--file=", "", script_arg[[1L]])
+    starts <- c(starts, dirname(normalizePath(script_file, winslash = "/", mustWork = TRUE)))
+  }
+  starts <- c(starts, getwd())
+
+  for (start in unique(starts)) {
+    current <- normalizePath(start, winslash = "/", mustWork = TRUE)
+    repeat {
+      if (file.exists(file.path(current, "R", "site_metadata.R")) &&
+          file.exists(file.path(current, "scripts", "build_expected_lists.R"))) {
+        return(current)
+      }
+      parent <- dirname(current)
+      if (identical(parent, current)) break
+      current <- parent
+    }
+  }
+  stop(
+    "Could not locate the NEON-Plant-Diversity repository. Set PDE_REPO_ROOT explicitly.",
+    call. = FALSE
+  )
+}
+
+REPO_ROOT <- resolve_repo_root()
+EXPECTED_DIR <- file.path(REPO_ROOT, "data", "expected")
+SITE_DIR <- file.path(REPO_ROOT, "data", "sites")
+source(file.path(REPO_ROOT, "R", "site_metadata.R"))   # neon_sites (site, lat, lng)
+dir.create(EXPECTED_DIR, showWarnings = FALSE, recursive = TRUE)
 
 sda <- function(q) {
   r <- tryCatch(httr::POST("https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest",
@@ -76,13 +111,13 @@ expected_for_site <- function(lng, lat) {
 
 # Default: fan out to every bundled site (data/sites/*.rds). SRER first (house default).
 # Optional CLI subset: Rscript scripts/build_expected_lists.R SRER JORN ...
-.bundled <- sort(sub("\\.rds$", "", list.files("data/sites", pattern = "\\.rds$")))
+.bundled <- sort(sub("\\.rds$", "", list.files(SITE_DIR, pattern = "\\.rds$")))
 .bundled <- c("SRER", setdiff(.bundled, "SRER"))
 SITES <- if (length(commandArgs(TRUE))) commandArgs(TRUE) else .bundled
 prov <- list()
 for (s in SITES) {
   row <- neon_sites[neon_sites$site == s, ]; if (!nrow(row)) { cat(s, "no coords\n"); next }
-  f <- sprintf("data/expected/%s.rds", s)
+  f <- file.path(EXPECTED_DIR, paste0(s, ".rds"))
   res <- tryCatch(expected_for_site(row$lng[1], row$lat[1]), error = function(e) list(status = paste("err:", conditionMessage(e))))
   if (identical(res$status, "ok")) {
     saveRDS(res, f)
@@ -93,5 +128,5 @@ for (s in SITES) {
   prov[[s]] <- data.frame(site = s, status = res$status,
     ecoclassid = res$ecoclassid %||% NA, n_expected = if (!is.null(res$reference_species)) nrow(res$reference_species) else 0L)
 }
-saveRDS(do.call(rbind, prov), "data/expected/provenance.rds")
+saveRDS(do.call(rbind, prov), file.path(EXPECTED_DIR, "provenance.rds"))
 cat("\nprovenance written; sites done:", length(prov), "\n")
