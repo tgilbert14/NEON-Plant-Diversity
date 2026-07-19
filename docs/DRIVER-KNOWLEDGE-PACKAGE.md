@@ -2,9 +2,11 @@
 
 Source app: NEON Plant Diversity Explorer (`DP1.10058.001`)
 
-Disposition: **descriptive legacy context only; no current-source or inferential Driver promotion until the registered opportunity, panel, and complete source-receipt contracts are present in promoted artifacts.**
+Disposition: **CONTEXT / NO DRIVER BYTE CHANGE.** The recurrent-panel contract is validated, but no current-source or inferential Driver promotion is authorized until a sampled-opportunity ledger, a measured Driver join, and a complete upstream source receipt are reviewed in promoted artifacts.
 
 The current plant family is the exact 46-site legacy set introduced in repository commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. Its canonical hash proves exact bytes, not upstream vintage. Because the original NEON release, query cutoff/receipt, raw-source digest, and actual build date were not preserved, `builtAt`, `neonRelease`, and `sourceCutoff` remain `NA`; `repositoryImportedAt` and `sourceBundleCommit` are repository-receipt fields. See [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
+
+Production release `d6c48625f8268873bcd42d86285becaadbd57b4c` serves runtime receipt `sha256:0765d8951843cf6fea09a295b260bfb53f1eb6708370748905a4a3941c85d2cb` under manifest SHA-256 `12ffe3496ac54a6504a04656236604abc64f4638d1ae92bfe103565c0d15cd51`. Exact CI, Connect, Pages, semantic-health, export, and responsive evidence is recorded in [BUILD-TEST-HANDOFF.md](BUILD-TEST-HANDOFF.md). This validates the application over the frozen family; it does not clear the source-vintage or Driver-ingestion gates below.
 
 ## What this app contributes
 
@@ -51,6 +53,6 @@ The legacy exact-family receipt does not satisfy item 3, and missing fields may 
 - Separate producer composition, producer phenology, and producer standing stock. Plant Diversity owns composition; Plant Phenology owns timing; Vegetation Structure should own standing-stock/productivity context.
 - Carry “can tell / cannot tell” and release-receipt patterns into the Driver cover and result panels.
 
-## Candidate Driver insight
+## Driver insight
 
 The useful suite-level learning is not a new climate→richness edge. It is the **producer-state correction**: plant richness is a grain-dependent composition measure and can rise through exotic addition, while basal area/vegetation structure is the more defensible slow standing-stock context. Driver should encode that distinction before accepting plant evidence.

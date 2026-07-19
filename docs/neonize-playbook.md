@@ -33,8 +33,8 @@ Use official product and authority sources. Record source/version/query/license 
 
 Every companion should provide:
 
-- an outcome-led public cover with honest “can tell / cannot tell” language;
-- an explicit suite-role chip and Driver-centred companion map;
+- an artistic public-cover poster with one dominant product-native object, a 3–7 word hook, one 6–12 word plain-language promise, and one CTA;
+- an explicit suite role, honest “can tell / cannot tell” contract, and Driver-centred relationships below the poster fold;
 - a national or entity picker with a non-map fallback;
 - an answer-first Overview;
 - navigation grouped by user intent, not a row of equal-weight tabs;
@@ -44,7 +44,7 @@ Every companion should provide:
 - a full export with strict dictionary and provenance;
 - desktop and mobile interaction design, visible focus, 44 px targets, and reduced-motion behavior.
 
-Generated cover art may be used when it is clearly illustrative, grounded in the field method, art-directed for separate desktop/mobile crops, and documented in image provenance. Never present synthetic art as field evidence. The 1200×630 social card is a release surface, not a placeholder.
+Generated cover art may be used when it is clearly illustrative, grounded in the field method, art-directed for separate desktop/mobile crops, and documented in image provenance. Never present synthetic art as field evidence. Metrics, methods, provenance, receipts, and secondary routes belong below the poster face. The 1200×630 social card is a separately composed release surface, not a cropped placeholder.
 
 ## 4. Build independent, offline-core apps
 
@@ -60,6 +60,8 @@ Core requirements:
 - one-argument Shiny custom-message handlers;
 - semantic readiness markers promoted only after Shiny connects and the requested entity loads;
 - deterministic derived artifacts from explicit query cutoffs/snapshot IDs, separately recorded actual build dates, builder commits, and versions.
+
+Compact controls must be verified against framework-generated markup, not a hand-written approximation. Shiny `actionButton()` places its visible label in a text node inside `.action-label`, so a sibling selector cannot remove it. Preserve the DOM text for the accessible name, zero only its inherited visual font size, restore the icon size, and require a true 44 x 44 px target. Test both sides of every responsive seam; Plant's production matrix is 390/375/361/360/320 px, with the status/help/theme grid beginning at 360.
 
 A missing production bundle is a release error. Do not mask it with a live API fallback that changes provenance, latency, schema, and reproducibility.
 

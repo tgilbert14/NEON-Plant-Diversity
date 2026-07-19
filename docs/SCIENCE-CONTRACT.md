@@ -1,6 +1,6 @@
 # Plant Diversity Science Contract
 
-Status: registered for the v3 rebuild candidate. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
+Status: registered and production-verified for the 2026-07-19 v3 release. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
 
 ## Observation model
 
@@ -85,6 +85,6 @@ Any mismatch blocks release.
 
 ## Driver disposition
 
-Current status: **context-only / hold current-source and inferential promotion**.
+Current status: **CONTEXT / NO DRIVER BYTE CHANGE.** The production release validates descriptive legacy context only; current-source and inferential promotion remain held.
 
 Eligible after byte and contract validation as descriptive legacy context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty. Current-source promotion remains blocked until a complete reviewed plant refresh receipt exists. Excluded: productivity vote, per-site climate–richness edges, management priority, and phenology signals owned by the Phenology app.
