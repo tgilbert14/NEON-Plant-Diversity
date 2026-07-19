@@ -669,10 +669,16 @@ server <- function(input, output, session) {
     rk$effective_common_core <- if (is.na(ec)) NA else ifelse(rk$rank <= ec, "yes", "no")
     rk[, c("rank","scientificName","family","nativity","summed_cover","cover_share_pct","cum_share_pct","effective_common_core")]
   }
-  observeEvent(plotly::event_data("plotly_click", source = "hillSrc"), {
+  # event_data() schedules a registration check on the next Shiny flush. Using
+  # it as the observer trigger runs that check before this tab's lazy plot has
+  # rendered, producing a false "source not registered" live-log warning.
+  # Trigger on Plotly's raw input ID; a real click can only arrive after the
+  # event-registered plot exists, so parsing inside the handler is warning-free.
+  observeEvent(input[["plotly_click-hillSrc"]], {
+    click <- plotly::event_data("plotly_click", source = "hillSrc")
     occ <- rv$snap; req(occ)
     h  <- hill_site(occ); rk <- hill_ranked(); req(!is.null(h), !is.null(rk), nrow(rk) > 0)
-    qk <- plotly::event_data("plotly_click", source = "hillSrc")$customdata %||% "q1"
+    qk <- click$customdata %||% "q1"
     ec <- max(1, round(h["q1"]))
     lab <- switch(qk, q0 = "q0 — richness (every species present)",
                        q1 = "q1 — effectively common species",
@@ -703,7 +709,7 @@ server <- function(input, output, session) {
         p(HTML(sprintf("You clicked <b>%s</b>. This site holds <b>%.0f</b> species in cover; q1 says about <span class='ci-hero'>%d</span> are <b>effectively common</b> (evenness-weighted).", lab, h["q0"], ec))),
         p(HTML(sprintf("q1 is an <b>effective number</b>, not a hand-picked list of exactly %d names. The species are ranked by summed 1 m\U00B2 cover below; the <span style='background:rgba(95,209,106,0.30);padding:1px 4px;border-radius:3px'>top %d highlighted</span> are the cluster that &ldquo;effectively common &asymp; %d&rdquo; describes. The long tail of low-cover species is real, just rare.", ec, ec, ec)))),
       dt))
-  })
+  }, ignoreInit = TRUE)
   output$hillCsv <- downloadHandler(
     filename = function() sprintf("NEON-PlantDiversity_%s_hill-ranked-species_%s.csv",
                                   rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
