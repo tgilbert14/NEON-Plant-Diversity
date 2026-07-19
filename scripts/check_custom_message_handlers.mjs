@@ -90,6 +90,18 @@ if (!/\.hero-title\s*\{[^}]*color:\s*var\(--pine2\)/s.test(plantStyles) ||
 if (/\.hero-title\s*\{[^}]*flex-wrap:\s*wrap/s.test(styles)) {
   throw new Error("styles.css must not shadow the Plant-specific mobile header contract");
 }
+const narrowTopBarBlocks = cssBlocks(
+  styles,
+  /@media\s*\(max-width:\s*560px\)\s*\{/g,
+).filter((block) => /\.top-bar-actions\s+\.tb-help\s*\{/.test(block));
+const narrowHelpContract = [
+  /\.top-bar-actions\s+\.tb-help\s*\{[^}]*width:\s*44px[^}]*min-width:\s*44px[^}]*justify-content:\s*center[^}]*font-size:\s*0/s,
+  /\.top-bar-actions\s+\.tb-help\s+\.bi\s*\{[^}]*font-size:\s*16px/s,
+];
+if (narrowTopBarBlocks.length !== 1 ||
+    !narrowHelpContract.every((contract) => contract.test(narrowTopBarBlocks[0]))) {
+  throw new Error("the narrow help control must hide actionButton's text node without hiding its accessible name or icon");
+}
 const compactTopBarBlocks = cssBlocks(
   styles,
   /@media\s*\(max-width:\s*360px\)\s*\{/g,
@@ -97,7 +109,6 @@ const compactTopBarBlocks = cssBlocks(
 const compactTopBarContract = [
   /\.top-bar-actions\s*\{[^}]*width:\s*100%[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+44px\s+auto/s,
   /\.app-status\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none[^}]*justify-content:\s*center/s,
-  /\.top-bar-actions\s+\.tb-help\s*\{[^}]*width:\s*44px[^}]*min-width:\s*44px/s,
 ];
 if (compactTopBarBlocks.length !== 1 ||
     !compactTopBarContract.every((contract) => contract.test(compactTopBarBlocks[0]))) {

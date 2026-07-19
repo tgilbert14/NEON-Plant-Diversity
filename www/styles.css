@@ -789,7 +789,12 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
 @media (max-width: 560px) {
   .top-bar { padding: 7px 10px; }
   .top-bar-brand .tb-title { font-size: 14px; }
-  .top-bar-actions .tb-help .bi + * { display: none; } /* icon-only help on tiny screens */
+  /* actionButton wraps icon + a text node in .action-label, so sibling selectors
+     cannot hide the label reliably. Zero only the inherited text size, then
+     restore the icon's em basis; the accessible name remains in the DOM. */
+  .top-bar-actions .tb-help { width: 44px; min-width: 44px; justify-content: center;
+    padding-left: 0; padding-right: 0; font-size: 0; }
+  .top-bar-actions .tb-help .bi { font-size: 16px; }
   .tb-role, .suite-link { display: none; }
   .top-bar-actions { gap: 7px; }
   .app-status { max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
@@ -799,8 +804,6 @@ table.dataTable td, table.dataTable th { border-color: #eef1ec !important; color
     grid-template-columns: minmax(0, 1fr) 44px auto; gap: 6px; }
   .app-status { width: 100%; max-width: none; min-width: 0; justify-content: center;
     padding-inline: 6px; overflow: visible; text-overflow: clip; }
-  .top-bar-actions .tb-help { width: 44px; min-width: 44px; justify-content: center;
-    padding-left: 0; padding-right: 0; }
   .tb-theme { justify-self: end; }
 }
 
