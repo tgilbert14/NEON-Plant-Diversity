@@ -53,7 +53,7 @@ jobs:
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/classInt_0.4-11.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/raster_3.6-32.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sp_2.2-1.tar.gz
-          pak-version: repo
+          pak-version: stable
           dependencies: '"hard"'
           cache-version: plant-diversity-geo-closure-v2
           cache: always
