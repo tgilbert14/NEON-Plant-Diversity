@@ -3527,19 +3527,25 @@
       "checksum": "587a81b3c738b09acf5b999fdcebcfad"
     },
     "ui.R": {
-      "checksum": "73f68f617992ec633b43b5792751929b"
+      "checksum": "c6190f1140e426f7db2804f145fa44c7"
     },
     "www/app.js": {
       "checksum": "fd67107d8481c7e0c981a45283acbe0d"
+    },
+    "www/assets/plant-nested-quadrat-hero-mobile-v1.jpg": {
+      "checksum": "a33bc7efcf7d6469d3f5e5c7a9b1a850"
+    },
+    "www/assets/plant-nested-quadrat-hero-v1.jpg": {
+      "checksum": "4b38a83fbe783bd503e8221b74ca530f"
     },
     "www/pincards.js": {
       "checksum": "18099f6709f10545d0c3d475c4565c90"
     },
     "www/plant.css": {
-      "checksum": "6a5f0282547bf6b99b295ea471c60456"
+      "checksum": "89a077d093d7b003380fb6ebaa2bdcb5"
     },
     "www/runtime-receipt.txt": {
-      "checksum": "98339182f797a3c9bd51b01e040b3f65"
+      "checksum": "7a3bfb0ec0fbdf8340b13d5004188c2b"
     },
     "www/styles.css": {
       "checksum": "78190c64f672d4788886624013142bd3"
