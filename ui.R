@@ -6,6 +6,38 @@
 tier_badge <- function(label, color) tags$span(class = "tag-badge",
   style = sprintf("background:%s;border-color:%s;color:#fff", color, color), label)
 
+plant_diversity_poster <- function() {
+  tags$section(
+    class = "pde-poster",
+    `aria-labelledby` = "pde-poster-title",
+    div(class = "pde-poster-copy",
+      div(class = "pde-poster-topline",
+        div(class = "pde-poster-brand", "Desert Data Labs"),
+        tags$nav(class = "pde-poster-nav", `aria-label` = "NEON Explorer Suite",
+          tags$a(class = "pde-poster-suite-link",
+            href = "https://tgilbert14.github.io/NEON-Driver-Cascade/",
+            target = "_blank", rel = "noopener",
+            "Whole suite: ", tags$strong("Driver Cascade"), tags$span("↗")))),
+      div(class = "pde-poster-app", "NEON Plant Diversity Explorer · unofficial"),
+      h1(id = "pde-poster-title", `aria-label` = "How much can one square hold?",
+        tags$span("How much can"), tags$em("one square hold?")),
+      p(class = "pde-poster-promise", "Explore plant communities from one square metre outward."),
+      tags$a(class = "pde-poster-cta", href = "#site-picker-start",
+        onclick = "window.setTimeout(function(){var target=document.getElementById('site-picker-start');if(target){target.focus({preventScroll:true});}},0)",
+        "Pick a place ", bs_icon("arrow-down")),
+      p(class = "pde-poster-note",
+        "Public NEON DP1.10058.001 · recorded composition across nested grains—not productivity, health, impact, or a management verdict.")),
+    tags$figure(class = "pde-poster-art",
+      tags$picture(
+        tags$source(media = "(max-width: 700px)",
+          srcset = asset_url("assets/plant-nested-quadrat-hero-mobile-v1.jpg")),
+        tags$img(src = asset_url("assets/plant-nested-quadrat-hero-v1.jpg"),
+          width = "1774", height = "887", fetchpriority = "high", decoding = "async",
+          alt = "A cut-paper dryland plant community with nested field quadrats extending from one square metre into the surrounding landscape.")),
+      tags$figcaption("Editorial illustration—not a field photograph or data record."))
+  )
+}
+
 ui <- bslib::page_fillable(
   theme = app_theme,
   window_title = "NEON Plant Diversity Explorer", fillable = FALSE,
@@ -37,8 +69,6 @@ ui <- bslib::page_fillable(
     div(class = "top-bar-actions",
       tags$span(id = "appStatus", class = "app-status", role = "status", `aria-live` = "polite",
                 `data-app-ready` = "false", "Connecting…"),
-      tags$a(class = "suite-link", href = "https://tgilbert14.github.io/NEON-Driver-Cascade/",
-             target = "_blank", rel = "noopener", "NEON suite"),
       actionButton("help", tagList(bs_icon("question-circle"), " How it works"),
                    class = "btn-outline-dark btn-sm tb-help"),
       div(class = "tb-theme",
@@ -75,21 +105,12 @@ ui <- bslib::page_fillable(
 
   # ---- splash ------------------------------------------------------------
   div(id = "splash",
-    div(class = "splash-guide",
-      div(class = "sg-bubble", "Pick a site to start!"),
-      div(class = "sg-mascot", MASCOT_CRITTER)),
-    div(class = "splash",
-      div(class = "app-hero app-hero-splash",
-        div(class = "app-role-chip", "COMPOSITION & INVASION CONTEXT"),
-        h1(class = "app-title", "NEON Plant Diversity Explorer",
-           span(class = "title-tag", "unofficial")),
-        p(class = "app-subtitle",
-          "See how plant communities change from 1 to 400 m²—and where introduced cover warrants a closer look. Built from NEON's nested-quadrat survey (DP1.10058.001), with effort and uncertainty kept visible.")),
-      div(class = "splash-contract",
-        tags$span(bs_icon("grid-3x3-gap"), " 46 bundled sites"),
-        tags$span(bs_icon("rulers"), " 1 → 400 m² grain"),
-        tags$span(bs_icon("shield-check"), " context, not productivity")),
-      p("Choose a ", tags$b("site"), " on the map to begin. Dot size shows the number of sampled plots—not raw richness—so the map does not turn unequal effort into a biodiversity ranking. You can also use the by-name picker or browse all 46 sites."),
+    plant_diversity_poster(),
+    div(id = "site-picker-start", class = "splash", tabindex = "-1",
+      div(class = "picker-start-head",
+        div(class = "picker-start-kicker", "START HERE"),
+        h2("Pick a place"),
+        p("Tap a site on the map. Dot size shows sampled plots—not raw richness—so unequal effort does not become a biodiversity ranking. You can also choose by name or browse all 46 places.")),
       div(class = "splash-colorby",
         radioButtons("splashColorBy", label = NULL, inline = TRUE,
           choices = c("Colour: invasion" = "invasion", "Colour: completeness" = "completeness"),

@@ -2,6 +2,31 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-07-22 Suite Living Poster V1 source candidate
+
+- Working branch: `agent/plant-diversity-living-poster-v1`; production remains
+  the verified release recorded below until the pinned validator, review, merge,
+  and Connect/Pages promotion path completes.
+- Pages and the in-app first-run surface now share the approved poster contract:
+  **“How much can one square hold?”** / **“Explore plant communities from one
+  square metre outward.”** / **“Pick a place.”** The face has one Driver route,
+  one contextual CTA, dominant responsive editorial art, an explicit
+  illustration/data boundary, and compact source and claim-boundary notes. The
+  prior fact cards, method blocks, release receipt, and full suite directory were
+  removed from the companion face.
+- The documented nested-quadrat desktop/mobile art was reused without a new
+  generative operation and mirrored byte-for-byte into `www/assets/`. The
+  1200×630 social card was recomposed from its checked-in SVG around the same
+  hook and promise; `docs/IMAGE-PROVENANCE.md` carries the new exact hashes.
+- Local source verification passed `node --check scripts/check_cover.mjs`,
+  `node scripts/check_cover.mjs`, `node --check www/app.js`, the six-handler
+  contract, `git diff --check`, a clean 1280×720 browser render with one
+  H1/Driver route and no root overflow or page-console errors, and an exact
+  1200×630 social-card inspection. This shell has no R runtime, so the R parse,
+  manifest/receipt, deterministic artifact, 390/320 browser, Connect, and Pages
+  gates remain for the pinned validator. No scientific estimator, source family,
+  bundle, or Driver byte changed.
+
 ## Production release receipt — 2026-07-19
 
 **Outcome: PASS for the exact legacy application release; CONTEXT / NO DRIVER BYTE CHANGE for Cascade.** The method, export, interface, deployment, and production-health gates closed. The plant source family remains `legacy-partial`, so this release does not invent an upstream build date, official NEON release, or query cutoff and does not authorize current-source or causal Driver promotion.
