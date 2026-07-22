@@ -31,14 +31,22 @@ SHA-256 checksums:
 | `assets/plant-nested-quadrat-hero-mobile-v1-source.png` | 941×1672 | Original mobile source | `a729f710a1580f89fc8db000c738321db7af487ad9a759f71a0445d427856f01` |
 | `assets/cover-generated/plant-nested-quadrat-hero-v1.jpg` | 1774×887 | Optimized desktop cover derivative | `6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825` |
 | `assets/cover-generated/plant-nested-quadrat-hero-mobile-v1.jpg` | 941×1672 | Optimized mobile cover derivative | `8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38` |
-| `assets/cover-generated/plant-social-card-v1.svg` | 1200×630 | Reproducible social-card composition source | `a10aa76fe1f5673855599d7b2a5f12d49ecca3213b4812f0a1f2c35a9668f3b5` |
-| `og-image.png` | 1200×630 | Open Graph / Twitter social image | `40b90aeb9625a3fe27bfe6a2070a2a487d6536d3d3d487d081d6b51118862238` |
+| `assets/cover-generated/plant-social-card-v1.svg` | 1200×630 | Reproducible Living Poster social-card source | `897063dc84b8f6660792fcfffcf36f59980934e4bf7e1a6c3d1ba544fe46d1a0` |
+| `og-image.png` | 1200×630 | Open Graph / Twitter social image | `0c3c9262ec1ab046137dd082626b94dee775271be8c58f6f3287bee97e30c3cb` |
+| `www/assets/plant-nested-quadrat-hero-v1.jpg` | 1774×887 | Byte-identical in-app desktop poster image | `6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825` |
+| `www/assets/plant-nested-quadrat-hero-mobile-v1.jpg` | 941×1672 | Byte-identical in-app mobile poster image | `8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38` |
 
-The JPEG cover derivatives use quality 84. The social card is a local SVG composition using the unedited desktop source, an accessibility title/description, and live vector text for the app name, role, facts, and data product. It was rasterized locally and normalized to the exact 1200×630 social-card canvas. No generative edits were added during derivative processing.
+The JPEG cover derivatives use quality 84. The Pages and in-app Living Posters
+reuse those derivatives; the in-app copies are byte-identical mirrors under
+`www/assets/`. No new generative image operation was used for the Living Poster
+revision. The social card is a local SVG composition using the unedited desktop
+source, an accessibility title/description, and live vector text for the shared
+hook and promise. It was rasterized locally and normalized to the exact 1200×630
+social-card canvas. No generative edits were added during derivative processing.
 
 ## Accessibility text
 
 - Hero image alt: “A cut-paper dryland plant community with four nested field quadrats extending from one square metre into the surrounding landscape.”
-- Social image alt: “NEON Plant Diversity social card: Composition across scale, over cut-paper nested quadrats in a dryland plant community.”
+- Social image alt: “Cut-paper nested quadrats beside the words How much can one square hold?”
 
 The visual contains no embedded labels. Survey-grain values, interpretation, caveats, and calls to action remain real HTML so they resize, translate, and remain available to assistive technology.
