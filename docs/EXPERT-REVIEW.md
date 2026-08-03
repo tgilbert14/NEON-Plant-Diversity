@@ -1,10 +1,10 @@
 # Plant Presence and Percent Cover — Expert Review
 
-_NEON DP1.10058.001 · review closed against the 2026-07-19 production release_
+_NEON DP1.10058.001 · human source-family review for candidate 2026-08-03_
 
-> **Review verdict:** the promoted application has a defensible analysis contract and passed the registered build, export, deployment, responsive, and semantic-health receipts at commit `d6c48625f8268873bcd42d86285becaadbd57b4c`. Method rules, bundled-data facts, and ecological findings remain different layers of evidence. Descriptive results are valid for the exact frozen legacy family; current-source, causal, productivity, health, and management claims remain out of scope.
+> **Review verdict:** validated candidate `374fb704c548ca830f05c46d5fab1331e0027302` has a defensible unchanged estimator contract, one complete 46-site query receipt, and independently reconciled bundle/index semantics. It is eligible to proceed to literal-head CI and production review, not yet to be called deployed. Causal, productivity, health, management, equal-effort ranking, and Driver-vote claims remain out of scope.
 
-The source-receipt correction establishes a separate limit: the exact legacy plant bytes can be identified, but their upstream date cannot. The current family is descriptive legacy context, not current-source evidence.
+The refresh closes the legacy family's missing upstream query receipt without changing the observation model. It records an actual build date and closed query boundary while preserving `neonRelease=NA` because no official release was selected. Complete provenance strengthens exact-source interpretation; it does not manufacture survey opportunity or inference.
 
 ## Method fidelity
 
@@ -23,7 +23,7 @@ The new `snapshot_by_plot_year()` contract closes the previous multi-bout ambigu
 
 ### Species-area
 
-The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The promoted release counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific values remain descriptive for the exact frozen family.
+The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The registered implementation counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific values remain descriptive for the exact reviewed source family.
 
 ### Chao2
 
@@ -77,26 +77,28 @@ The export contract is now materially stronger:
 - definitions, units, NA semantics, and estimands accompany every exported field;
 - the PDF uses the same selected snapshot for richness, species-area, and Chao2.
 
-These safeguards now have a release receipt. Hard-assertion R fixtures, deterministic artifacts, exact manifest validation, offline sourcing, export/PDF inspection, and deployed semantic health all passed for the recorded production commit.
+These safeguards retain the 2026-07-19 production receipt. For the new source family, hard-assertion R fixtures, deterministic artifacts, exact manifest validation, offline sourcing, export/PDF inspection, and deployed semantic health must all rerun on the literal reviewed head before promotion.
 
 ## Plant source-provenance review
 
-The exact 46-site `DP1.10058.001` family was introduced by repository commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. The canonical frozen-family SHA-256 in [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md) is a valid exact-byte identity guard. The superseded MD5-based inventory hashes are useful only for audit reconciliation. Neither checksum family, the commit date, filesystem mtimes, nor manifest/runtime hashes is evidence of the original NEON fetch date or release.
+Every candidate site bundle and `data/site_index.rds` carries `plant-source-receipt-v2`: `builtAt=2026-08-03`, `sourceStart=2013-01`, `sourceCutoff=2026-07-31`, receipt ID `PDE-DP1.10058.001-query-through-2026-07-31-sha256-48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, raw-inventory digest `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, builder commit `1734840a4f09e7acee356431ea1e57e9a637fb31`, `basic`, and `neonUtilities 4.0.1`. The durable raw inventory has exactly 46 scoped entries. No official release was selected, so `neonRelease=NA` is the supported value.
 
-The original official NEON release, fetch/query cutoff, query receipt, raw-source digest, and actual bundle build date were not preserved. The scientifically honest legacy values are therefore `builtAt=NA`, `neonRelease=NA`, and `sourceCutoff=NA`, with `repositoryImportedAt` and `sourceBundleCommit` reported separately. Exact-byte validation allows ecological values to remain descriptive for this frozen family; it does not make them current-source results.
+The query cutoff is a request boundary, not an observation date: retained records span 2013–2024. The prior legacy guard remains rollback history but no longer describes the candidate. Repository dates, mtimes, manifest/runtime hashes, and derived checksums remain ineligible substitutes for source fields.
+
+An independent base-R oracle found 1,375,149 occurrence rows, 451,979 ground rows, 1,574 plots, and 5,840 distinct species-level names across all historical records. Forty-three site row families are semantically unchanged; only JORN, KONZ, and SRER gained rows. Sixty-three species-level names were added nationally and none removed. Candidate snapshot/index parity passed across all 46 sites. JORN, KONZ, and SRER changed current-state values because newer surveys became the deterministic latest plot snapshots, not because historical rows were deleted.
 
 ## Production evidence and remaining scientific limits
 
-The validated inventory contains 46 site bundles, 46 environment bundles, and 34 site reference artifacts. The deterministic release rebuilt the registered analyses, and public/export QA confirmed parity for the exact bytes. That supports descriptive release findings with their grain and support; it does not create upstream vintage or broader inferential authority.
+The candidate inventory contains 46 site bundles, 46 byte-unchanged environment bundles, and 34 byte-unchanged site reference artifacts; only the derived completeness index changed with plant snapshots. Producer/validator run `30818211291` and artifact `8858560431` establish the data candidate. Public/export QA still must confirm parity for the final reviewed head. Complete source provenance supports exact query-snapshot interpretation; it does not create broader inferential authority.
 
 The following remain scientific limits rather than unfinished release gates:
 
 1. an explicit sampled-opportunity artifact for empty 1 m² quadrats;
-2. a complete current-source plant receipt from a future reviewed refresh; the legacy family has an exact-byte receipt, but its missing upstream vintage/release fields cannot be reconstructed;
+2. a measured eligible site-year Driver join and independent adapter; the source-receipt gate is satisfied by this candidate, but no Driver ingestion parity has been run;
 3. a coverage-standardized cross-site estimator before any national richness ranking;
 4. plot- or buffer-matched reference flora before stronger expected/observed conclusions.
 
-Named site rankings, Chao2 values, invasion percentages, or association screens may be shown only when generated from the promoted code with their estimand, support, and frozen-family receipt. They must not be detached from those qualifications or copied into Driver as current-source, causal, productivity, health, or management evidence.
+Named site rankings, Chao2 values, invasion percentages, or association screens may be shown only when generated from the promoted code with their estimand, support, and query-snapshot receipt. They must not be detached from those qualifications or copied into Driver as causal, productivity, health, management, or vote-eligible evidence.
 
 ## Product honesty scorecard
 
@@ -110,15 +112,15 @@ Named site rankings, Chao2 values, invasion percentages, or association screens 
 | Expected/reference flora | Correctly limited to one local reference | Build plot/buffer-matched references before stronger claims |
 | Annual metrics | Recurrent plot-panel estimands validated | Preserve panel and bout support |
 | Environment | Descriptive and non-causal | No Driver promotion from this screen |
-| Export/provenance | Exact legacy family and public runtime identified; upstream receipt incomplete | Preserve `NA` source fields until a reviewed refresh |
-| Release status | Promoted 2026-07-19 and production-healthy | Keep CI, receipt, mobile, and post-deploy gates hard |
+| Export/provenance | Complete 46-site query receipt and raw inventory independently reconciled | Keep `neonRelease=NA`; preserve cutoff ≠ observation-year distinction |
+| Release status | Data candidate validated; public production still on 2026-07-19 release | Require literal-head CI, export/PDF parity, merge, deploy, mobile, and post-deploy receipts |
 
 ## Suite and Driver disposition
 
-Plant Diversity is a composition context app, not a productivity or phenology authority. Its validated suite contribution may include common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, and their support. Those are descriptive legacy context. Current-source promotion stays blocked until all 46 replacement bundles and `site_index.rds` carry one complete matching receipt.
+Plant Diversity is a composition context app, not a productivity or phenology authority. Its validated suite contribution may include common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, and their support. After promotion these are descriptive query-snapshot context. The complete-receipt gate is closed; explicit sampled opportunity, a measured Driver join, an independent adapter, and old/new parity remain held.
 
 The app must not contribute a productivity vote, management priority, per-site climate–richness edge, or phenology signal owned by the Phenology app. Driver disposition is **CONTEXT / NO DRIVER BYTE CHANGE** for this pass.
 
 ## Final recommendation
 
-The full handoff passed, including empirical recomputation, export/PDF inspection, exact deployment identity, mobile review, and semantic post-deploy health. The method contract and descriptive results for the exact legacy bytes are defensible and publishable. The missing upstream release/cutoff/build receipt remains missing, so the app must not be called current-source or “science complete”; every future refresh must repeat the full handoff.
+The candidate's source and semantic review passes. It should proceed to literal-head CI and, only after a green exact reviewed commit, to merge and deployment verification. The last-known-good public release remains authoritative until app/export/PDF parity, responsive QA, Connect/Pages identity, and semantic health close. `neonRelease=NA`, missing sampled-empty opportunity, and descriptive-only Driver status remain explicit; every later refresh must repeat the full handoff.

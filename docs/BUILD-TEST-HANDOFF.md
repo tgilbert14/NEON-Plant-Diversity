@@ -2,6 +2,110 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-03 complete-query refresh human-review candidate
+
+- Recorded `2026-08-03 10:27 EDT` (`America/New_York`) from validated data
+  candidate `374fb704c548ca830f05c46d5fab1331e0027302`, a direct child of
+  `1734840a4f09e7acee356431ea1e57e9a637fb31`. The isolated implementation
+  branch is `codex/plant-diversity-refresh-review-374fb704`; draft PR #13 must
+  remain draft until the literal reviewed head passes CI and the deployment
+  gates below. Public production remains the exact 2026-07-19 release recorded
+  later in this file.
+- Scheduled run `30818211291` produced validated artifact `8858560431`
+  (artifact digest beginning `6929f301`). Every one of the 46 plant bundles
+  and `data/site_index.rds` carries the same `plant-source-receipt-v2`: built
+  `2026-08-03`, requested from `2013-01` through closed query cutoff
+  `2026-07-31`, `basic` package, neonUtilities `4.0.1`, no selected official
+  release (`neonRelease=NA`), builder commit
+  `1734840a4f09e7acee356431ea1e57e9a637fb31`, and source digest
+  `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`.
+  The digest is the SHA-256 of the durable 46-line raw-file inventory. Query
+  cutoff is not observation vintage: retained observations end in 2024.
+- Two independent base-R review oracles, which do not source app helpers,
+  reconciled all 46 receipt/index rows and candidate metrics. The candidate has
+  1,375,149 occurrence rows, 451,979 ground rows, 1,217,691 species-level rows,
+  157,458 coarse-identification rows, 1,574 plots, 9,326 current 1 m² incidence
+  units, and 5,840 distinct species-level names across history. Compared with
+  production, 63 names were added and none removed. Forty-three occurrence and
+  ground row multisets are semantically unchanged after ignoring deterministic
+  ordering/serialization; only JORN, KONZ, and SRER gain source rows.
+- The three changed sites retain 33 current plots each. JORN moves from 35 to
+  80 selected-snapshot species, 0.0% to 0.2% introduced relative cover, and
+  Chao2 60.8 to 61.9; KONZ moves from 231 to 200 species, remains 0.2%, and
+  moves Chao2 204.9 to 209.9; SRER moves from 203 to 161 species, 22.2% to
+  10.0%, and Chao2 143.7 to 194.5. JORN and SRER now select 2024 for all 33
+  plots. KONZ now selects 2024 for 11 plots while retaining the supported
+  2020/2022/2023 panel for the rest. These are deterministic latest-snapshot
+  changes, not row deletions, equal-effort national rankings, trends, health
+  scores, or causal effects.
+- The 46 environment bundles are byte-identical to production. The 34 reference
+  artifacts are byte-identical; only their derived completeness index changes
+  with the plant snapshot. Reference completeness stays 24% at JORN, moves 64%
+  to 60% at KONZ, and 52% to 38% at SRER. The source still lacks an explicit
+  sampled-empty 1 m² opportunity ledger, so provenance completeness does not
+  close the Chao2/cover opportunity limitation.
+- Validated runtime identities, unchanged by the human-only cover/review
+  changes, are:
+  manifest `c6350647ca245e9f8f6d656bfe21b685fae1cb8239471be497fd90427309e7ac`,
+  search index `9d34390efdf8555f1b915828eedaeba0f6796d1585a259b01d0e71b403455d80`,
+  site index `1addb5ae4e5adcc3bce64016ea0a7ecce0b987b184949187742f404cc46a424a`,
+  completeness index
+  `7da754ba77cd56185862f760b11e72f7e9197b1bb92efaccad6ca8edd6bee1f7`,
+  runtime-receipt content
+  `sha256:94e89e5c59166476c386f3e337e7cd4f08d59bef6953c4a3d09b07134ed8378e`,
+  and runtime-receipt file
+  `2484023fffdc4174f2038d7545b8e0a6926a725f8e9afbfbd1f4173c80d3543a`.
+  The reviewed social SVG is
+  `4d85e7e239a342d46aa841c04c55913522d4bf2f4667c4109fec7b82cad94233`;
+  its visually inspected 1200×630 PNG is
+  `4eb34b5e05e32d0a8d87534de612ab3b500ace097ceb07a71cbbcc79e7f12964`.
+  Generated cover-receipt content is
+  `sha256:27ede8c791fa23cac59cf7023f7d7fe4c79910f63dec0831f09ccf1c802e5792`
+  (receipt-file SHA-256
+  `aad0798de34ab1174aac633a97a998c5f128ddafeb1135302b27a7ec7f57101b`).
+- The failing review workflow was validating GitHub's synthetic pull-request
+  merge SHA while the human-review surface comparison and artifact labels
+  purported to describe the PR head. CI now derives one immutable `SOURCE_SHA`
+  from `github.event.pull_request.head.sha` (falling back to `github.sha` for
+  non-PR events), checks out that exact revision, proves literal-head equality,
+  and uses it for source-family diffs and artifact names. This is a workflow
+  identity repair; it does not alter plant, environment, estimator, app, or
+  Driver bytes.
+- Local R 4.5.3 review passed both independent oracles,
+  `scripts/test_build_script_portability.R`, `scripts/test_raw_portability.R`,
+  and parse of all 28 app/R/script files. The raw inventory has exactly one
+  unique digest for each canonical site and its own SHA-256 equals the embedded
+  `sourceDigest`. JavaScript syntax, six-handler/semantic-readiness contracts,
+  cover contract, generated-receipt check, shell syntax, Python compile, YAML
+  parse, all 10 workflow run-block `bash -n` checks, all 15 changed human-review
+  surfaces, `git diff --check`, native-size social-card inspection, and exact
+  equality of manifest/search/runtime bytes to data candidate `374fb704` also
+  passed. `actionlint` is unavailable locally. The first Ruby run-block helper
+  used `filter_map`, which is unavailable in local Ruby 2.6.10, and the first
+  zsh surface helper accidentally shadowed zsh's special `path` array; both
+  diagnostics failed before evaluating repository content and their corrected
+  versions passed.
+- The full science test and bundle verifier stop at missing local `dplyr`; the
+  offline app source stops at missing local `shiny`. This machine has only
+  `htmltools`, `digest`, and `jsonlite` from the runtime closure, so no green
+  result is claimed for those package-dependent gates and no ad hoc package
+  installation was used. They must run in the pinned R 4.5.2 CI closure.
+  Likewise, headless Chrome on this host enforces a 485 CSS-pixel minimum even
+  when cropping a 390/320 screenshot, so those captures are not responsive
+  evidence. Remaining authority gates are literal-head CI, app/export/PDF
+  parity, real desktop plus 390/375/361/360/320 responsive/accessibility review,
+  merge, exact Connect/Pages identity, and post-deploy semantic health.
+- Failure/cleanup: the original publish-or-update-review-branch stage did not
+  establish a publishable reviewed head. No subset, failed deployment, or
+  partial family is being promoted by this local review; no GitHub mutation is
+  authorized from this worktree. Local `gh auth status` reports the saved
+  `tgilbert14` CLI token invalid, which does not affect the local audit but also
+  prevents a remote recheck from this worktree. Learning classes are
+  `app-local` for surfaced
+  snapshot facts, `suite-platform` for literal-head CI identity, and
+  `scientific-contract` for receipt/opportunity boundaries. Driver disposition
+  remains `CONTEXT / NO DRIVER BYTE CHANGE`.
+
 ## 2026-08-03 scheduled-refresh raw-RDS portability repair candidate
 
 - Recorded `2026-08-03 08:46 EDT` (`America/New_York`) from source branch
@@ -232,4 +336,6 @@ If Connect cannot restore an archived dependency, fix the package closure and re
 - For a release-byte promotion, Connect and Pages must point to the same promoted application commit. A later documentation-only closeout may merge without creating a new app release; record its repository/Pages commit separately while retaining the exact deployed application SHA and receipts.
 - If public semantic health fails, stop promotion and restore the last known-good commit through a normal revert/redeploy workflow.
 - Preserve the failed receipt and root cause for the suite learning loop.
-- Keep current-source Driver promotion on hold while the plant family is `legacy-partial`, even if the application release and exact-byte deployment gates pass.
+- Keep Driver ingestion and inferential promotion on hold until explicit sampled
+  opportunity, a measured eligible join, an independent adapter, and old/new
+  parity pass. A complete source receipt alone is not authorization.
