@@ -2,6 +2,85 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-03 scheduled-refresh raw-RDS portability repair candidate
+
+- Recorded `2026-08-03 08:46 EDT` (`America/New_York`) from source branch
+  `origin/master` at exact commit
+  `dfb44231e67fff49f229a835eb9fcdc2bfcefe0d`; implementation branch is
+  `agent/plant-diversity-refresh-portability`. Production remains the verified
+  legacy runtime and Living Poster authorities recorded below. No generated
+  plant/environment bundle, search index, receipt, cover, `manifest.json`,
+  Connect deployment, Pages publication, or Driver byte changed in this source
+  candidate.
+- Scheduled run
+  [30736596906](https://github.com/tgilbert14/NEON-Plant-Diversity/actions/runs/30736596906)
+  fetched all 46 sites successfully, including 20,738 ABBY `div_1m2Data` rows,
+  but the first clean build process stopped at ABBY with
+  `div_1m2Data consumed-row mask is invalid`; the publisher was skipped. The
+  sole raw artifact expired after one day and now returns HTTP 410, so the exact
+  malformed column cannot be re-read. The strongest supported cause is the
+  repository's already-documented Arrow ALTREP seam: the R 4.1.1 /
+  neonUtilities 4.0.1 fetch process saved Arrow-backed strings directly, while
+  the independent R 4.5.2 builder did not load Arrow. This diagnosis is
+  high-confidence inference, not a byte-level observation from the expired
+  artifact; there is no evidence that a new ecological row code caused the
+  failure.
+- The repair materializes every fetched data-frame column into a plain base-R
+  vector while Arrow is still available, preserving base character, logical,
+  integer, numeric, complex, raw, `Date`, `POSIXct`, factor, and ordered-factor
+  values/classes. It rejects length/row disagreement, dimensions, unsupported
+  storage or attributes, and residual Arrow/ALTREP-like classes before saving.
+  Each saved site RDS is then opened by a fresh `Rscript --vanilla` child that
+  loads neither Arrow nor neonUtilities, validates all data-frame columns,
+  independently recreates both registered consumed-row masks, and re-runs the
+  site/date source boundary before the file can be renamed into raw staging.
+  The builder repeats the portable-frame gate and now reports expected/actual
+  mask shape plus the three contributing field signatures. The mask itself is
+  unchanged: only named `plantSpecies` and `otherVariables` records are consumed;
+  no missing survey opportunity is converted to zero.
+- Focused fixtures preserve exact values, `NA`s, storage types, `Date`/
+  `POSIXct` timezone, factor levels/order, and the intended plant/other-variable
+  mask. A producer-to-fresh-child regression passes a portable raw RDS, while a
+  deliberately malformed three-row frame with a zero-length `scientificName`
+  fails with the field and expected row count. Static assertions bind the fetch
+  order (`materialize -> save -> child verify -> rename`) and the restricted
+  publisher contract. Local R was 4.5.3 with `arrow`, `neonUtilities`, and
+  `tibble` absent. Exact local results:
+  `Rscript --vanilla scripts/test_raw_portability.R` — PASS;
+  `Rscript --vanilla scripts/test_build_script_portability.R` — PASS; parse of
+  all 26 app/R/script files — PASS; read-only materialization of the `occ` and
+  `ground` frames in all 46 committed bundles preserved exact values, classes,
+  and attributes — PASS; corrected Ruby safe-load of both changed
+  workflow YAML files — PASS; extraction of the restricted publisher run block
+  with PyYAML followed by `bash -n` — PASS; and `git diff --check` — PASS. The
+  first Ruby diagnostic used the unavailable `YAML.safe_load_file` method and
+  failed before reading either workflow; rerunning with
+  `YAML.safe_load(File.read(...))` passed.
+  The existing full science/bundle/manifest suite is not claimed locally because
+  its pinned package closure is not installed.
+- Raw evidence retention is raised from one to seven days. The restricted
+  publisher still writes only
+  `automation/plant-diversity-data-refresh`, never `master`; it now requires
+  exact current-master input, a direct-child promotion commit, a remote branch
+  resolving to that exact commit, and an unambiguous `master <- review branch`
+  PR identity. It no longer calls `gh pr create` or changes PR readiness with the
+  Actions token. When no PR exists it succeeds with a notice instructing a
+  repository write user to open the intentionally draft PR; an existing PR is
+  commented only after its exact head is observed. Human science/provenance
+  changes on an active review branch remain protected from automation overwrite.
+- Residual gate: the local fixture uses an Arrow-class analogue because Arrow is
+  unavailable locally. The pinned R 4.1.1 fetch job must exercise the real
+  neonUtilities/Arrow vectors, retain the raw family for seven days, and pass a
+  full new 46-site fetch, two exact builds, manifest/verifier suite, and
+  exact-head review workflow. Rerunning only the old failed jobs cannot succeed:
+  their raw artifact is gone. A new full fetch will legitimately produce a new
+  serialized raw digest even when ecological values are unchanged. Local
+  `gh auth status` also reports that the saved `tgilbert14` token is invalid; no
+  push, PR, dispatch, or other GitHub mutation had been attempted at audit time;
+  publication still requires the exact receipts below.
+  Learning is `app-local + suite-platform`, disposition `NONE`; the registered
+  Plant Driver disposition remains `CONTEXT / NO DRIVER BYTE CHANGE`.
+
 ## 2026-07-22 Suite Living Poster V1 source candidate
 
 - Working branch: `agent/plant-diversity-living-poster-v1`; production remains

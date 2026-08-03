@@ -8,6 +8,7 @@ suppressWarnings(suppressMessages(library(dplyr)))
 source("R/site_metadata.R")
 source("R/source_receipt.R")
 source("R/plant_helpers.R")
+source("scripts/plant_raw_portability.R")
 
 `%||%` <- function(a, b) {
   if (is.null(a) || length(a) == 0L || (length(a) == 1L && is.na(a))) b else a
@@ -154,8 +155,10 @@ stable_order <- function(frame, columns) {
 
 build_site <- function(site) {
   raw <- readRDS(file.path(raw_dir, paste0(site, "_raw.rds")))
-  if (is.null(raw$div_1m2Data) || is.null(raw$div_10m2Data100m2Data))
-    stop(sprintf("%s raw dump lacks required product tables", site), call. = FALSE)
+  pde_require_raw_tables(
+    raw, c("div_1m2Data", "div_10m2Data100m2Data"), sprintf("%s raw", site)
+  )
+  pde_validate_raw_result(raw, sprintf("%s raw", site))
   d1 <- tibble::as_tibble(raw$div_1m2Data)
   d2 <- tibble::as_tibble(raw$div_10m2Data100m2Data)
   d1_required <- c("divDataType", "scientificName", "otherVariables", "endDate")
@@ -168,6 +171,13 @@ build_site <- function(site) {
     (as.character(d1$divDataType) == "plantSpecies" & !is.na(d1$scientificName)) |
     (as.character(d1$divDataType) == "otherVariables" & !is.na(d1$otherVariables))
   d2_consumed <- !is.na(d2$scientificName)
+  pde_validate_consumed_mask(
+    d1_consumed, d1, "div_1m2Data",
+    c("divDataType", "scientificName", "otherVariables")
+  )
+  pde_validate_consumed_mask(
+    d2_consumed, d2, "div_10m2Data100m2Data", "scientificName"
+  )
   validate_plant_source_rows(
     d1, site, "div_1m2Data", parsed_source_start, as.Date(source_cutoff),
     d1_consumed

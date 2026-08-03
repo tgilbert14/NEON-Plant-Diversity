@@ -165,6 +165,9 @@ jobs:
           echo "neon_utilities_version=$neon_utilities_version" >> "$GITHUB_OUTPUT"
           echo "neonUtilities fetch runtime: $neon_utilities_version"
 
+      - name: Prove the portable raw-RDS boundary before network fetch
+        run: Rscript --vanilla scripts/test_raw_portability.R
+
       - name: Fetch exactly 46 sites into empty staging
         env:
           NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
@@ -206,7 +209,7 @@ jobs:
           name: plant-diversity-raw-${{ github.sha }}
           path: ${{ runner.temp }}/plant-raw
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   build_candidate:
     needs: [gate, fetch_raw]
@@ -425,6 +428,7 @@ jobs:
           node scripts/check_cover.mjs
           Rscript --vanilla scripts/test_science_contracts.R
           Rscript --vanilla scripts/test_build_script_portability.R
+          Rscript --vanilla scripts/test_raw_portability.R
           Rscript --vanilla -e 'Sys.setenv(PDE_LIVE="0"); source("global.R"); source("ui.R"); source("server.R"); stopifnot((inherits(ui,"shiny.tag.list") || inherits(ui,"shiny.tag")), is.function(server), length(BUNDLED) == 46L)'
           git diff --check
 
@@ -481,7 +485,7 @@ jobs:
               exit 1
             fi
           fi
-          git fetch origin master
+          git fetch --no-tags origin master
           remote_master=$(git rev-parse origin/master)
           if [ "$remote_master" != "$GITHUB_SHA" ]; then
             echo "::error title=Stale refresh base::master moved from $GITHUB_SHA to $remote_master; rebuild the candidate."
@@ -493,13 +497,13 @@ jobs:
           cp "$RUNNER_TEMP/validated-release/data-sample/demo.rds" data-sample/demo.rds
           cp "$RUNNER_TEMP/validated-release/www/runtime-receipt.txt" www/runtime-receipt.txt
           cp "$RUNNER_TEMP/validated-release/manifest.json" manifest.json
-          changed=$(git diff --name-only)
+          changed=$(git status --porcelain=v1 --untracked-files=all | cut -c4-)
           if [ -n "$changed" ] && echo "$changed" | grep -Ev '^(data/|data-sample/|www/runtime-receipt[.]txt$|manifest[.]json$)' >/dev/null; then
             echo "::error title=Candidate allowlist violation::validated artifact changed a non-release path"
             echo "$changed"
             exit 1
           fi
-          if git diff --quiet -- data data-sample www/runtime-receipt.txt manifest.json; then
+          if [ -z "$(git status --porcelain=v1 --untracked-files=all -- data data-sample www/runtime-receipt.txt manifest.json)" ]; then
             echo "No validated release-byte change; no review branch created."
             exit 0
           fi
@@ -532,6 +536,10 @@ jobs:
           git config user.name "neon-data-bot"
           git config user.email "neon-data-bot@users.noreply.github.com"
           git add -A -- data data-sample www/runtime-receipt.txt manifest.json
+          if git diff --cached --quiet -- data data-sample www/runtime-receipt.txt manifest.json; then
+            echo "No validated candidate change, including untracked scoped files."
+            exit 0
+          fi
           if [ "$SKIP_DOWNLOAD" = "true" ]; then
             receipt="revalidation-only; committed source receipts unchanged"
           else
@@ -539,17 +547,67 @@ jobs:
           fi
           git commit -m "data: propose validated plant-diversity refresh [bot]" \
                      -m "Source ${GITHUB_SHA}; ${receipt}; two exact plant builds, 46 static environment-context byte/schema checks, runtime receipt, manifest, and offline source passed."
+          published_commit=$(git rev-parse HEAD)
+          if [ "$(git rev-parse HEAD^)" != "$GITHUB_SHA" ]; then
+            echo "::error title=Candidate identity mismatch::promotion commit is not a direct child of the exact validated master revision"
+            exit 1
+          fi
           if [ -n "$remote_head" ]; then
             git push --force-with-lease="refs/heads/$branch:$remote_head" origin "$branch:refs/heads/$branch"
           else
             git push origin "$branch:refs/heads/$branch"
           fi
-          pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
-          body="Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. This PR is intentionally draft. Before it can pass CI or be marked ready, a human must recompute/review the empirical cover facts and update the Plant source receipt, science/current-status docs, Driver handoff, suite learning, expert/data verdicts, build handoff, social card, Open Graph image, and cover receipt. Merging the completed review PR is the explicit production/deployment decision."
-          if [ -z "$pr_url" ]; then
-            gh pr create --draft --base master --head "$branch" \
-              --title "data: validated NEON plant-diversity refresh" --body "$body"
-          else
-            gh pr ready --undo "$pr_url" || true
-            gh pr comment "$pr_url" --body "$body"
+          pushed_commit=""
+          for attempt in 1 2 3 4 5; do
+            pushed_commit=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+            [ "$pushed_commit" = "$published_commit" ] && break
+            sleep 2
+          done
+          if [ "$pushed_commit" != "$published_commit" ]; then
+            echo "::error title=Published branch identity mismatch::review branch does not resolve to the validated candidate commit"
+            exit 1
           fi
+
+          body="Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. This PR is intentionally draft. Before it can pass CI or be marked ready, a human must recompute/review the empirical cover facts and update the Plant source receipt, science/current-status docs, Driver handoff, suite learning, expert/data verdicts, build handoff, social card, Open Graph image, and cover receipt. Merging the completed review PR is the explicit production/deployment decision."
+          pr_count=$(gh pr list --head "$branch" --base master --state open \
+            --json url --jq 'length')
+          if [ "$pr_count" -gt 1 ]; then
+            echo "::error title=Ambiguous refresh review::more than one open master PR exists for $branch"
+            exit 1
+          fi
+          if [ "$pr_count" -eq 0 ]; then
+            compare_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/master...${branch}?expand=1"
+            {
+              echo "### Validated Plant Diversity draft-review branch ready"
+              echo "- Branch: ${branch}"
+              echo "- Exact head: ${published_commit}"
+              echo "- Validator run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+              echo "- Review state: open as draft; empirical cover and provenance surfaces remain human-gated"
+              echo "- [Open the reviewer-authenticated draft PR](${compare_url})"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Validated draft review branch ready::Open a reviewer-authenticated draft PR from $branch to master after reviewing run ${GITHUB_RUN_ID}; that pull_request event is the exact-head CI trigger. $body Exact candidate head: $published_commit."
+            exit 0
+          fi
+
+          pr_record=""
+          for attempt in 1 2 3 4 5; do
+            pr_record=$(gh pr list --head "$branch" --base master --state open \
+              --json url,baseRefName,headRefName,headRefOid,isDraft \
+              --jq 'if length == 1 then .[0] | [.url,.baseRefName,.headRefName,.headRefOid,(.isDraft|tostring)] | @tsv else "" end')
+            case "$pr_record" in
+              *$'\t'"$published_commit"$'\t'*) break ;;
+            esac
+            sleep 2
+          done
+          IFS=$'\t' read -r pr_url pr_base pr_head pr_oid pr_draft <<< "$pr_record"
+          if [ -z "$pr_record" ] || [ "$pr_base" != master ] || \
+             [ "$pr_head" != "$branch" ] || [ "$pr_oid" != "$published_commit" ]; then
+            echo "::error title=Refresh PR identity mismatch::open PR does not match master <- $branch at the exact validated head"
+            exit 1
+          fi
+          draft_warning=""
+          if [ "$pr_draft" != true ]; then
+            draft_warning=" The existing PR is not draft; a repository write user must convert it back to draft before scientific review continues."
+          fi
+          gh pr comment "$pr_url" --body "$body Exact candidate head: ${published_commit}.${draft_warning} GitHub will hold the pull_request synchronize checks triggered by this automation update for approval; a repository write user must select **Approve workflows to run**. Do not merge until every required human-review surface is updated and checks are green on exact head ${published_commit}."
+          echo "::notice title=Approve exact-head draft-review checks::Existing PR updated to $published_commit.${draft_warning} A repository write user must approve workflows, keep the review draft until the required science/provenance surfaces are complete, and verify green checks on that exact head."
