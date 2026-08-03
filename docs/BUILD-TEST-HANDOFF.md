@@ -2,6 +2,43 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-03 refreshed-family compact-width repair candidate
+
+- PR #13 merged the reviewed query-snapshot family as
+  `a060ee64909431f7c694d32be9729f03cb7b04e0`. Exact PR-head CI
+  `30824231684`, post-merge Pages `30824563599`, and semantic production
+  health `30824565205` passed. Connect served runtime receipt
+  `sha256:94e89e5c59166476c386f3e337e7cd4f08d59bef6953c4a3d09b07134ed8378e`;
+  Pages served cover receipt
+  `sha256:27ede8c791fa23cac59cf7023f7d7fe4c79910f63dec0831f09ccf1c802e5792`.
+- Public SRER loaded with 161 species, 33 plots, 10.0% introduced relative
+  cover, and Chao2 194.5. The live whole-site ZIP passed integrity with its 11
+  documented files; snapshot/export values and the complete query receipt
+  agreed. The one-page 44,575-byte Cairo PDF was rendered at 144 dpi and had no
+  clipping, overlap, blank panel, or broken glyph; its surfaced values and NRCS
+  reference facts matched the app/export.
+- Real browser QA at forced 390×844 found a horizontal scrollbar. The long new
+  query receipt made `.hero-receipt` retain a 473 px min-content width inside a
+  375 px document, unlike the shorter legacy receipt used by the earlier mobile
+  fixture. This is an app-local responsive defect, not a scientific or source
+  failure.
+- The compact-header cascade now gives the receipt an explicit zero flex
+  minimum, 100% maximum, border-box sizing, and anywhere/break-word wrapping.
+  The static browser contract requires those exact protections so a future
+  content-addressed receipt cannot silently restore intrinsic-width overflow.
+  No plant, environment, reference, estimator, export, cover, or Driver byte is
+  changed by this source repair.
+- Local `git diff --check`, JavaScript parse, the six-handler/readiness/mobile-
+  cascade contract, and the complete cover contract pass. The release-receipt
+  checker rejects the intentionally unchanged committed runtime receipt as
+  stale, which is the expected fail-closed boundary after changing deployed CSS;
+  only the pinned validator may generate the replacement receipt and manifest.
+
+Next action: run the exact-head validator, promote only its generated runtime
+receipt/manifest bytes, merge the matching head, verify Connect/Pages identity,
+and repeat desktop plus 390/375/361/360/320 real-browser QA before recording the
+refreshed family as the production authority.
+
 ## 2026-08-03 complete-query refresh human-review candidate
 
 - Recorded `2026-08-03 10:27 EDT` (`America/New_York`) from validated data
