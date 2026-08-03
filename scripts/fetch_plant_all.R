@@ -7,6 +7,7 @@
 suppressPackageStartupMessages(library(neonUtilities))
 source("R/site_metadata.R")
 source("R/source_receipt.R")
+source("scripts/plant_raw_portability.R")
 
 read_required_env <- function(name) {
   value <- trimws(Sys.getenv(name, ""))
@@ -100,9 +101,60 @@ for (site in requested) {
     next
   }
 
+  result <- tryCatch(
+    pde_materialize_raw_result(result, sprintf("%s fetched raw", site)),
+    error = function(error) {
+      message(sprintf(
+        "RAW PORTABILITY FAILED [%s]: %s", site, conditionMessage(error)
+      ))
+      NULL
+    }
+  )
+  if (is.null(result)) {
+    failed <- c(failed, site)
+    next
+  }
+
+  # Re-run the source boundary after materialization. This proves that removing
+  # Arrow/ALTREP storage classes did not change the retained site/date values.
+  materialized_semantic_problems <- c(
+    plant_source_row_problems(
+      result$div_1m2Data, site, "div_1m2Data",
+      query_start_date, query_cutoff_date
+    ),
+    plant_source_row_problems(
+      result$div_10m2Data100m2Data, site, "div_10m2Data100m2Data",
+      query_start_date, query_cutoff_date
+    )
+  )
+  if (length(materialized_semantic_problems)) {
+    message(sprintf(
+      "MATERIALIZED RAW SEMANTICS FAILED [%s]: %s",
+      site, paste(materialized_semantic_problems, collapse = "; ")
+    ))
+    failed <- c(failed, site)
+    next
+  }
+
   temporary <- tempfile(pattern = paste0(site, "-"), tmpdir = outdir,
                         fileext = ".rds.tmp")
   saveRDS(result, temporary, compress = "xz")
+  child_valid <- tryCatch({
+    pde_verify_raw_file_in_fresh_r(
+      temporary, site, query_start_date, query_cutoff_date
+    )
+    TRUE
+  }, error = function(error) {
+    message(sprintf(
+      "FRESH-R RAW VALIDATION FAILED [%s]: %s", site, conditionMessage(error)
+    ))
+    FALSE
+  })
+  if (!child_valid) {
+    unlink(temporary)
+    failed <- c(failed, site)
+    next
+  }
   if (!file.rename(temporary, destination)) {
     unlink(temporary)
     failed <- c(failed, site)

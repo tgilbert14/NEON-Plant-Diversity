@@ -137,6 +137,7 @@ jobs:
           set -euo pipefail
           Rscript --vanilla scripts/test_science_contracts.R
           Rscript --vanilla scripts/test_build_script_portability.R
+          Rscript --vanilla scripts/test_raw_portability.R
 
       - name: Rebuild the derived search index twice and require identical bytes
         run: |
