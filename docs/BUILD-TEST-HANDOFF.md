@@ -2,42 +2,58 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
-## 2026-08-03 refreshed-family compact-width repair candidate
+## 2026-08-03 refreshed-family compact-width production closeout
 
-- PR #13 merged the reviewed query-snapshot family as
+- PR #13 merged the reviewed complete query-snapshot family as
   `a060ee64909431f7c694d32be9729f03cb7b04e0`. Exact PR-head CI
-  `30824231684`, post-merge Pages `30824563599`, and semantic production
-  health `30824565205` passed. Connect served runtime receipt
-  `sha256:94e89e5c59166476c386f3e337e7cd4f08d59bef6953c4a3d09b07134ed8378e`;
-  Pages served cover receipt
+  `30824231684`, post-merge CI `30824565159`, Pages `30824563599`, and semantic
+  production health `30824565205` passed. Public SRER loaded with 161 species,
+  33 plots, 10.0% introduced relative cover, and Chao2 194.5. Its live 11-file
+  whole-site ZIP passed integrity and value/receipt parity; the 44,575-byte
+  one-page Cairo PDF rendered cleanly at 144 dpi with the same surfaced values
+  and NRCS reference facts.
+- That source release exposed one real compact-width defect: at forced 390×844,
+  its new content-addressed query receipt retained a 473 px min-content width
+  inside a 375 px document and produced a horizontal scrollbar. PR #14 gives
+  `.hero-receipt` an explicit zero flex minimum, 100% maximum, border-box sizing,
+  and anywhere/break-word wrapping, and makes those protections an executable
+  mobile-cascade contract. This is an app-local presentation repair; plant,
+  environment, reference, estimator, export, cover, and Driver data bytes are
+  unchanged.
+- The source repair `18568efeb2f4f9faf3d0d6586d18b382c2d5e2d1` passed every
+  substantive pinned gate in exact-head run `30826012189` and failed only the
+  intentional committed-release-byte equality boundary. Its validator artifact
+  `8860955279` (digest
+  `sha256:33f70f63e2650981721977ae0ed7bff1f81b4315bf33715b71adf69ca24ed209`)
+  supplied the exact replacement runtime receipt and manifest; search and cover
+  bytes were already identical. Promotion head
+  `9a8c4a383f1c277685a8edf9a994296a1ee70aa4` then passed literal-head CI
+  `30826586359` and merged through PR #14 as
+  `8fc0824493a52a1a7ca2054852a5d84b264a9c8c`.
+- The merged authority passed main CI `30827023726`; its exact release artifact
+  is `8861393536`, 135,994 bytes, digest
+  `sha256:f4d9c431b78b727c9dc21a91a4554eececb54c7fb3b3b2df0288a58f3c323f40`.
+  Semantic production verification `30827025550` and Pages deployment
+  `30827021757` passed on that same merge. Connect serves runtime receipt
+  `sha256:22418f8bf10fd96795b007a81b1b9174020c9e0eac97aec8d52e80b80a7309ce`;
+  Pages serves unchanged cover receipt
   `sha256:27ede8c791fa23cac59cf7023f7d7fe4c79910f63dec0831f09ccf1c802e5792`.
-- Public SRER loaded with 161 species, 33 plots, 10.0% introduced relative
-  cover, and Chao2 194.5. The live whole-site ZIP passed integrity with its 11
-  documented files; snapshot/export values and the complete query receipt
-  agreed. The one-page 44,575-byte Cairo PDF was rendered at 144 dpi and had no
-  clipping, overlap, blank panel, or broken glyph; its surfaced values and NRCS
-  reference facts matched the app/export.
-- Real browser QA at forced 390×844 found a horizontal scrollbar. The long new
-  query receipt made `.hero-receipt` retain a 473 px min-content width inside a
-  375 px document, unlike the shorter legacy receipt used by the earlier mobile
-  fixture. This is an app-local responsive defect, not a scientific or source
-  failure.
-- The compact-header cascade now gives the receipt an explicit zero flex
-  minimum, 100% maximum, border-box sizing, and anywhere/break-word wrapping.
-  The static browser contract requires those exact protections so a future
-  content-addressed receipt cannot silently restore intrinsic-width overflow.
-  No plant, environment, reference, estimator, export, cover, or Driver byte is
-  changed by this source repair.
-- Local `git diff --check`, JavaScript parse, the six-handler/readiness/mobile-
-  cascade contract, and the complete cover contract pass. The release-receipt
-  checker rejects the intentionally unchanged committed runtime receipt as
-  stale, which is the expected fail-closed boundary after changing deployed CSS;
-  only the pinned validator may generate the replacement receipt and manifest.
+- Real production browser QA repeated SRER at 390, 375, 361, 360, and 320 CSS
+  pixels. Every width reached `SRER ready`, showed no visible Shiny error or
+  disconnect, and had document/body scroll width equal to client width. The
+  full receipt wrapped with `overflow-wrap: anywhere`; at 320 px its 255 px
+  scroll width exactly matched its 255 px client width. The regression is
+  closed without hiding or truncating provenance, and the temporary browser
+  viewport override was reset after testing.
+- Local JavaScript parse, handler/readiness/mobile-cascade, cover, generated
+  receipt, shell syntax, and `git diff --check` gates passed. The package-complete
+  R/science/bundle/offline-source authority is the pinned exact-head and merged
+  CI above; no unsupported local substitute is claimed. Classification remains
+  `app-local` plus a reusable `suite-platform` intrinsic-width guard. Driver
+  disposition remains `CONTEXT / NO DRIVER BYTE CHANGE`.
 
-Next action: run the exact-head validator, promote only its generated runtime
-receipt/manifest bytes, merge the matching head, verify Connect/Pages identity,
-and repeat desktop plus 390/375/361/360/320 real-browser QA before recording the
-refreshed family as the production authority.
+Next action: vendor this exact source/production receipt into the central suite
+register, then continue the independently gated companion-app release queue.
 
 ## 2026-08-03 complete-query refresh human-review candidate
 
