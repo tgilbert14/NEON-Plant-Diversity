@@ -14,6 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
   RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
   OPENBLAS_CORETYPE: Haswell
@@ -29,9 +30,22 @@ jobs:
       - name: Checkout the immutable app revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Prove the literal source head
+        env:
+          EXPECTED_PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$SOURCE_SHA"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            test -n "$EXPECTED_PR_HEAD"
+            test "$SOURCE_SHA" = "$EXPECTED_PR_HEAD"
+          fi
+          echo "Validated literal source head: $SOURCE_SHA"
 
       - name: Require human review surfaces when the plant source family changes
         if: github.event_name == 'pull_request'
@@ -40,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          if git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- \
+          if git diff --quiet "$BASE_SHA" "$SOURCE_SHA" -- \
               data/sites data/site_index.rds data/source; then
             echo "Plant source family unchanged; refresh-review surface gate not required."
             exit 0
@@ -65,7 +79,7 @@ jobs:
           missing=()
           for path in "${required[@]}"; do
             if [ ! -e "$path" ] ||
-               git diff --quiet "$BASE_SHA" "$GITHUB_SHA" -- "$path"; then
+               git diff --quiet "$BASE_SHA" "$SOURCE_SHA" -- "$path"; then
               missing+=("$path")
             fi
           done
@@ -173,7 +187,7 @@ jobs:
         if: failure() && steps.manifest.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plant-diversity-manifest-UNVALIDATED-${{ github.sha }}
+          name: plant-diversity-manifest-UNVALIDATED-${{ env.SOURCE_SHA }}
           path: manifest.json
           if-no-files-found: ignore
           retention-days: 1
@@ -181,7 +195,7 @@ jobs:
       - name: Upload the validated release-byte candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plant-diversity-release-candidate-${{ github.sha }}
+          name: plant-diversity-release-candidate-${{ env.SOURCE_SHA }}
           path: |
             data/search_index.rds
             www/runtime-receipt.txt

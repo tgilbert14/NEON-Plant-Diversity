@@ -21,7 +21,7 @@ Before promotion, record:
 - `manifest.json` SHA-256;
 - CI run URL.
 
-The current legacy identity is registered in [Plant Source Receipt](docs/PLANT-SOURCE-RECEIPT.md). Its exact 46-site family entered the repository in commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19, but neither the commit nor its date is an upstream fetch/build/release fact. The normative gates are in [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md). Do not substitute a successful local page load for the R, byte, source, deployment, or public-browser receipts.
+The reviewed candidate identity is registered in [Plant Source Receipt](docs/PLANT-SOURCE-RECEIPT.md): 46 matching `plant-source-receipt-v2` records, build date `2026-08-03`, source interval `2013-01` through `2026-07-31`, receipt/raw-inventory digest `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, builder commit `1734840a4f09e7acee356431ea1e57e9a637fb31`, and `neonRelease=NA` because no official release was selected. Retained observations end in 2024; the query cutoff is not an observation date. The normative gates are in [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md). Do not substitute a successful local page load for the R, byte, source, deployment, or public-browser receipts.
 
 ## Candidate validation
 
@@ -36,6 +36,8 @@ Open a review branch and PR. CI must:
 7. run JavaScript, cover, handler-arity, shell, environment-context, and offline-boot gates.
 
 Plant source validation must either match the canonical frozen-family SHA-256 for the legacy 46-site bytes while preserving unknown source fields as `NA`, or validate one complete identical refreshed receipt across every plant bundle and `data/site_index.rds`. Partial or mixed receipt modes are ineligible for promotion.
+
+For candidate `374fb704c548ca830f05c46d5fab1331e0027302`, run `30818211291` and validated artifact `8858560431` establish the complete refreshed mode. Human review independently reconciles all 46 bundles to the indexes and compares the previous and candidate row families with `scripts/review_refresh_candidate.R` and `scripts/review_refresh_rows.R`. CI must still rerun on the literal reviewed PR head; a green merge-ref build is not a substitute.
 
 This repository cannot safely hand-edit derived release bytes. If the first CI run regenerates a different candidate, download `plant-diversity-release-candidate-<SHA>`, inspect it, and replace all four exact files: `data/search_index.rds`, `www/runtime-receipt.txt`, `docs/cover-receipt.txt`, and `manifest.json`. Commit them together and rerun CI. The PR is not eligible to merge until every equality and tracked-membership gate is green.
 

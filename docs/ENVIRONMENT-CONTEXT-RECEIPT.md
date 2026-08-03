@@ -2,6 +2,8 @@
 
 Status: versioned static context; provenance is partial and this layer is not a Driver evidence source.
 
+2026-08-03 plant-refresh review: candidate `374fb704c548ca830f05c46d5fab1331e0027302` carries the environment directory byte-for-byte from parent `1734840a4f09e7acee356431ea1e57e9a637fb31`; both Git tree IDs are `3825e1f68fd6c99367d3959b64086a849c57538d`. No environment row, source label, or cutoff changed. The 34 site reference artifacts are likewise unchanged; only `data/expected/completeness_index.rds` was rebuilt against the refreshed plant snapshots.
+
 ## Identity
 
 - Inventory: 46 monthly `data/env/<SITE>.rds` overlays.
@@ -15,7 +17,7 @@ That missing upstream receipt is a real limitation. The app may use these bytes 
 ## Release contract
 
 - Plant-product refreshes do not silently relabel these overlays with the plant cutoff.
-- The plant family's repository import date, source-bundle commit, and exact-byte guard likewise do not date or relabel the environment overlays; see [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
+- The plant family's query interval, build date, source digest, and builder commit likewise do not date or relabel the environment overlays; see [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
 - The environment bytes are carried forward unchanged unless a separate reviewed environment rebuild replaces all 46 files.
 - Every release verifies the exact 46-site filename/siteID mapping, monthly key/date consistency, finite/range constraints, and the public runtime receipt that hashes all environment files.
 - A future environment rebuild must add source product IDs, query parameters, cutoff, transformation code/version, licenses, row counts, and per-file checksums before promotion.

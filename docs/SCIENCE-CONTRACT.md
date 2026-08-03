@@ -1,6 +1,6 @@
 # Plant Diversity Science Contract
 
-Status: registered and production-verified for the 2026-07-19 v3 release. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
+Status: registered estimator contract; source-family review updated for validated query-snapshot candidate `374fb704c548ca830f05c46d5fab1331e0027302`. Public production remains on the 2026-07-19 legacy release until exact-head CI, merge, deployment, and public verification complete. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
 
 ## Observation model
 
@@ -14,11 +14,11 @@ Status: registered and production-verified for the 2026-07-19 v3 release. This d
 
 ## Plant source-receipt contract
 
-The current plant data are an exact, frozen legacy family, not a current-source claim. The 46-site `DP1.10058.001` family was introduced in repository commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19 and is guarded by the canonical frozen-family SHA-256 recorded in [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md). The original NEON release, fetch/query cutoff, query receipt, raw-source digest, and actual bundle build date were not preserved.
+The candidate plant data are a receipt-complete 46-site `DP1.10058.001` query snapshot, not the former frozen legacy family. Every site bundle and `data/site_index.rds` carries `plant-source-receipt-v2` with build date `2026-08-03`, source interval `2013-01` through closed cutoff `2026-07-31`, immutable receipt ID `PDE-DP1.10058.001-query-through-2026-07-31-sha256-48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, raw-inventory digest `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, builder commit `1734840a4f09e7acee356431ea1e57e9a637fb31`, `basic` query package, and `neonUtilities 4.0.1`. See [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
 
-For this legacy family, `builtAt`, `neonRelease`, and `sourceCutoff` are `NA`. `repositoryImportedAt=2026-06-19` and `sourceBundleCommit=4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` identify repository receipt only. No filesystem mtime, commit date, manifest checksum, runtime checksum, or derived-artifact checksum may be substituted for an upstream source date, release, cutoff, query ID, or raw-source digest.
+No official NEON release was explicitly selected, so `neonRelease=NA`. That honest `NA` does not invalidate the complete query receipt. The closed 2026-07-31 cutoff states what the query requested; retained observations span 2013–2024 and must not be presented as 2026 observations. Repository dates, file mtimes, manifest/runtime hashes, and derived checksums remain ineligible substitutes for source fields.
 
-These exact bytes may support descriptive ecological values under the estimand and support rules below. They may not be labelled current, assigned an invented official release, or promoted as current-source Driver evidence. A future query-snapshot refresh requires one complete matching receipt across every one of the 46 plant bundles and `data/site_index.rds`, including a separate actual build date, query cutoff and immutable snapshot/query ID, true selected official release when applicable, raw/source digests, and builder commit. Revalidation without download preserves the existing receipt; it never stamps new provenance.
+After exact promotion, these bytes may support descriptive ecological values under the estimand and support rules below. A complete query receipt closes the former source-provenance hold, but does not invent sampled-empty 1 m² opportunities, standardize national effort, establish causal currentness, or authorize a Driver vote. Every later refresh must again carry one complete matching receipt across all 46 bundles and `data/site_index.rds`; revalidation without download preserves the existing receipt and never stamps new provenance.
 
 ## Registered estimands
 
@@ -79,12 +79,12 @@ For a selected site and snapshot, the following must match exactly:
 - report PDF values;
 - `analysis_snapshot.csv` and `plots_snapshot.csv`;
 - science fixture outputs;
-- reference and provenance receipts, including the plant source-receipt class and exact-family guard.
+- reference and provenance receipts, including the matching query-snapshot fields and durable raw-source inventory digest.
 
 Any mismatch blocks release.
 
 ## Driver disposition
 
-Current status: **CONTEXT / NO DRIVER BYTE CHANGE.** The production release validates descriptive legacy context only; current-source and inferential promotion remain held.
+Current status: **CONTEXT / NO DRIVER BYTE CHANGE.** The candidate closes the plant source-receipt gate, but current Driver ingestion and inferential promotion remain held on explicit sampled opportunity, a measured eligible join, an independent adapter, and old/new parity.
 
-Eligible after byte and contract validation as descriptive legacy context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty. Current-source promotion remains blocked until a complete reviewed plant refresh receipt exists. Excluded: productivity vote, per-site climate–richness edges, management priority, and phenology signals owned by the Phenology app.
+Eligible after exact promotion as descriptive query-snapshot context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty. Excluded: productivity vote, per-site climate–richness edges, management priority, and phenology signals owned by the Phenology app.

@@ -4,7 +4,7 @@ See how plant communities change from **1 to 400 m²**, inspect native and intro
 
 [Open the public cover](https://tgilbert14.github.io/NEON-Plant-Diversity/) · [Launch the app](https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/) · [Open Driver Cascade](https://tgilbert14.github.io/NEON-Driver-Cascade/)
 
-Production release `d6c48625f8268873bcd42d86285becaadbd57b4c` serves exact runtime receipt `sha256:0765d8951843cf6fea09a295b260bfb53f1eb6708370748905a4a3941c85d2cb`; the complete CI, Pages, Connect, responsive, export, and source-limit receipt is in [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md).
+Validated data candidate `374fb704c548ca830f05c46d5fab1331e0027302` replaces the old legacy-partial plant family with one receipt-complete 46-site query snapshot built 2026-08-03 from a `basic` query spanning 2013-01 through the closed cutoff 2026-07-31. No official NEON release was selected, so `neonRelease=NA`; the newest retained observation year is 2024, not the query-cutoff year. The public production release remains `d6c48625f8268873bcd42d86285becaadbd57b4c` until this human-reviewed candidate passes exact-head CI, merge, Connect, Pages, export, and responsive verification. See [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md).
 
 This is an independent, unofficial R/Shiny explorer for NEON **Plant presence and percent cover** (`DP1.10058.001`). It is the **composition and invasion context** app in the NEON Explorer Suite. It does not treat richness as productivity, turn per-site short records into causal climate edges, or make management prescriptions.
 
@@ -73,7 +73,7 @@ See [Science Contract](docs/SCIENCE-CONTRACT.md), [Data Takeaways](docs/DATA-TAK
 
 ## Data and exports
 
-Committed per-site bundles live at `data/sites/<SITE>.rds` as `list(occ, ground, meta)`. The exact legacy 46-site family was introduced to this repository in commit `4ffcb24c3c1bf0dcab1f6c42fd3b9b5fe4de4e1e` on 2026-06-19. Its original NEON release, fetch/query cutoff, query receipt, and actual build date were not preserved. Accordingly, its `builtAt`, `neonRelease`, and `sourceCutoff` values remain `NA`; `repositoryImportedAt` and `sourceBundleCommit` record the repository receipt without pretending it is upstream vintage. The frozen-family guard identifies the exact bytes, which remain useful for descriptive ecology, but neither it nor filesystem, manifest, or runtime hashes establishes source recency. See the canonical [Plant Source Receipt](docs/PLANT-SOURCE-RECEIPT.md).
+Committed per-site bundles live at `data/sites/<SITE>.rds` as `list(occ, ground, meta)`. Every candidate bundle and `data/site_index.rds` carries the same `plant-source-receipt-v2`: build date `2026-08-03`, source interval `2013-01` through `2026-07-31`, immutable receipt ID `PDE-DP1.10058.001-query-through-2026-07-31-sha256-48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, raw-inventory digest `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, builder commit `1734840a4f09e7acee356431ea1e57e9a637fb31`, `basic` query package, and `neonUtilities 4.0.1`. Because the query did not select an official release, `neonRelease` honestly remains `NA`. The cutoff identifies the closed query boundary; retained records span 2013–2024. See the canonical [Plant Source Receipt](docs/PLANT-SOURCE-RECEIPT.md).
 
 The app also ships 46 versioned-static environmental context bundles, a network search index, 34 currently available NRCS reference bundles, and an optional USDA authority file. The environment layer's partial provenance and independent refresh boundary are registered in [`docs/ENVIRONMENT-CONTEXT-RECEIPT.md`](docs/ENVIRONMENT-CONTEXT-RECEIPT.md).
 
@@ -133,9 +133,9 @@ The refresh workflow must never mix new partial raw data with old site bundles o
 
 ## Suite role
 
-Plant Diversity's disposition is **CONTEXT / NO DRIVER BYTE CHANGE** for this pass:
+Plant Diversity's disposition is **CONTEXT / NO DRIVER BYTE CHANGE** for this refresh:
 
-- eligible after exact-byte and contract validation as descriptive legacy context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty; current-source Driver promotion remains blocked until a complete reviewed refresh receipt exists;
+- eligible after promotion as descriptive query-snapshot context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty. This candidate closes the missing plant source-receipt gate, but Driver ingestion remains held until an explicit sampled-opportunity ledger, a measured eligible Driver join, an independent adapter, and old/new parity are reviewed;
 - excluded: productivity votes, management priority, per-site climate–richness fits, and duplicated phenology signals owned by the Phenology app.
 
 The reusable lessons from this rebuild are recorded in [Suite Learning Handoff](docs/SUITE-LEARNING-HANDOFF.md) and the proposed Driver fields in [Driver Knowledge Package](docs/DRIVER-KNOWLEDGE-PACKAGE.md).

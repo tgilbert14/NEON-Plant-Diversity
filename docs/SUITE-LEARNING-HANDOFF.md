@@ -1,8 +1,16 @@
 # Suite Learning Handoff
 
-App: Plant Diversity · pass 3 production closeout · 2026-07-19
+App: Plant Diversity · pass 3 production closeout plus 2026-08-03 source-refresh review
 
 This file is the reusable learning package for the next companion app and the final Driver Cascade synthesis.
+
+## 2026-08-03 refresh-review addendum
+
+- Validated candidate `374fb704c548ca830f05c46d5fab1331e0027302` proves the first complete Plant Diversity query-snapshot receipt: 46 matching bundles/index rows, a durable 46-file raw SHA-256 inventory, actual build date, explicit query interval/ID, builder commit, and honest `neonRelease=NA` because no official release was selected.
+- A query cutoff is not an observation year. The request closed 2026-07-31 while retained records end in 2024; public copy and exports must preserve both facts.
+- Independent row-multiset review separated serialization/order change from ecology: 43 site row families are semantically unchanged, and only JORN, KONZ, and SRER gained rows. New latest surveys can lower a current snapshot while the historical family only grows; SRER's 203→161 snapshot species is not a deletion.
+- The candidate's source-provenance gap is closed, but sampled-empty opportunity, measured Driver join, independent adapter, and old/new ingestion parity remain held. Disposition stays `CONTEXT / NO DRIVER BYTE CHANGE`.
+- Pull-request validation must check out `${{ github.event.pull_request.head.sha || github.sha }}`, prove `HEAD` equals that literal SHA, and use the same SHA for base comparisons and artifact names. A merge-ref check cannot authorize release bytes or human-review surfaces.
 
 ## Product lessons
 
@@ -42,6 +50,7 @@ This file is the reusable learning package for the next companion app and the fi
 13. A skip-download run revalidates existing bytes and receipts without stamping a workflow date or invented source metadata.
 14. A real Shiny `actionButton()` keeps its label as a text node inside `.action-label`; a sibling selector cannot hide that node. For compact icon-only presentation, retain the DOM text, zero the inherited visual font size, restore the icon's `em` basis, and prove a 44 x 44 px target at the actual 390/375/361/360/320 production widths.
 15. Treat 360 px as a breakpoint seam, not a synonym for 320 px. The Plant release required a full-width status track plus fixed Help and theme columns at and below 360, while 361 remained the compact flex case.
+16. Separate semantic row-multiset review from byte review. Deterministic ordering and a new R serialization can change every bundle byte while only a few sites gain ecological rows; report both layers.
 
 ## Pattern to carry to every next app
 
@@ -53,7 +62,7 @@ This file is the reusable learning package for the next companion app and the fi
 
 ## Driver changes to make after companion promotion
 
-- Add Plant Diversity as **descriptive legacy composition & invasion context**, not a current-source or productivity vote; reconsider current-source promotion only after a complete reviewed refresh receipt.
+- Add Plant Diversity after promotion as **descriptive query-snapshot composition & invasion context**, not a productivity or inferential vote; the complete-receipt gate is closed, while opportunity, measured join, independent adapter, and ingestion parity remain held.
 - Add source-app/contract/support/release links to every accepted Driver field.
 - Add the four-state disposition (`promote`, `context`, `hold`, `reject`).
 - Rebuild the Driver cover as the master artistic poster, with companion field motifs converging into one cascade; keep the final composition pending the suite cover review.
