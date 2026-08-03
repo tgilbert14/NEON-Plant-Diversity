@@ -73,13 +73,13 @@ if (mobileHeaderBlocks.length !== 1) {
 const mobileHeaderStyles = mobileHeaderBlocks[0];
 const mobileHeaderContract = [
   /\.hero-title\s*\{[^}]*flex-wrap:\s*wrap[^}]*align-items:\s*flex-start/s,
-  /\.hero-receipt\s*\{[^}]*flex:\s*1\s+0\s+100%[^}]*background:\s*var\(--paper\)/s,
+  /\.hero-receipt\s*\{[^}]*flex:\s*1\s+0\s+100%[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*overflow-wrap:\s*anywhere[^}]*word-break:\s*break-word[^}]*background:\s*var\(--paper\)/s,
   /\.hero-change,\s*\.hero-report\s*\{[^}]*flex:\s*1\s+1\s+calc\(50%\s*-\s*4px\)[^}]*min-height:\s*44px/s,
   /\.hero-change,\s*\.hero-change:hover\s*\{[^}]*color:\s*var\(--pine2\)/s,
   /\.hero-report,\s*\.hero-report:hover\s*\{[^}]*color:\s*var\(--sky2\)/s,
 ];
 if (!mobileHeaderContract.every((contract) => contract.test(mobileHeaderStyles))) {
-  throw new Error("plant.css must own the final mobile header cascade: full-row receipt, equal touch-sized actions, and accessible change-site color");
+  throw new Error("plant.css must own the final mobile header cascade: bounded wrapping receipt, equal touch-sized actions, and accessible change-site color");
 }
 if (!/\.hero-title\s*\{[^}]*color:\s*var\(--pine2\)/s.test(plantStyles) ||
     !/\.hero-change\s*\{[^}]*color:\s*var\(--pine2\)/s.test(styles) ||
