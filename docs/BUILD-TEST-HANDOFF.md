@@ -2,6 +2,55 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-04 14:51:24 EDT - [Codex] current-production governance closeout
+
+- Scope was documentation-only suite synthesis from clean branch
+  `agent/suite-synthesis-plant-governance` at exact current default/docs commit
+  `72924657ab93a05d28297616ed337bf55d4c8fbc`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Diversity/> and Connect remains
+  <https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/>
+  (content ID `019ee109-30ae-006e-cb3b-143afeac57e3`). No runtime, data,
+  estimator, manifest, workflow, Pages, Connect, or Driver artifact was changed.
+- The refreshed query-snapshot family is promoted production, not a pending
+  candidate. Validated candidate
+  `374fb704c548ca830f05c46d5fab1331e0027302` entered `master` through source-data
+  merge `a060ee64909431f7c694d32be9729f03cb7b04e0`. PR #14 exact-head run
+  `30826586359` authorized the compact-width runtime promotion merged as
+  `8fc0824493a52a1a7ca2054852a5d84b264a9c8c`; current documentation/default
+  authority is `72924657ab93a05d28297616ed337bf55d4c8fbc`. Current-default
+  validation `30828066796`, Pages `30828064229`, and production health
+  `30828072298` passed. Current `manifest.json` SHA-256 is
+  `d7e24b0df9d25657a8999b855ed7ad92f37e3c5b45556464cc5fa10a8baaa938`;
+  `data/site_index.rds` SHA-256 is
+  `1addb5ae4e5adcc3bce64016ea0a7ecce0b987b184949187742f404cc46a424a`.
+- The measured suite audit ran from the Driver worktree with
+  `Rscript --vanilla scripts/audit_suite_compatibility.R
+  /Users/vgs/Documents/Codex/2026-07-22/we-have-been-working-through-updating/work/repos
+  plant_diversity`. The 46-site current family is visible, but annual eligible
+  support and a Driver site-year join remain `UNMEASURED`: the source does not
+  preserve an explicit sampled-empty opportunity ledger. The current Driver pin
+  `73c92c6c67f7c982eaae76950f718ce932ff7a52` also differs at the consumed
+  `data/sites` tree from promoted runtime `8fc0824`.
+- Decision axes are now explicit: the current app scientific/release contract is
+  `VERIFIED`; the ecological Driver disposition remains
+  `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`. A complete source
+  receipt proves the app family, not an annual opportunity denominator, eligible
+  join, independent adapter, or Driver vote.
+- Static documentation checks passed: `git diff --check`; a changed-path audit
+  limited this closeout to `docs/BUILD-TEST-HANDOFF.md` and
+  `docs/DRIVER-KNOWLEDGE-PACKAGE.md`; and exact-identity/disposition assertions
+  found the candidate, source-data/runtime/docs authorities, four workflow
+  receipts, `UNMEASURED` support/join, pin mismatch, contract-trust axis, and
+  no-byte authorization. Full R/app/browser and deployment gates are `N/A`
+  because no release byte changed. The first audit invocation used unsupported
+  product alias `plant`, exited before reading product data, and changed nothing;
+  the documented `plant_diversity` invocation passed. No cleanup was required.
+
+Next action: keep Plant Diversity non-voting context until an explicit sampled-
+opportunity ledger, measured eligible join, independent adapter, and old/new parity
+can authorize a Driver change.
+
 ## 2026-08-03 refreshed-family compact-width production closeout
 
 - PR #13 merged the reviewed complete query-snapshot family as
