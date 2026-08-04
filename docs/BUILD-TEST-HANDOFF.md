@@ -2,6 +2,46 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-04 15:14:31 EDT - [Codex] PR #16 manifest-package closure repair
+
+- Scope started from governance branch `agent/suite-synthesis-plant-governance`
+  at exact head `b5f8975e3c90f301818f06dd9c7b10ee1129acd8`; the watched branch remains
+  `master`, Pages remains <https://tgilbert14.github.io/NEON-Plant-Diversity/>,
+  and Connect remains
+  <https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/>
+  (content ID `019ee109-30ae-006e-cb3b-143afeac57e3`). This repair changes only
+  `.github/workflows/ci.yml`, `.github/workflows/refresh-data.yml`, and this
+  append-only handoff. No plant, environment, reference, estimator, runtime,
+  search, manifest, cover, Pages, Connect, or Driver byte changed.
+- PR #16 run `30940960342` passed the scientific release contracts and reached
+  manifest generation, then failed because the installed `bslib` had
+  non-reproducible source provenance. Both manifest-producing workflows requested
+  moving `bslib` while the immutable committed manifest records CRAN/RSPM
+  `bslib 0.11.0`. Their prior dependency-cache namespaces could also restore that
+  incompatible installed closure. The failure is a package-install/manifest
+  provenance mismatch, not a scientific-data or release-byte mismatch.
+- The CI validator and refresh candidate builder now request `bslib@0.11.0`,
+  exactly matching `manifest.json`, and use new cache namespaces ending in
+  `bslib-0.11.0-v3`. The fetch-only R 4.1.1 job does not generate a manifest and
+  is intentionally unchanged. The manifest provenance gate is not weakened and
+  no package metadata is rewritten to conceal the installed source.
+- Local checks under R 4.5.3 passed: Ruby and PyYAML loaded both workflows; all 28
+  app/R/script R files parsed; a manifest-to-workflow assertion proved committed
+  `bslib 0.11.0`, an exact `bslib@0.11.0` pin, and a rolled cache in both
+  manifest producers; and `git diff --check` passed. The first Ruby YAML command
+  omitted `require "date"` and failed before reading either workflow with
+  `uninitialized constant Date`; the corrected command loaded `date` and both
+  workflows passed. No cleanup was required.
+- Residual gate: local R 4.5.3 cannot prove the canonical Ubuntu 22.04 / R 4.5.2
+  package install, exact manifest regeneration, or committed-byte equality. PR
+  #16 must rerun the pinned workflow on the exact repaired head. The coordinating
+  session independently retrieved the failed Actions log; no remote green claim is
+  made until the amended exact-head run completes.
+
+Next action: commit and push the focused workflow/handoff repair, then require PR
+#16's exact repaired head to pass manifest generation, bundle verification, and the
+committed release-byte equality gate before merge.
+
 ## 2026-08-04 14:51:24 EDT - [Codex] current-production governance closeout
 
 - Scope was documentation-only suite synthesis from clean branch
