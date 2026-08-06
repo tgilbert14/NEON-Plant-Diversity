@@ -33,8 +33,7 @@ plant_diversity_poster <- function() {
           srcset = asset_url("assets/plant-nested-quadrat-hero-mobile-v1.jpg")),
         tags$img(src = asset_url("assets/plant-nested-quadrat-hero-v1.jpg"),
           width = "1774", height = "887", fetchpriority = "high", decoding = "async",
-          alt = "A cut-paper dryland plant community with nested field quadrats extending from one square metre into the surrounding landscape.")),
-      tags$figcaption("Editorial illustration—not a field photograph or data record."))
+          alt = "A cut-paper dryland plant community with nested field quadrats extending from one square metre into the surrounding landscape.")))
   )
 }
 

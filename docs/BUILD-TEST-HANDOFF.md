@@ -2,6 +2,60 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-05 19:28:00 MST - [Codex] visible art-label removal candidate
+
+- Scope began from clean exact `origin/master`
+  `28fab5b0bb5fa0fb87b7f5bbf4c2aa690cc5b612` on branch
+  `agent/remove-cover-art-disclaimer`. The watched publication branch remains
+  `master`; Pages remains <https://tgilbert14.github.io/NEON-Plant-Diversity/>,
+  and Connect remains
+  <https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/>
+  (content ID `019ee109-30ae-006e-cb3b-143afeac57e3`). Nothing was pushed,
+  merged, dispatched, or deployed in this local candidate pass.
+- Pages and the in-app first-run poster no longer overlay the sentence
+  “Editorial illustration—not a field photograph or data record.” The matching
+  caption-only CSS was removed. Descriptive alt text, durable image provenance,
+  nested-grain/source scope, `DP1.10058.001`, and the productivity/diversity/
+  health limitations are unchanged. `scripts/check_cover.mjs` now fails if
+  either poster restores the sentence or any visible `figcaption`.
+- `node scripts/write_release_receipts.mjs` generated the coupled release files.
+  Runtime receipt content is
+  `sha256:71dfaafbc00dcf2f3f696db26806f504c474e92e63e4f176226d32caca044651`
+  (file SHA-256
+  `2be9829c90bbde292f26e8bb33abd9f7f513338afc227b5362446f29590cda72`);
+  cover receipt content is
+  `sha256:c82cc27aaf036b78b6bd3ca5fc6e4e31b32b47096995b550e5d95878f0ba5886`
+  (file SHA-256
+  `ede05cc4b9958ba339a8847c6f4e21038b79f06739694733ced69e94ab5fc8f6`).
+  The immediate `--check` pass reproduced both values.
+- Local PASS on Node `v24.4.1` and R `4.5.3`: cover checker syntax and full
+  cover/image contract; six-handler/readiness/deferred-Plotly contract; both app
+  JavaScript parses; release-receipt generator parse and `--check`; all app,
+  helper, and script R parses; reference-flora build portability; raw-RDS fresh-
+  process portability; shell parse; Python semantic-smoke compile (with a private-
+  temp bytecode cache after macOS denied its default cache); and final
+  `git diff --check`.
+- Package-complete commands were attempted but stopped before assertions or
+  output: search-index build, science contracts, and bundle verification lack
+  local `dplyr`; manifest generation lacks local `rsconnect`. The search index
+  and tracked manifest were not hand-edited. Exact search/manifest bytes,
+  complete science/bundle verification, and offline app source remain pending
+  the pinned Ubuntu 22.04 / R 4.5.2 / Haswell / one-thread PR validator.
+- Learning/Driver decision: `NONE / NO DRIVER BYTE CHANGE` (`cover-system` and
+  `suite-platform`). No plant/environment/reference bundle, opportunity,
+  estimator, support, source receipt, ecological disposition, or Driver artifact
+  changed; the current scientific and source contracts remain authoritative.
+
+Next action: push this local commit for review. If the exact-head validator stops
+at committed-byte equality, download
+`plant-diversity-release-candidate-<reviewed-head>`, promote its exact four files
+(`data/search_index.rds`, `www/runtime-receipt.txt`,
+`docs/cover-receipt.txt`, `manifest.json`), and rerun. Merge only a green exact
+head; then use the logged-in Connect content page to republish `master` if Last
+deployed lags. Workflow `Verify Plant Diversity production after master
+publication` must match both receipts, the `id="appStatus"` shell marker, and a
+real `?site=SRER` Shiny readiness pass before responsive browser QA.
+
 ## 2026-08-04 15:14:31 EDT - [Codex] PR #16 manifest-package closure repair
 
 - Scope started from governance branch `agent/suite-synthesis-plant-governance`

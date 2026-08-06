@@ -64,7 +64,14 @@ requireText(/<img[^>]+alt="[^"]+"/, "poster image needs alternative text");
 requireText(/How much can one square hold\?/i, "poster hook is missing");
 requireText(/Explore plant communities from one square metre outward\./i, "poster promise is missing");
 requireText(/Pick a place/i, "poster CTA must be contextual");
-requireText(/Editorial illustration—not a field photograph or data record\./i, "poster must disclose the art/data boundary");
+for (const [source, surface] of [[html, "Pages"], [ui, "in-app"]]) {
+  if (/Editorial illustration—not a field photograph or data record\./i.test(source)) {
+    fail(`${surface} poster must not restore the visible illustration disclaimer`);
+  }
+  if (/<figcaption\b/i.test(source)) {
+    fail(`${surface} poster must not restore a visible art caption`);
+  }
+}
 requireText(/nested survey grains/i, "cover must state the observation scope");
 requireText(/not productivity, total landscape diversity, ecological health/i, "cover must state the primary claim boundary");
 requireText(/DP1\.10058\.001/i, "cover must identify the source data product");
