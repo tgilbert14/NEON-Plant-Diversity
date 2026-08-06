@@ -3530,7 +3530,7 @@
       "checksum": "587a81b3c738b09acf5b999fdcebcfad"
     },
     "ui.R": {
-      "checksum": "c6190f1140e426f7db2804f145fa44c7"
+      "checksum": "6c0349e79eee1b21770b2784e2de5047"
     },
     "www/app.js": {
       "checksum": "fd67107d8481c7e0c981a45283acbe0d"
@@ -3545,10 +3545,10 @@
       "checksum": "18099f6709f10545d0c3d475c4565c90"
     },
     "www/plant.css": {
-      "checksum": "ecd359dbed22b1a2a00bf2cffa3a6615"
+      "checksum": "d24a63b0c1e42763878e95726a5816e6"
     },
     "www/runtime-receipt.txt": {
-      "checksum": "01fd22c6ae5e811767265cce2156d47f"
+      "checksum": "04923a0b6b0e468dba5ac3786a13bfc8"
     },
     "www/styles.css": {
       "checksum": "78190c64f672d4788886624013142bd3"
