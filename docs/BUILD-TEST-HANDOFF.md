@@ -2,6 +2,30 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-08-05 19:37:36 MST - [Codex] pinned release-byte promotion
+
+- Draft PR #17 validated exact source head
+  `a3e5050bd81a59ddf39b129a481441b4722114a2` in run `31065794657`, job
+  `92503121154`. Static, science, portability, deterministic search/manifest,
+  bundle/reference, and offline-source gates passed. The run stopped only at the
+  intentional committed-release-byte equality guard after uploading the validated
+  candidate.
+- Downloaded artifact `8953825567`,
+  `plant-diversity-release-candidate-a3e5050bd81a59ddf39b129a481441b4722114a2`,
+  and verified its archive digest as
+  `sha256:62846ac8f8563d28f96a541e4a760c21c1c4f82e5ccb4e83a746bc496af83803`.
+  Extracted all four registered files directly without rebuilding or hand editing.
+  `data/search_index.rds`, `www/runtime-receipt.txt`, and
+  `docs/cover-receipt.txt` reproduced the reviewed source-candidate bytes; only
+  `manifest.json` changed, from SHA-256
+  `d7e24b0df9d25657a8999b855ed7ad92f37e3c5b45556464cc5fa10a8baaa938` to
+  `539ea1d7cf1a2e26a3e0ce732c0ea23f9fae24a773ec0b9eedc6d2d27f9fdf30`.
+- This is release-byte promotion for the cover-only source change. It does not
+  alter plant/environment/reference bundles, opportunity, estimator, support,
+  source receipts, ecological disposition, or Driver artifacts. Next action:
+  commit and push the promoted manifest, then require the complete validator to
+  pass on that exact amended PR head before review or publication.
+
 ## 2026-08-05 19:28:00 MST - [Codex] visible art-label removal candidate
 
 - Scope began from clean exact `origin/master`
