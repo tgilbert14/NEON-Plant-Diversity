@@ -1492,7 +1492,7 @@ server <- function(input, output, session) {
     bm <- input$view %||% "Esri.WorldImagery"
     rr <- range(lb$richness, na.rm = TRUE)
     lb$radius <- if (diff(rr) > 0) 6 + 14 * (lb$richness - rr[1]) / diff(rr) else 11
-    leaflet::leaflet(lb) %>% leaflet::addProviderTiles(bm) %>%
+    leaflet::leaflet(lb) %>% add_suite_basemap(bm) %>%
       leaflet::addCircleMarkers(lng = ~lng, lat = ~lat,
         radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
         label = ~lapply(sprintf("<b>%s</b><br>%d species · %s%% introduced cover", short_plot(plotID), richness,
