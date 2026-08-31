@@ -55,7 +55,7 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, p
         autoPan = TRUE, autoPanPadding = c(40, 55), keepInView = TRUE,
         closeButton = TRUE, closeOnClick = FALSE, className = "pm-pop-card") else NULL
       leaflet::leaflet(st, options = leaflet::leafletOptions(minZoom = 2, worldCopyJump = TRUE)) %>%
-        leaflet::addProviderTiles("CartoDB.Positron", options = leaflet::providerTileOptions(noWrap = TRUE)) %>%
+        add_suite_basemap("light_all", noWrap = TRUE) %>%  # keyed CARTO Positron (global.R helper; CARTO watermarks unkeyed tiles)
         leaflet::setView(lng = -96, lat = 41, zoom = 4) %>%
         leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, layerId = ~site,
           radius = picker_radius(st[[radius_metric]]), stroke = TRUE, color = "#ffffff",
