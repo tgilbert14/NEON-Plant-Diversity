@@ -25,39 +25,10 @@ if (!is.data.frame(site_index) ||
     !identical(sort(as.character(site_index$site)), expected_sites))
   stop("data/site_index.rds is not the complete 46-site index", call. = FALSE)
 
-taxa_for_site <- function(site, bundle) {
-  if (is.null(bundle$occ) || !nrow(bundle$occ))
-    stop(sprintf("%s has no occurrence table", site), call. = FALSE)
-  snapshot <- latest_snapshot(bundle$occ)
-  species <- species_level_only(snapshot)
-  if (is.null(species) || !nrow(species))
-    stop(sprintf("%s has no species-level snapshot", site), call. = FALSE)
-
-  plot_cover <- plot_species_cover(species)
-  cover_by_species <- if (is.null(plot_cover)) NULL else plot_cover |>
-    dplyr::group_by(.data$scientificName) |>
-    dplyr::summarise(mean_cover = round(mean(.data$mean_cover), 2), .groups = "drop")
-  years <- species_level_only(bundle$occ) |>
-    dplyr::group_by(.data$scientificName) |>
-    dplyr::summarise(
-      year_min = suppressWarnings(min(.data$year, na.rm = TRUE)),
-      year_max = suppressWarnings(max(.data$year, na.rm = TRUE)),
-      .groups = "drop"
-    )
-  output <- species |>
-    dplyr::group_by(.data$scientificName) |>
-    dplyr::summarise(
-      family = mode_chr(.data$family), nativity = mode_chr(.data$nativity),
-      n_plots = dplyr::n_distinct(.data$plotID), .groups = "drop"
-    ) |>
-    dplyr::mutate(site = site)
-  if (!is.null(cover_by_species))
-    output <- dplyr::left_join(output, cover_by_species, by = "scientificName")
-  if (!"mean_cover" %in% names(output)) output$mean_cover <- NA_real_
-  output <- dplyr::left_join(output, years, by = "scientificName")
-  output[, c("scientificName", "site", "family", "nativity", "mean_cover",
-             "n_plots", "year_min", "year_max")]
-}
+# Presence (family, nativity, n_plots) from the grain event F and mean_cover /
+# plots_with_cover from species_summary(F, Q): search_taxa_for_site() in
+# R/plant_helpers.R, shared with scripts/test_science_contracts.R.
+taxa_for_site <- function(site, bundle) search_taxa_for_site(site, bundle)
 
 bundles <- stats::setNames(
   lapply(sites, function(site) readRDS(file.path(site_dir, paste0(site, ".rds")))),
@@ -133,7 +104,8 @@ index <- list(
   source_provenance_class = source_status$provenance_class,
   source_bundle_commit = source_status$bundle_commit,
   query_package = source_status$query_package,
-  neon_utilities_version = source_status$neon_utilities_version
+  neon_utilities_version = source_status$neon_utilities_version,
+  snapshot_contract = "plant-snapshot-v2"
 )
 saveRDS(index, search_path, compress = "xz")
 cat(sprintf(

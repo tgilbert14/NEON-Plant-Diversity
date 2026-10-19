@@ -2,6 +2,73 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-18 20:45:00 MST - [Claude Fable 5.1] plant-snapshot-v2 candidate (audit items 3 and 11)
+
+- Scope began from clean exact `origin/master`
+  `70f0bfddb050f7a83449f1c6ab44ffba14a1b89a` on branch
+  `fix/snapshot-grain-events-2026-10`. Watched publication branch `master`; Pages
+  <https://tgilbert14.github.io/NEON-Plant-Diversity/>; Connect
+  <https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/>
+  (content ID `019ee109-30ae-006e-cb3b-143afeac57e3`). Pre-change receipts:
+  manifest SHA-256 `539ea1d7cf1a2e26a3e0ce732c0ea23f9fae24a773ec0b9eedc6d2d27f9fdf30`,
+  runtime receipt `sha256:71dfaafbc00dcf2f3f696db26806f504c474e92e63e4f176226d32caca044651`,
+  cover receipt `sha256:c82cc27aaf036b78b6bd3ca5fc6e4e31b32b47096995b550e5d95878f0ba5886`.
+  Nothing merged, dispatched, or deployed in this pass.
+- Finding (suite audit 2026-10-18, item 3 P0 and item 11 P1): the per-plot
+  `latest_snapshot()` selected 1 m²-only years at 40 of 46 sites because NEON has
+  surveyed 10 and 100 m² subplots biennially since 2019; the 10 m² species-area
+  point merged two 10 m² subplots per corner; search-index and Expected-vs-Observed
+  cover were presence-conditional means; Chao2 (1 m² units) was printed under the
+  plot-wide species count at 23 sites; cropland sites were scored against a
+  rangeland reference list; the annual richness series followed the biennial
+  schedule; the environment verdict could fire at 5 years and p = 0.2.
+- Change: contract `plant-snapshot-v2` (two labelled site events, grain F and
+  cover Q; see SCIENCE-CONTRACT.md), per-subplot 10 m² point, `species_summary()`
+  as the single cover recipe for search index and Expected-vs-Observed, Chao2
+  printed with its 1 m² S_obs in the compare modal and PDF, cropland applicability
+  (`pct_detected = NA`, status), mean 1 m² subplot richness as the annual richness
+  response with 2018/2019/2026 design breaks drawn and no line across 2019,
+  `MIN_ENV_YEARS = 6` with p < 0.10 for any pattern wording. New fixtures (a)–(k)
+  in `scripts/test_science_contracts.R`; `scripts/verify_bundle.R` gains the grain
+  gate and a contract-aware site-index comparison; new read-only
+  `scripts/report_snapshot_events.R` prints the 46-site before/after table.
+- Local PASS on R 4.5.2 (macOS, all runtime packages present): parse of every
+  app/R/script file; `test_science_contracts.R`; `test_build_script_portability.R`;
+  `test_raw_portability.R`; `check_custom_message_handlers.mjs` (6 handlers);
+  `check_cover.mjs`; `write_release_receipts.mjs` write and `--check` (runtime
+  receipt now `sha256:8ea4975cd7adf0cf6a9ac98434bc697e09e4b38a120dc77b6c1db0eb39b6cabb`,
+  cover receipt unchanged); offline `source()` of global/ui/server with 46 bundles;
+  `shiny::testServer` drive of SRER, JORN, STER, CPER; PDF renders for SRER, JORN,
+  STER. `scripts/build_search_index.R` and `scripts/build_completeness_index.R` were
+  rerun locally (7,546 taxon-site rows; STER and KONA `pct_detected = NA`).
+- Local `verify_bundle.R`: every gate passes except the exact manifest checksums
+  (expected; the manifest is regenerated only in the pinned validator) and emits
+  one registered `::warning::` that `data/site_index.rds` predates
+  `plant-snapshot-v2` and is reconciled under the legacy rule. `write_manifest.R`
+  stops locally at the installed-closure gate (terra 1.8-50 and the geo closure
+  are not compiled from the pinned URLs here), as designed.
+- Before/after (old rule = per-plot latest year; new = F grain event / Q cover
+  event): SRER 161 species, species-area 6.5/8.2/8.2/17.9, Chao2 194.5 → F 2023
+  bout 2, 33 plots: 203 species, 5.5/12.3/26.7/42.6; Q 2024 bout 1, 33 plots: Chao2
+  191.9 from 157 at 1 m², 9.6% introduced. CPER 70 plots (2013–2024) 102 species →
+  F/Q 2024 bout 1, 33 plots: 92 species, Chao2 73.1 from 58. JORN 80 species with
+  Chao2 61.9 → 66 species at 400 m², Chao2 46.5 beside 39 at 1 m². STER 0% and KONA
+  5.1% "reference flora detected" → NA, cropland status. Full table:
+  `Rscript --vanilla scripts/report_snapshot_events.R`.
+- Residual: `data/site_index.rds` (bundle-time) stays on the v1 rule until a manual
+  non-skip refresh (workflow_dispatch, skip_download=false) regenerates it onto the
+  review branch, so splash-card species counts lag the hero until then.
+  `data/search_index.rds`, `manifest.json`, `www/runtime-receipt.txt` and
+  `docs/cover-receipt.txt` must be promoted byte-exact from the validator artifact
+  on the reviewed PR head. Desktop and 390/375/361/360/320 public verification is
+  owed after deployment. Driver repository evidence register, implication backlog,
+  revamp plan and playbook entries are still to be written (disposition:
+  `scientific-contract` + `app-local`; Driver `CONTEXT / NO DRIVER BYTE CHANGE`).
+- Next concrete action: push the branch, open the PR, let the pinned validator
+  run on the exact head, download `plant-diversity-release-candidate-<head>`,
+  promote its four files, rerun to green, then Tim merges and dispatches the
+  non-skip refresh.
+
 ## 2026-08-05 19:37:36 MST - [Codex] pinned release-byte promotion
 
 - Draft PR #17 validated exact source head

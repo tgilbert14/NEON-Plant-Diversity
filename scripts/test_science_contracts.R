@@ -207,8 +207,19 @@ assert(setequal(py$row_id, c("new", "now", "beta")), "snapshot_by_plot_year pool
 sup <- attr(py, "snapshot_support")
 assert(nrow(sup) == 3L && sup$n_bouts_observed[sup$plotID == "SRER_001" & sup$year == 2020] == 2L,
        "snapshot support did not retain observed-bout counts")
-latest <- latest_snapshot(snap_fx)
-assert(setequal(latest$row_id, c("now", "beta")), "latest_snapshot did not select one latest plot survey")
+# (k) The retired per-plot latest-year rule survives only as the legacy
+# reconciliation helper and still reproduces its old selection exactly.
+latest <- legacy_plot_latest_snapshot(snap_fx)
+assert(setequal(latest$row_id, c("now", "beta")), "legacy_plot_latest_snapshot no longer reproduces the v1 rule")
+# Under contract v2 latest_snapshot() is grain_snapshot(): snap_fx is 1 m^2-only,
+# so there is no full-grain event; F is a zero-row frame, never an error.
+latest_v2 <- latest_snapshot(snap_fx)
+assert(is.data.frame(latest_v2) && nrow(latest_v2) == 0L && is.null(attr(latest_v2, "event")),
+       "latest_snapshot() returned 1 m^2-only rows as a grain snapshot")
+latest_sup <- attr(latest_v2, "snapshot_support")
+assert(!is.null(latest_sup) && setequal(latest_sup$plotID, c("SRER_001", "SRER_002")) &&
+       all(!latest_sup$in_snapshot) && all(latest_sup$status == "no full-grain year at site"),
+       "an empty grain snapshot did not report that the site has no full-grain year")
 set.seed(42)
 py_perm <- snapshot_by_plot_year(snap_fx[sample(seq_len(nrow(snap_fx))), ])
 assert(identical(sort(py$row_id), sort(py_perm$row_id)), "bout selection depends on input row order")
@@ -231,8 +242,10 @@ cov_ts <- balanced_plant_metric_series(annual_fx, "total_cover")
 assert(near(cov_ts$value, c(20, 30)), "annual cover pooled an older bout or a non-recurrent plot")
 trend_fx <- rbind(
   annual_fx,
-  occ_row("SRER_004", "31_10", 2020, 1, "E", "Epsilon species", "Introduced", "I", scale = 10, cover = NA),
-  occ_row("SRER_004", "31_10", 2021, 1, "E", "Epsilon species", "Introduced", "I", scale = 10, cover = NA))
+  # A plot with 1 m^2 presence but no recorded cover enters the richness panel
+  # (annual richness is the 1 m^2 grain) but not the introduced-cover panel.
+  occ_row("SRER_004", "31_1_1", 2020, 1, "E", "Epsilon species", "Introduced", "I", scale = 1, cover = NA),
+  occ_row("SRER_004", "31_1_1", 2021, 1, "E", "Epsilon species", "Introduced", "I", scale = 1, cover = NA))
 trend <- native_trend(trend_fx)
 pct_support <- balanced_plant_metric_series(trend_fx, "pct_introduced")
 rich_support <- balanced_plant_metric_series(trend_fx, "n_introduced")
@@ -290,8 +303,10 @@ assert(a1$n == 1L && is.na(a1$sd) && is.finite(a1$richness),
 
 # 5. Contradictory NEON nativity routes to Unknown/review; L48 authority is gated.
 nat_fx <- rbind(
-  occ_row("SRER_001", "31_1", 2020, 1, "X", "Conflict species", "Native", "N"),
-  occ_row("SRER_001", "31_2", 2020, 1, "X", "Conflict species", "Introduced", "I"))
+  occ_row("SRER_001", "31_1_1", 2020, 1, "X", "Conflict species", "Native", "N"),
+  occ_row("SRER_001", "32_1_2", 2020, 1, "X", "Conflict species", "Introduced", "I"),
+  occ_row("SRER_001", "31_10_1", 2020, 1, "X", "Conflict species", "Native", "N", cover = NA, scale = 10),
+  occ_row("SRER_001", "31_100", 2020, 1, "X", "Conflict species", "Native", "N", cover = NA, scale = 100))
 auth <- list(authority = data.frame(accepted_symbol = "X", nativity_usda = "Introduced",
                                     stringsAsFactors = FALSE), synonyms = character())
 obs <- observed_species(nat_fx, auth)
@@ -302,7 +317,10 @@ assert(nat_plot$n_native == 0L && nat_plot$n_introduced == 0L && nat_plot$n_unkn
        "a contradictory taxon contributed to both native and introduced plot metrics")
 mm <- flag_nativity_mismatch(nat_fx, auth)
 assert(mm$n == 0L, "an unresolved within-NEON conflict became a USDA mismatch")
-ak_fx <- occ_row("BARR_001", "31_1", 2020, 1, "X", "Arctic species", "Native", "N")
+ak_fx <- rbind(
+  occ_row("BARR_001", "31_1_1", 2020, 1, "X", "Arctic species", "Native", "N"),
+  occ_row("BARR_001", "31_10_1", 2020, 1, "X", "Arctic species", "Native", "N", cover = NA, scale = 10),
+  occ_row("BARR_001", "31_100", 2020, 1, "X", "Arctic species", "Native", "N", cover = NA, scale = 100))
 ak <- flag_nativity_mismatch(ak_fx, auth)
 assert(identical(ak$eligible, FALSE) && ak$n == 0L && ak$state == "AK",
        "L48 nativity authority was applied outside the lower 48")
@@ -343,10 +361,175 @@ verdict <- env_verdict(0.9, 0.01, 10)
 assert(isTRUE(verdict$flag) && verdict$word == "exploratory association",
        "environment verdict overstates observational evidence")
 
-# 7. The PDF must use the same snapshot for Chao2 and species-area as its hero.
+# ---- Snapshot contract v2: labelled grain (F) and cover (Q) site events ------
+full_plot <- function(plotID, year, bout, sp = "A", extra = NULL, cover = 10) {
+  rows <- rbind(
+    occ_row(plotID, "31_1_1", year, bout, sp, paste(sp, "species"), cover = cover),
+    occ_row(plotID, "31_10_1", year, bout, sp, paste(sp, "species"), cover = NA, scale = 10),
+    occ_row(plotID, "31_100", year, bout, sp, paste(sp, "species"), cover = NA, scale = 100))
+  if (!is.null(extra)) rows <- rbind(rows, extra)
+  rows
+}
+one_m_plot <- function(plotID, year, bout, sp = "A", cover = 10)
+  occ_row(plotID, "31_1_1", year, bout, sp, paste(sp, "species"), cover = cover)
+
+# (a) A 1 m^2-only latest year selects the earlier full-grain year for F and the
+# latest year for Q; both carry labels.
+ev_fx <- rbind(
+  full_plot("SRER_001", 2023, 1), full_plot("SRER_002", 2023, 1), full_plot("SRER_003", 2023, 1),
+  one_m_plot("SRER_001", 2024, 1, "B"), one_m_plot("SRER_002", 2024, 1, "B"),
+  one_m_plot("SRER_003", 2024, 1, "B"))
+ss_a <- site_snapshot(ev_fx)
+F_a <- ss_a$grain; Q_a <- ss_a$cover
+assert(all(F_a$year == 2023) && setequal(unique(F_a$scale), c(1, 10, 100)) &&
+       all(Q_a$year == 2024) && all(Q_a$scale == 1),
+       "a 1 m^2-only latest year leaked into the grain event or the cover event lagged")
+assert(identical(ss_a$events$label[ss_a$events$kind == "grain"], "2023 · bout 1 · 3 plots · 1/10/100 m²") &&
+       identical(ss_a$events$label[ss_a$events$kind == "cover"], "2024 · bout 1 · 3 plots · 1 m² cover") &&
+       identical(attr(plot_summary(F_a, Q_a), "grain_event"), "2023 · bout 1 · 3 plots · 1/10/100 m²") &&
+       identical(attr(plot_summary(F_a, Q_a), "cover_event"), "2024 · bout 1 · 3 plots · 1 m² cover"),
+       "grain/cover events are not labelled on the snapshot and the mixed tables")
+
+# (b) Every F plot carries 1, 10 and 100 m^2; a plot lacking 100 m^2 in the F
+# bout is excluded and counted in support.
+partial <- rbind(
+  occ_row("SRER_004", "31_1_1", 2023, 1, "A", "A species"),
+  occ_row("SRER_004", "31_10_1", 2023, 1, "A", "A species", cover = NA, scale = 10))
+F_b <- grain_snapshot(rbind(ev_fx, partial))
+scales_by_plot <- tapply(F_b$scale, F_b$plotID, function(x) all(c(1, 10, 100) %in% x))
+sup_b <- attr(F_b, "snapshot_support")
+assert(all(scales_by_plot) && !("SRER_004" %in% F_b$plotID) &&
+       identical(sup_b$status[sup_b$plotID == "SRER_004"], "surveyed in event without all of 1/10/100 m²") &&
+       sum(!sup_b$in_snapshot) == 1L && attr(F_b, "event")$n_plots == 3L,
+       "a plot without all three grains entered F or vanished from support")
+
+# (c) F bout = the bout with most full-grain plots; a tie goes to the later bout;
+# input row order never changes the selection.
+bout_fx <- rbind(
+  full_plot("SRER_001", 2023, 1), full_plot("SRER_002", 2023, 1), full_plot("SRER_003", 2023, 1),
+  full_plot("SRER_001", 2023, 2), full_plot("SRER_002", 2023, 2))
+assert(identical(attr(grain_snapshot(bout_fx), "event")$bout, "1"),
+       "grain event did not take the bout with the most full-grain plots")
+tie_fx <- rbind(bout_fx, full_plot("SRER_003", 2023, 2))
+assert(identical(attr(grain_snapshot(tie_fx), "event")$bout, "2"),
+       "a full-grain bout tie did not go to the later bout")
+set.seed(7)
+tie_perm <- grain_snapshot(tie_fx[sample(seq_len(nrow(tie_fx))), ])
+assert(identical(attr(tie_perm, "event")$bout, "2") && nrow(tie_perm) == 9L,
+       "grain-event selection depends on input row order")
+
+# (d) Q steps back a year when the newest year's best bout has fewer than
+# max(3, ceiling(0.5 * n_plots(F))) plots.
+step_fx <- rbind(
+  full_plot("SRER_001", 2023, 1), full_plot("SRER_002", 2023, 1),
+  full_plot("SRER_003", 2023, 1), full_plot("SRER_004", 2023, 1),
+  one_m_plot("SRER_001", 2024, 1, "B"), one_m_plot("SRER_002", 2024, 1, "B"))
+Q_d <- cover_snapshot(step_fx)
+assert(identical(attr(Q_d, "event")$year, 2023) && all(Q_d$year == 2023) && all(Q_d$scale == 1),
+       "cover event accepted a newest year below the plot floor")
+step_fx2 <- rbind(step_fx, one_m_plot("SRER_003", 2024, 1, "B"))
+assert(identical(attr(cover_snapshot(step_fx2), "event")$year, 2024),
+       "cover event stepped back although the newest year met the plot floor")
+
+# (e) The 10 m^2 point is the per-subplot union with its nested 1 m^2 quadrat,
+# averaged over subplots; never the corner union of both 10 m^2 subplots.
+sa_e <- rbind(
+  occ_row("P1", "31_1_1", 2023, 1, "A", "Alpha species"),
+  occ_row("P1", "31_10_1", 2023, 1, "B", "Beta species", cover = NA, scale = 10),
+  occ_row("P1", "31_1_4", 2023, 1, "C", "Gamma species"),
+  occ_row("P1", "31_10_4", 2023, 1, "C", "Gamma species", cover = NA, scale = 10),
+  occ_row("P1", "31_10_4", 2023, 1, "D", "Delta species", cover = NA, scale = 10),
+  occ_row("P1", "31_100", 2023, 1, "E", "Epsilon species", cover = NA, scale = 100))
+sa_curve <- species_area_plot(sa_e, "P1")
+assert(near(sa_curve$richness, c(1, 2, 5, 5)),
+       "species-area 10 m^2 point merged the two 10 m^2 subplots of a corner")
+assert(identical(subplot_cell(c("31_10_1", "31_1_1", "31_100")), c("31_1", "31_1", NA_character_)),
+       "subplot_cell() does not nest a 1 m^2 quadrat in its own 10 m^2 subplot")
+
+# (f) species_summary(F, Q)$mean_cover = sum(plot mean) / n_supported, and the
+# search index emits exactly that number.
+cov_fx <- rbind(
+  full_plot("SRER_001", 2023, 1, "X"), full_plot("SRER_002", 2023, 1, "X"),
+  full_plot("SRER_003", 2023, 1, "Y"),
+  occ_row("SRER_001", "31_1_1", 2024, 1, "X", "X species", cover = 20),
+  occ_row("SRER_001", "32_1_2", 2024, 1, "Y", "Y species", cover = 5),
+  occ_row("SRER_002", "31_1_1", 2024, 1, "X", "X species", cover = 10),
+  occ_row("SRER_002", "32_1_2", 2024, 1, "Y", "Y species", cover = 5),
+  occ_row("SRER_003", "31_1_1", 2024, 1, "Y", "Y species", cover = 30))
+ss_f <- site_snapshot(cov_fx)
+sp_f <- species_summary(ss_f$grain, ss_f$cover)
+x_cover <- sp_f$mean_cover[sp_f$scientificName == "X species"]
+assert(near(x_cover, (20 / 2 + 10 / 2) / 3) &&
+       sp_f$plots_with_cover[sp_f$scientificName == "X species"] == 2L,
+       "species mean cover is not the structural-zero mean over supported cover plots")
+taxa_f <- search_taxa_for_site("SRER", list(occ = cov_fx))
+assert(near(taxa_f$mean_cover[taxa_f$scientificName == "X species"], x_cover) &&
+       near(taxa_f$mean_cover, sp_f$mean_cover[match(taxa_f$scientificName, sp_f$scientificName)]) &&
+       "plots_with_cover" %in% names(taxa_f),
+       "the search index cover differs from species_summary(F, Q)")
+
+# (g) Expected-vs-Observed cover: a species present in one of two supported
+# plots has mean cover = its plot mean / 2 (never the presence-only mean).
+g_fx <- rbind(
+  full_plot("SRER_001", 2023, 1, "X", cover = 40),
+  occ_row("SRER_001", "32_1_2", 2023, 1, "Y", "Y species", cover = 10),
+  full_plot("SRER_002", 2023, 1, "Y", cover = 30))
+g_ss <- site_snapshot(g_fx, min_plots = 2L)
+g_obs <- observed_species(g_fx, NULL, snapshot = g_ss)
+assert(nrow(g_ss$cover) == 3L &&
+       near(g_obs$mean_cover[g_obs$sym == "X"], round((40 / 2) / 2, 2)),
+       "observed_species() cover is conditioned on presence")
+
+# (h) Annual richness has no odd/even split when 10/100 m^2 rows exist only in
+# odd years: the series is the 1 m^2 grain, so it stays flat.
+annual_h <- do.call(rbind, lapply(2019:2022, function(y) {
+  base <- rbind(
+    occ_row("SRER_001", "31_1_1", y, 1, "A", "A species"), occ_row("SRER_001", "31_1_1", y, 1, "B", "B species"),
+    occ_row("SRER_001", "32_1_2", y, 1, "A", "A species"), occ_row("SRER_001", "32_1_2", y, 1, "C", "C species"),
+    occ_row("SRER_002", "31_1_1", y, 1, "A", "A species"), occ_row("SRER_002", "31_1_1", y, 1, "D", "D species"))
+  if (y %% 2 == 1) base <- rbind(base,
+    occ_row("SRER_001", "31_10_1", y, 1, "E", "E species", cover = NA, scale = 10),
+    occ_row("SRER_001", "31_100", y, 1, "F", "F species", cover = NA, scale = 100),
+    occ_row("SRER_002", "31_100", y, 1, "G", "G species", cover = NA, scale = 100))
+  base
+}))
+rich_h <- balanced_plant_metric_series(annual_h, "richness")
+assert(nrow(rich_h) == 4L && near(rich_h$value, rep(2, 4)),
+       "annual richness follows the biennial 10/100 m^2 schedule")
+dbs <- design_break_shapes(2016:2024)
+assert(length(dbs$shapes) == 2L && length(dbs$annotations) == 2L &&
+       length(design_break_shapes(2020:2024)$shapes) == 0L &&
+       length(design_break_shapes(2020:2025)$shapes) == 1L,
+       "design breaks are not limited to [min(years), max(years) + 1]")
+
+# (i) Environment verdicts need p < 0.10 and at least six matched years.
+assert(identical(env_verdict(0.9, 0.2, 5)$word, "no clear pattern") &&
+       identical(env_verdict(0.9, 0.05, 5)$word, "no clear pattern") &&
+       identical(env_verdict(0.7, 0.05, 6)$word, "exploratory association") &&
+       identical(env_verdict(0.5, 0.2, 8)$word, "no clear pattern") &&
+       MIN_ENV_YEARS == 6L,
+       "environment verdict fires on a short or unsupported series")
+
+# (j) A cultivated-crop site has no applicable native reference: the buckets are
+# still computed, the completeness percentage is NA.
+crop_fx <- nat_fx
+crop_fx$nlcdClass <- "cultivatedCrops"
+crop_app <- reference_applicability(crop_fx)
+crop_ev <- expected_vs_observed(crop_fx, expected_fx, auth)
+assert(identical(crop_app$applies, FALSE) &&
+       identical(crop_app$status, "cropland: no native reference applies") &&
+       is.na(crop_ev$overlap_pct) && identical(crop_ev$applicability$applies, FALSE) &&
+       is.data.frame(crop_ev$events) &&
+       isTRUE(reference_applicability(nat_fx)$applies) && is.finite(ev$overlap_pct),
+       "a native reference flora was scored against cropland")
+
+# 7. The PDF must use the app's labelled events: Chao2 on the cover table (Q),
+# species-area on the grain table (F), both from site_snapshot().
 pdf_body <- paste(deparse(body(build_diversity_report)), collapse = "\n")
-assert(grepl("chao2(snap)", pdf_body, fixed = TRUE) &&
-       grepl("species_area_site(snap)", pdf_body, fixed = TRUE),
+assert(grepl("site_snapshot(occ)", pdf_body, fixed = TRUE) &&
+       grepl("chao2(cover_tbl)", pdf_body, fixed = TRUE) &&
+       grepl("species_area_site(grain_tbl)", pdf_body, fixed = TRUE) &&
+       !grepl("latest_snapshot(", pdf_body, fixed = TRUE),
        "PDF estimators do not share the app snapshot contract")
 
 # 8. Every emitted column has a strict unit/NA/estimand contract; no fallback.

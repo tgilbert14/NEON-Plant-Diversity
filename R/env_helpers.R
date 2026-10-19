@@ -20,8 +20,8 @@
 # ===========================================================================
 
 ENV_DIR <- "data/env"
-MIN_ENV_YEARS <- 5L          # overlap floor below which we show no correlation
-FIRM_ENV_YEARS <- 7L         # below this -> flagged "exploratory"
+MIN_ENV_YEARS <- 6L          # overlap floor below which we show no correlation and no non-null verdict
+FIRM_ENV_YEARS <- 7L         # legacy UI copy constant; env_verdict() is gated by MIN_ENV_YEARS (contract v2)
 ENV_LAGS <- 0:2              # driver leads response by 0, 1, or 2 YEARS (prior-year climate)
 
 # The driver registry the UI + plots read. `agg` is how a year's monthly values
@@ -51,8 +51,8 @@ ENV_LAYERS <- list(
 PLANT_METRICS <- list(
   pct_introduced = list(label = "% introduced cover", unit = "%",   dig = 1,
                         desc = "Mean plot-level introduced-cover share over the recurrent plot panel that year."),
-  richness       = list(label = "Mean plot richness", unit = "spp/plot", dig = 1,
-                        desc = "Mean plot-level richness over plots represented in every included year."),
+  richness       = list(label = "Mean 1 m² richness", unit = "spp per m²", dig = 1,
+                        desc = "Mean species richness of a plot's 1 m² quadrats (the grain NEON surveys every year), averaged over plots represented in every included year. Not a 400 m² plot list, which NEON surveys only every other year since 2019."),
   total_cover    = list(label = "Total relative cover", unit = "",  dig = 0,
                         desc = "Mean plot-level summed relative cover over the recurrent plot panel that year.")
 )
@@ -230,13 +230,16 @@ ec_corr_color <- function(layer, r, dark = FALSE) {
 
 # Verdict word + tone for the environment banner. Circular-shift p gates every
 # non-null pattern, and even the strongest supported result remains explicitly
-# exploratory because this is a short observational site series.
+# exploratory because this is a short observational site series.  Any wording
+# other than "no clear pattern" needs p < 0.10 AND at least MIN_ENV_YEARS matched
+# years; below that a short series cannot carry a verdict at all.
 env_verdict <- function(r, p, n) {
   if (is.na(r) || is.na(p)) return(list(word = "no clear link", tone = "weak", flag = TRUE))
-  s <- abs(r); firm <- n >= FIRM_ENV_YEARS
+  s <- abs(r)
+  supported <- isTRUE(p < 0.10) && isTRUE(n >= MIN_ENV_YEARS)
   # Correlations remain exploratory context: no causal/confirmatory language is
   # emitted from these short observational site series.
-  if (s >= 0.6 && p < 0.10 && firm)      list(word = "exploratory association", tone = "mod", flag = TRUE)
-  else if (s >= 0.45 && p < 0.25)        list(word = "possible pattern",        tone = "mod", flag = TRUE)
-  else                                   list(word = "no clear pattern",         tone = "weak", flag = TRUE)
+  if (supported && s >= 0.6)        list(word = "exploratory association", tone = "mod", flag = TRUE)
+  else if (supported && s >= 0.45)  list(word = "possible pattern",        tone = "mod", flag = TRUE)
+  else                              list(word = "no clear pattern",         tone = "weak", flag = TRUE)
 }

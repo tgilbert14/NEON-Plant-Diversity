@@ -32,7 +32,13 @@ Source app: NEON Plant Diversity Explorer (`DP1.10058.001`)
 
 ## Unit, opportunity, and support
 
-- Current-state unit: one deterministic eligible `(year, bout)` snapshot per plot.
+- Current-state unit (`plant-snapshot-v2`, 2026-10-18): two labelled site events.
+  The grain event is the site's latest `(year, bout)` with 1, 10 and 100 m² rows,
+  full-grain plots only, and carries every richness and species-area figure; the
+  cover event is the latest complete 1 m² bout and carries every cover-weighted
+  figure. The former per-plot latest-year snapshot was retired because NEON has
+  surveyed the 10 and 100 m² subplots every other year since 2019 (changeLog
+  16204/16207), which left 1 m² richness under a 400 m² label at 40 of 46 sites.
 - Annual unit: one deterministic bout per plot-year over a recurrent plot panel.
 - Registered spatial grains: 1, 10, 100, and 400 m² incidence; ocular cover only
   at 1 m².
@@ -49,8 +55,8 @@ Source app: NEON Plant Diversity Explorer (`DP1.10058.001`)
 
 | Field | Meaning | Grain/support | Driver use |
 |---|---|---|---|
-| `plant_mean_richness_400m2` | mean species per 400 m² plot | one registered snapshot per plot | composition context only |
-| `plant_introduced_cover_relative` | mean introduced relative ocular cover | supported plots and known 1 m² records | disturbance/composition context |
+| `plant_mean_richness_400m2` | mean species per 400 m² plot | grain event: full-grain plots of one labelled site `(year, bout)` | composition context only |
+| `plant_introduced_cover_relative` | mean introduced relative ocular cover | cover event: supported plots and known 1 m² records of one labelled site bout | disturbance/composition context |
 | `plant_native_cover_relative` | mean native relative ocular cover | same | composition context |
 | `plant_unknown_nativity_share` | unknown/conflicted share | species and cover support | confidence/context |
 | `plant_cross_scale_gap` | 400 m² minus 1 m² plot detections by introduced species | exact plot lists at both grains | review context only |

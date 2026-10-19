@@ -3,8 +3,11 @@
 # completeness (% of the NRCS reference flora NEON detected) into a tiny index
 # the splash picker can colour by, WITHOUT reading 46 bundles at app boot.
 # Writes data/expected/completeness_index.rds = data.frame(site, pct_detected,
-# n_ref, n_overlap, dom_obs, dom_total). Re-runnable; run after the expected
-# lists / authority are (re)built. Build-only.
+# n_ref, n_overlap, dom_obs, dom_total, status). Observed species come from the
+# grain event F (plant-snapshot-v2). status is "ok", or "cropland: no native
+# reference applies" with pct_detected NA where the modal plot NLCD class is
+# cultivatedCrops (reference_applicability()). Re-runnable; run after the
+# expected lists / authority are (re)built. Build-only.
 # ===========================================================================
 suppressWarnings(suppressMessages({ library(dplyr) }))
 
@@ -64,11 +67,14 @@ for (s in sites) {
   if (is.null(ev)) next
   rows[[s]] <- data.frame(site = s, pct_detected = ev$overlap_pct,
     n_ref = ev$n_ref, n_overlap = ev$n_overlap,
-    dom_obs = ev$dom_obs, dom_total = ev$dom_total, stringsAsFactors = FALSE)
-  cat(sprintf("%-5s %.0f%% (%d/%d)\n", s, ev$overlap_pct, ev$n_overlap, ev$n_ref))
+    dom_obs = ev$dom_obs, dom_total = ev$dom_total,
+    status = ev$applicability$status, stringsAsFactors = FALSE)
+  cat(sprintf("%-5s %s (%d/%d) %s\n", s,
+              if (is.finite(ev$overlap_pct)) sprintf("%.0f%%", ev$overlap_pct) else "NA",
+              ev$n_overlap, ev$n_ref, ev$applicability$status))
 }
 idx <- if (length(rows)) do.call(rbind, rows) else
-  data.frame(site = character(), pct_detected = numeric())
+  data.frame(site = character(), pct_detected = numeric(), status = character())
 dir.create(dirname(BUILD_COMPLETENESS_OUT), recursive = TRUE, showWarnings = FALSE)
 saveRDS(idx, BUILD_COMPLETENESS_OUT, compress = "xz")
 cat("\ncompleteness_index.rds:", nrow(idx), "sites with a reference list\n")

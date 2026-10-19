@@ -47,7 +47,7 @@ The national picker sizes dots by **sampled plot support**, not raw richness. Wi
 
 ### Current-state snapshot
 
-`latest_snapshot()` keeps one latest `(year, bout)` snapshot per plot. It prevents two seasonal bouts or unequal visit histories from being pooled into one current-state richness number.
+Since 2019 NEON surveys the 10 and 100 m² subplots every other year (changeLog 16204/16207), so a plot's latest year is often a 1 m²-only year. `site_snapshot()` therefore selects two labelled site events: a **grain event** (the latest year with 1, 10 and 100 m² rows; one bout; full-grain plots only) for every richness, species-area and plot-list figure, and a **cover event** (the latest complete 1 m² bout) for every cover-weighted figure (relative cover, Hill, Chao2, watchlist). Both labels appear in the hero band, the PDF and the exports. The old per-plot latest-year rule is gone; `latest_snapshot()` is a deprecated alias of the grain event.
 
 ### Annual estimates
 

@@ -148,6 +148,42 @@ for (path in site_files) {
 cat(sprintf("plant bundles: %d expected, %d readable\n",
             length(EXPECTED_SITES), length(bundles)))
 
+# ---- plant-snapshot-v2 grain gate ------------------------------------------
+# Every site must yield a grain event F whose plots all carry 1, 10 and 100 m^2
+# rows, F must be the site's newest full-grain year, and the cover event Q must
+# be non-empty and 1 m^2 only.
+SNAPSHOT_CONTRACT <- "plant-snapshot-v2"
+snapshots <- list()
+for (site in names(bundles)) {
+  occ <- bundles[[site]]$occ
+  if (!is.data.frame(occ) || !nrow(occ) ||
+      !all(c("plotID", "year", "scale", "bout") %in% names(occ))) next
+  ss <- tryCatch(site_snapshot(occ), error = function(error) error)
+  if (inherits(ss, "error")) {
+    note(sprintf("%s snapshot events failed: %s", site, conditionMessage(ss)))
+    next
+  }
+  snapshots[[site]] <- ss
+  grain_tbl <- ss$grain; cover_tbl <- ss$cover
+  gev <- attr(grain_tbl, "event", exact = TRUE)
+  if (is.null(gev) || !nrow(grain_tbl)) {
+    note(sprintf("%s has no full-grain (1/10/100 m2) grain event", site))
+  } else {
+    full <- tapply(as.numeric(grain_tbl$scale), as.character(grain_tbl$plotID),
+                   function(x) all(c(1, 10, 100) %in% x))
+    if (!all(full) || !setequal(names(full), gev$plotIDs))
+      note(sprintf("%s grain event contains a plot without all of 1/10/100 m2", site))
+    events <- site_events(occ)
+    newest_full <- suppressWarnings(max(events$year[events$n_plots_full > 0]))
+    if (!is.finite(newest_full) || gev$year < newest_full)
+      note(sprintf("%s grain event is older than its newest full-grain year", site))
+    if (length(unique(grain_tbl$year)) != 1L)
+      note(sprintf("%s grain event spans more than one year", site))
+  }
+  if (is.null(attr(cover_tbl, "event", exact = TRUE)) || !nrow(cover_tbl) || any(as.numeric(cover_tbl$scale) != 1))
+    note(sprintf("%s has an empty or non-1 m2 cover event", site))
+}
+
 # ---- environmental overlays ------------------------------------------------
 env_files <- list.files("data/env", pattern = "[.]rds$", full.names = TRUE)
 env_codes <- sort(sub("[.]rds$", "", basename(env_files)))
@@ -243,15 +279,33 @@ if (!is.null(site_index)) {
           any(abs(site_index$lng - metadata$lng) > 1.5, na.rm = TRUE))
         note("site_index coordinates are implausibly far from canonical site coordinates")
     }
-    if (length(bundles) == length(EXPECTED_SITES) &&
+    # site_index is bundle-time: it is compared under the snapshot contract its
+    # attribute declares.  No attribute = built before plant-snapshot-v2 (the
+    # retired per-plot latest-year rule) and awaiting the next full refresh.
+    index_contract <- attr(site_index, "snapshot_contract", exact = TRUE)
+    index_rule <- if (is.null(index_contract)) "legacy" else
+      if (identical(index_contract, SNAPSHOT_CONTRACT)) "v2" else NA_character_
+    if (is.na(index_rule))
+      note(sprintf("site_index declares unknown snapshot_contract '%s'",
+                   paste(index_contract, collapse = ",")))
+    if (identical(index_rule, "legacy"))
+      cat("::warning title=Plant Diversity site index::site_index.rds predates plant-snapshot-v2 (per-plot latest-year rule); it awaits the next full refresh and is reconciled against legacy_plot_latest_snapshot().\n")
+    if (!is.na(index_rule) && length(bundles) == length(EXPECTED_SITES) &&
         !length(setdiff(SITE_INDEX_REQUIRED, names(site_index)))) {
       for (site in EXPECTED_SITES) {
         row <- site_index[site_index$site == site, , drop = FALSE]
-        snapshot <- latest_snapshot(bundles[[site]]$occ)
+        if (identical(index_rule, "legacy")) {
+          snapshot <- legacy_plot_latest_snapshot(bundles[[site]]$occ)
+          cover_table <- snapshot
+        } else {
+          ss <- snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ)
+          snapshot <- ss$grain
+          cover_table <- ss$cover
+        }
         species <- species_level_only(snapshot)
         expected_richness <- length(unique(species$scientificName))
         expected_plots <- length(unique(snapshot$plotID))
-        expected_invasion <- site_invasion(snapshot)
+        expected_invasion <- site_invasion(cover_table)
         families <- sort(table(species$family[!is.na(species$family)]),
                          decreasing = TRUE)
         expected_family <- if (length(families)) names(families)[1L] else NA_character_
@@ -268,7 +322,8 @@ if (!is.null(site_index)) {
                               tolerance = 1e-10)) ||
             !isTRUE(all.equal(as.numeric(row$lng), as.numeric(bundles[[site]]$meta$lng),
                               tolerance = 1e-10)))
-          note(sprintf("site_index metrics differ from the %s site bundle", site))
+          note(sprintf("site_index metrics differ from the %s site bundle (%s rule)",
+                       site, index_rule))
       }
     }
   }
@@ -329,7 +384,15 @@ if (!is.null(search)) {
              !is.data.frame(search$sites) || !nrow(search$sites)) {
     note("search_index taxa and sites must be non-empty data frames")
   } else {
-    missing <- setdiff(SEARCH_TAXA_REQUIRED, names(search$taxa))
+    search_contract <- search$snapshot_contract
+    if (!is.null(search_contract) && !identical(search_contract, SNAPSHOT_CONTRACT))
+      note(sprintf("search_index declares unknown snapshot_contract '%s'",
+                   paste(search_contract, collapse = ",")))
+    # plots_with_cover arrived with plant-snapshot-v2; an index regenerated by the
+    # pinned validator carries snapshot_contract and must carry it.
+    taxa_required <- if (is.null(search_contract)) SEARCH_TAXA_REQUIRED else
+      c(SEARCH_TAXA_REQUIRED, "plots_with_cover")
+    missing <- setdiff(taxa_required, names(search$taxa))
     if (length(missing)) note(sprintf("search taxa lacks: %s", paste(missing, collapse = ",")))
     if (all(c("site", "scientificName") %in% names(search$taxa))) {
       keys <- paste(search$taxa$site, search$taxa$scientificName, sep = "\r")
@@ -338,11 +401,23 @@ if (!is.null(search)) {
         note("search taxa contains an unknown site")
       if (length(bundles) == length(EXPECTED_SITES)) {
         expected_keys <- sort(unique(unlist(lapply(names(bundles), function(site) {
-          species <- species_level_only(latest_snapshot(bundles[[site]]$occ))
+          grain_tbl <- (snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ))$grain
+          species <- species_level_only(grain_tbl)
           paste(site, species$scientificName, sep = "\r")
         }))))
         if (!identical(sort(keys), expected_keys))
-          note("search taxon keys differ from the complete site bundles")
+          note("search taxon keys differ from the grain events of the complete site bundles")
+        if (identical(search_contract, SNAPSHOT_CONTRACT) && !length(missing)) {
+          rebuilt_taxa <- dplyr::bind_rows(lapply(names(bundles), function(site)
+            search_taxa_for_site(site, bundles[[site]])))
+          rk <- paste(rebuilt_taxa$site, rebuilt_taxa$scientificName, sep = "\r")
+          j <- match(keys, rk)
+          value_cols <- c("family", "nativity", "mean_cover", "n_plots", "plots_with_cover")
+          same <- !anyNA(j) && all(vapply(value_cols, function(column)
+            isTRUE(all.equal(as.data.frame(search$taxa)[[column]], rebuilt_taxa[[column]][j],
+                             tolerance = 1e-10, check.attributes = FALSE)), logical(1)))
+          if (!same) note("search taxon presence/cover values differ from search_taxa_for_site(F, Q)")
+        }
       }
     }
     if (!is.null(site_index) && is.data.frame(site_index) &&
@@ -403,7 +478,7 @@ for (path in expected_files) {
 completeness <- read_checked("data/expected/completeness_index.rds")
 if (!is.null(completeness) &&
     (!is.data.frame(completeness) ||
-     !all(c("site", "pct_detected", "n_ref", "n_overlap", "dom_obs", "dom_total") %in% names(completeness)) ||
+     !all(c("site", "pct_detected", "n_ref", "n_overlap", "dom_obs", "dom_total", "status") %in% names(completeness)) ||
      !identical(sort(as.character(completeness$site)), expected_codes)))
   note("completeness_index does not match the bundled expected-flora site set")
 
@@ -441,15 +516,18 @@ if (!is.null(completeness) && is.data.frame(completeness) &&
     comparison <- if (is.null(expected)) NULL else
       expected_vs_observed(bundles[[site]]$occ, expected, authority)
     if (is.null(comparison)) return(NULL)
+    # Same applicability rule as scripts/build_completeness_index.R: cropland
+    # sites carry pct_detected NA and a cropland status.
     data.frame(
       site = site, pct_detected = comparison$overlap_pct,
       n_ref = comparison$n_ref, n_overlap = comparison$n_overlap,
       dom_obs = comparison$dom_obs, dom_total = comparison$dom_total,
+      status = comparison$applicability$status,
       stringsAsFactors = FALSE)
   })
   rebuilt_rows <- rebuilt_rows[!vapply(rebuilt_rows, is.null, logical(1))]
   rebuilt <- if (length(rebuilt_rows)) do.call(rbind, rebuilt_rows) else data.frame()
-  required <- c("site", "pct_detected", "n_ref", "n_overlap", "dom_obs", "dom_total")
+  required <- c("site", "pct_detected", "n_ref", "n_overlap", "dom_obs", "dom_total", "status")
   if (!all(required %in% names(completeness)) ||
       !all(required %in% names(rebuilt))) {
     note("completeness_index cannot be reconciled to current bundles")
