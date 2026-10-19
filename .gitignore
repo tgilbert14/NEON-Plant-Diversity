@@ -19,3 +19,10 @@ Thumbs.db
 
 # build-only USDA profile cache (re-run scaffolding; not shipped)
 data/authority/_profile_cache.rds
+
+# local secrets (.env.example is the committed template)
+.env
+*.env
+!.env.example
+.Renviron
+.Renviron.*
