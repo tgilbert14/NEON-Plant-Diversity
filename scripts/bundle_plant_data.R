@@ -267,7 +267,10 @@ for (site in expected_sites) {
   if (!file.rename(temporary, destination))
     stop(sprintf("Could not atomically publish staged bundle %s", destination), call. = FALSE)
 
-  snapshot <- latest_snapshot(bundle$occ)
+  # plant-snapshot-v2: richness / n_plots / dominant family from the grain
+  # event F, introduced-cover share from the cover event Q.
+  ss <- site_snapshot(bundle$occ)
+  snapshot <- ss$grain
   species <- species_level_only(snapshot)
   families <- sort(table(species$family[!is.na(species$family)]), decreasing = TRUE)
   top_family <- if (length(families)) names(families)[1L] else NA_character_
@@ -275,7 +278,7 @@ for (site in expected_sites) {
     site = site,
     richness = length(unique(species$scientificName)),
     n_plots = length(unique(snapshot$plotID)),
-    pct_introduced = site_invasion(snapshot),
+    pct_introduced = site_invasion(ss$cover),
     dominant_family = top_family,
     lat = bundle$meta$lat,
     lng = bundle$meta$lng,
@@ -300,6 +303,7 @@ receipt_attributes <- list(
 )
 for (field in names(receipt_attributes))
   attr(site_index, field) <- receipt_attributes[[field]]
+attr(site_index, "snapshot_contract") <- "plant-snapshot-v2"
 saveRDS(site_index, file.path(output_root, "data", "site_index.rds"), compress = "xz")
 
 demo_source <- file.path(site_dir, paste0(demo_site, ".rds"))

@@ -139,6 +139,13 @@ COMPLETENESS <- tryCatch(readRDS("data/expected/completeness_index.rds"), error 
 if (nrow(site_table) && !is.null(COMPLETENESS) && nrow(COMPLETENESS))
   site_table$pct_detected <- COMPLETENESS$pct_detected[match(site_table$site, COMPLETENESS$site)]
 if (!"pct_detected" %in% names(site_table)) site_table$pct_detected <- NA_real_
+# applicability status from the rebuilt completeness index (snapshot contract v2):
+# "cropland: no native reference applies" at cultivated-crop sites, where
+# pct_detected is NA by design rather than for want of a reference list.
+site_table$completeness_status <- if (nrow(site_table) && !is.null(COMPLETENESS) &&
+                                      "status" %in% names(COMPLETENESS))
+  as.character(COMPLETENESS$status[match(site_table$site, COMPLETENESS$site)]) else
+  rep(NA_character_, nrow(site_table))
 
 # sidebar picker: only bundled sites
 plant_state_choices <- function() {

@@ -73,31 +73,69 @@ expected_reference_scope <- function(expected = NULL) {
   if (.nativity_conflict(x)) "Unknown" else mode_chr(x)
 }
 
+# ---- reference applicability -----------------------------------------------
+# An NRCS rangeland/forest ecological-site flora is not an expectation for a
+# cultivated field: scoring a crop rotation against it reports a meaningless
+# "0% detected".  When the site's modal plot NLCD class is cultivatedCrops the
+# comparison is labelled inapplicable (the buckets are still computed for the
+# record, but no completeness percentage is published).
+reference_applicability <- function(occ) {
+  nlcd <- if (!is.null(occ) && nrow(occ) && "nlcdClass" %in% names(occ)) {
+    pl <- occ[!is.na(occ$plotID) & !duplicated(occ$plotID), , drop = FALSE]
+    mode_chr(as.character(pl$nlcdClass))
+  } else NA_character_
+  if (!is.na(nlcd) && identical(nlcd, "cultivatedCrops"))
+    return(list(applies = FALSE, status = "cropland: no native reference applies", nlcd = nlcd))
+  list(applies = TRUE, status = "ok", nlcd = nlcd)
+}
+
 # ---- the observed species set (the comparison's left-hand side) -----------
-# One row per ACCEPTED species symbol from the honest one-survey-per-plot snapshot
-# (same recipe every other site metric uses — no pseudoreplication, agrees with
-# the hero counts). Carries NEON nativity + mean 1 m^2 cover + plot ubiquity.
-observed_species <- function(occ, authority = NULL) {
-  d <- species_level_only(latest_snapshot(occ))
+# One row per ACCEPTED species symbol.  Presence (nativity, family, n_plots) comes
+# from the grain snapshot F (one labelled site event carrying 1/10/100 m^2), the
+# same table behind the hero species count.  mean_cover comes from the cover
+# snapshot Q with the structural-zero recipe: the sum of the symbol's per-plot
+# mean 1 m^2 cover divided by every supported Q plot, so absence counts as zero
+# (never a presence-conditional mean).  attrs grain_event / cover_event label both.
+observed_species <- function(occ, authority = NULL, snapshot = NULL) {
+  ss <- snapshot %||% site_snapshot(occ)
+  d <- species_level_only(ss$grain)
   if (is.null(d) || !nrow(d)) return(NULL)
   d <- d[!is.na(d$taxonID) & nzchar(d$taxonID), , drop = FALSE]
   if (!nrow(d)) return(NULL)
   d$sym <- accept_symbol(d$taxonID, authority)
-  cov1 <- d[d$scale == 1 & is.finite(d$percentCover) & d$percentCover > 0, , drop = FALSE]
-  cov_by <- if (nrow(cov1)) tapply(cov1$percentCover, cov1$sym, mean) else numeric(0)
-  d %>% dplyr::group_by(.data$sym) %>%
+  Q <- ss$cover
+  cov_by <- numeric(0)
+  if (!is.null(Q) && nrow(Q)) {
+    q1 <- species_level_only(Q)
+    q1 <- q1[!is.na(q1$taxonID) & nzchar(q1$taxonID), , drop = FALSE]
+    psc <- if (nrow(q1)) plot_species_cover(q1) else NULL
+    n_sup <- dplyr::n_distinct(Q$plotID[.scale_num(Q$scale) %in% 1])
+    if (!is.null(psc) && nrow(psc) && n_sup > 0) {
+      name_sym <- tapply(accept_symbol(q1$taxonID, authority), q1$scientificName, mode_chr)
+      psym <- unname(name_sym[psc$scientificName])
+      cov_by <- tapply(psc$mean_cover, psym, sum) / n_sup
+    }
+  }
+  out <- d %>% dplyr::group_by(.data$sym) %>%
     dplyr::summarise(
       scientificName = mode_chr(.data$scientificName),
       family         = mode_chr(.data$family),
       nativity_conflict = .nativity_conflict(.data$nativity),
-      nativity       = .resolve_nativity(.data$nativity), # conflicts route to Unknown/review
+      # neon_status before nativity: a later summarise() expression sees the
+      # already-collapsed earlier column, so the raw nativity must be read first.
       neon_status    = if (.nativity_conflict(.data$nativity))
         paste(sort(unique(as.character(.data$nativeStatusCode[!is.na(.data$nativeStatusCode)])),
                    method = "radix"), collapse = "|") else mode_chr(.data$nativeStatusCode),
+      nativity       = .resolve_nativity(.data$nativity), # conflicts route to Unknown/review
       n_plots        = dplyr::n_distinct(.data$plotID),
       .groups = "drop") %>%
     dplyr::mutate(mean_cover = round(as.numeric(cov_by[.data$sym]), 2)) %>%
     dplyr::arrange(dplyr::desc(.data$n_plots), dplyr::desc(.data$mean_cover))
+  out <- out[, c("sym", "scientificName", "family", "nativity_conflict", "nativity",
+                 "neon_status", "n_plots", "mean_cover")]
+  attr(out, "grain_event") <- attr(ss$grain, "snapshot_label", exact = TRUE) %||% NA_character_
+  attr(out, "cover_event") <- attr(ss$cover, "snapshot_label", exact = TRUE) %||% NA_character_
+  out
 }
 
 # the comparison reference list: real species only (drop SDA aggregate/genus codes
@@ -119,7 +157,9 @@ reference_species_clean <- function(expected, authority = NULL) {
 #    Introduced (invasion signal) vs Native-not-in-reference (range/mapping/misID)
 expected_vs_observed <- function(occ, expected, authority = NULL) {
   if (is.null(expected)) return(NULL)
-  obs <- observed_species(occ, authority)
+  ss <- site_snapshot(occ)
+  applicability <- reference_applicability(occ)
+  obs <- observed_species(occ, authority, snapshot = ss)
   ref <- reference_species_clean(expected, authority)
   if (is.null(obs) || !nrow(obs) || is.null(ref) || !nrow(ref)) return(NULL)
 
@@ -151,7 +191,10 @@ expected_vs_observed <- function(occ, expected, authority = NULL) {
     A = A, B = B, C = C_review, C_all = C,
     n_ref = nrow(ref), n_obs = nrow(obs),
     n_overlap = nrow(A),
-    overlap_pct = round(100 * nrow(A) / nrow(ref), 1),
+    # No completeness percentage where the reference cannot apply (cropland).
+    overlap_pct = if (isTRUE(applicability$applies)) round(100 * nrow(A) / nrow(ref), 1) else NA_real_,
+    applicability = applicability,
+    events = ss$events,
     dom_total = sum(ref$is_dominant %in% TRUE),
     dom_obs   = sum(ref$is_dominant %in% TRUE & in_obs),
     n_review_intro   = sum(C_review$nativity == "Introduced", na.rm = TRUE),
@@ -191,7 +234,7 @@ missing_dominants <- function(evo) {
 # family / kingdom. A direct count (no inference, no false positives); it frames
 # every other flag, so it is surfaced FIRST. Cover share uses the 1 m^2 quadrats.
 flag_coarse_rank <- function(occ) {
-  d <- latest_snapshot(occ)
+  d <- grain_snapshot(occ)                 # F: the same records as the species count
   if (is.null(d) || !nrow(d)) return(NULL)
   fine <- c("species", "subspecies", "variety", "speciesGroup")
   # "fine" = species-level via the bundle's is_species flag, so this agrees with

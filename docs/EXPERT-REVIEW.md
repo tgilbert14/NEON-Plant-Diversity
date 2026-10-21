@@ -13,17 +13,17 @@ The app preserves the load-bearing parts of the NEON plant-diversity design:
 - nested incidence at 1, 10, 100, and 400 m²;
 - ocular cover only at 1 m²;
 - species-level analysis separated from coarse taxonomic records;
-- one selected survey event per plot for current-state analyses;
+- two labelled site events for current-state analyses (`plant-snapshot-v2`): a full-grain event for richness and species-area, a 1 m² cover event for cover-weighted figures;
 - Unknown nativity retained as an explicit category;
 - cover described as an overlapping relative index, never a ground-share partition.
 
-The new `snapshot_by_plot_year()` contract closes the previous multi-bout ambiguity. Selection is deterministic, emits support, and is tested for row-order invariance. `latest_snapshot()` builds on that contract, so app summaries, report values, and snapshot exports have one registered observation model.
+The `snapshot_by_plot_year()` contract closes the multi-bout ambiguity for annual series. The 2026-10-18 audit found that the former per-plot `latest_snapshot()` selected 1 m²-only years at 40 of 46 sites because NEON surveys the 10 and 100 m² subplots biennially since 2019, so the current-state model was rewritten as two labelled site events (`site_snapshot()`): richness and species-area come from the latest full-grain `(year, bout)` with full-grain plots only; cover, Hill, Chao2 and the watchlist come from the latest complete 1 m² bout. Plots outside an event are reported as unsupported rather than carried forward from older years (CPER no longer keeps 36 plots last surveyed in 2013). The trade-off against a single event for everything is recorded in the science contract and the PR.
 
 ## Estimator review
 
 ### Species-area
 
-The nested species-area curve remains the app's most direct quantity. It is computed per plot and then summarized by scale. The registered implementation counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale. This is a product-contract strength; site-specific values remain descriptive for the exact reviewed source family.
+The nested species-area curve remains the app's most direct quantity. It is computed per plot on the grain event and then summarized by scale. The 10 m² point is the mean over 10 m² subplots of each subplot's own rows plus its nested 1 m² quadrat; the former corner union merged both 10 m² subplots of a corner into a 10/20 m² mix (about +23% at SRER). The registered implementation counts only finite plot values in scale-specific `n`, and reports SD only when at least two plots support that scale.
 
 ### Chao2
 
@@ -31,7 +31,7 @@ Incidence-based Chao2 is the appropriate estimator family for 1 m² presence uni
 
 `S_obs + ((m - 1) / m) * Q1 * (Q1 - 1) / (2 * (Q2 + 1))`
 
-The result is a lower-bound estimate of total richness; its difference from observed richness is the estimated unseen component. `Q1`, `Q2`, `m`, and instability remain visible; no unsupported upper confidence limit is invented. It is not coverage-standardized, and its incidence-unit denominator remains limited by the absence of an explicit sampled-empty-quadrat table.
+The result is a lower-bound estimate of the 1 m² quadrat species pool; its difference from the 1 m² `S_obs` printed beside it is the estimated unseen component. It must never be read against the plot-wide species count, which includes 10 and 100 m² detections and exceeded Chao2 at 23 of 46 sites in the compare modal and PDF before this fix. `Q1`, `Q2`, `m`, and instability remain visible; no unsupported upper confidence limit is invented. It is not coverage-standardized, and its incidence-unit denominator remains limited by the absence of an explicit sampled-empty-quadrat table.
 
 ### Cover and Hill weights
 
@@ -41,7 +41,7 @@ One limitation remains: the bundles identify subplots through occurrence records
 
 ### Annual responses
 
-Annual richness, total relative cover, introduced-cover share, and nativity trends now use one selected bout per plot-year and recurrent plot panels. The estimand is a mean plot-level response, with plot and sampling-unit support, rather than a site total that changes when effort changes.
+Annual richness, total relative cover, introduced-cover share, and nativity trends use one selected bout per plot-year and recurrent plot panels. The annual richness response is mean 1 m² subplot richness per plot: the whole-plot list alternates with the biennial 10/100 m² schedule (SRER odd years 42.3, even years 16.7), so the former 400 m² annual series was a sampling-design sawtooth. The 2018, 2019 and 2026 design breaks (changeLog 16203, 16207, 110012) are drawn on every annual chart and no line crosses 2019. The environment screen requires at least 6 matched years and p < 0.10 before any pattern wording.
 
 This is the correct contract for descriptive time series. It does not by itself solve short records, observation error, shared trends, or causal identification.
 
@@ -75,7 +75,7 @@ The export contract is now materially stronger:
 - plot, ground, environment, expected/reference, and release provenance are separately scoped;
 - the strict data dictionary is generated from the emitted frames and fails on unknown or duplicate columns;
 - definitions, units, NA semantics, and estimands accompany every exported field;
-- the PDF uses the same selected snapshot for richness, species-area, and Chao2.
+- the PDF uses the same two labelled events as the app for richness, species-area, cover and Chao2.
 
 These safeguards retain the 2026-07-19 production receipt. For the new source family, hard-assertion R fixtures, deterministic artifacts, exact manifest validation, offline sourcing, export/PDF inspection, and deployed semantic health must all rerun on the literal reviewed head before promotion.
 
@@ -105,7 +105,7 @@ Named site rankings, Chao2 values, invasion percentages, or association screens 
 | Dimension | Production assessment | Remaining condition |
 |---|---|---|
 | Observation model | Registered and validated | Preserve fixtures and export parity |
-| Nested-scale fidelity | Strong and release-tested | Preserve exact grain/support labels |
+| Nested-scale fidelity | Repaired 2026-10-18: grain event and per-subplot 10 m² point | Preserve exact grain/support labels; regenerate `site_index` by refresh |
 | Chao2 | Correctly labelled lower-bound contract | Add explicit sampled-opportunity data |
 | Cover interpretation | Honest relative-index framing | Add explicit sampled-empty opportunity data |
 | Nativity/QC | Conflicts and regional limits gated | Preserve authority provenance |

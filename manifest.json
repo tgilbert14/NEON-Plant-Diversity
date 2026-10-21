@@ -3257,7 +3257,7 @@
       "checksum": "5c2dc1ee1d4102847b2e0c340fd1b2a4"
     },
     "data/expected/completeness_index.rds": {
-      "checksum": "ea6392469bbf4a2b64b697d644bd4ef8"
+      "checksum": "9b6512f6969967d9a0dfe31e0c7d51d0"
     },
     "data/expected/CPER.rds": {
       "checksum": "5a291d8d934812eca2db196f8adfafc7"
@@ -3356,7 +3356,7 @@
       "checksum": "99ce09d4d44925ebf2bfe3f416d265fc"
     },
     "data/search_index.rds": {
-      "checksum": "a69a1afbb8fc653ed1562753428e4eee"
+      "checksum": "860de1077c9fb054d9fc34910f2291d0"
     },
     "data/site_index.rds": {
       "checksum": "c4f1c9348a36cea191646588415028f5"
@@ -3503,22 +3503,22 @@
       "checksum": "afe7537b906995ff41a0716d0a3b3be3"
     },
     "global.R": {
-      "checksum": "f754661ac2628df2f6494e94b3784e82"
+      "checksum": "b17fcc49ed89b67f68a340e95d5c7173"
     },
     "R/env_helpers.R": {
-      "checksum": "db69a86c37ae4df54b469800c002282f"
+      "checksum": "1a1a765bb97bf26b07ebb122984c6c17"
     },
     "R/expected_qc.R": {
-      "checksum": "c9a901cb2e7b3d4f342c69930736a476"
+      "checksum": "da3a6da9575662a662cd8a50fd37c35b"
     },
     "R/map_picker.R": {
       "checksum": "ea879d30599dbea13235c2a68c569eb4"
     },
     "R/plant_helpers.R": {
-      "checksum": "3b9417c9e36b885907ecc9f9cca1dc43"
+      "checksum": "c157c534203b7c16d692960670f88c0a"
     },
     "R/report_pdf.R": {
-      "checksum": "615a4e55d8d7c0886e43f7df91d6b4ab"
+      "checksum": "80c1ad463e2bcb8ecda837ae555f1bea"
     },
     "R/site_metadata.R": {
       "checksum": "755f5dc0f683807d58a4fc5420d7b392"
@@ -3527,10 +3527,10 @@
       "checksum": "65e7e20d02875550730649c4af5f6d52"
     },
     "server.R": {
-      "checksum": "6fec2046c3a8147e5782a8e482c3dda7"
+      "checksum": "e006879f6108a457cb6684039af1e300"
     },
     "ui.R": {
-      "checksum": "6c0349e79eee1b21770b2784e2de5047"
+      "checksum": "4e1671b10353c9060c36380538c44853"
     },
     "www/app.js": {
       "checksum": "fd67107d8481c7e0c981a45283acbe0d"
@@ -3548,10 +3548,10 @@
       "checksum": "d24a63b0c1e42763878e95726a5816e6"
     },
     "www/runtime-receipt.txt": {
-      "checksum": "e5876d8eb47f9931228c20b10d96ccef"
+      "checksum": "b55d4f0e85e739a03877c6fe280812f2"
     },
     "www/styles.css": {
-      "checksum": "78190c64f672d4788886624013142bd3"
+      "checksum": "adee0f3a746f7ab8adc711bcbf844581"
     },
     "www/vendor/html-to-image-1.11.11.js": {
       "checksum": "1b01c7cd9fb375bd1fb395b3dfd31450"

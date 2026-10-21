@@ -6,8 +6,13 @@ Status: registered estimator contract; source-family review updated for validate
 
 - Product: NEON Plant presence and percent cover (`DP1.10058.001`).
 - Spatial grain: nested 1, 10, 100, and 400 m² incidence; ocular cover only at 1 m².
-- Current-state unit: one latest registered `(year, bout)` snapshot per plot.
-- Annual unit: one deterministic bout per plot-year, then a plot-level response.
+- Sampling design change: since 2019 NEON surveys the 10 and 100 m² subplots every other year (NEON changeLog 16204/16207); 1 m² quadrats are surveyed every year. A plot's latest year is therefore often a 1 m²-only year and is not a 400 m² plot list.
+- Current-state unit (`plant-snapshot-v2`): two labelled site events, each one `(year, bout)` at one site with the plots surveyed in it.
+  - Grain event: the site's latest year with rows at 1, 10 and 100 m²; the bout with the most full-grain plots (tie: later bout); only plots carrying all three scales. Every richness, species-area, incidence and plot-list figure uses it.
+  - Cover event: the site's newest year whose best-covered bout holds at least max(3, half the grain event's plots) plots with 1 m² records; scale-1 rows only. Every cover-weighted figure (relative cover, Hill, Chao2, watchlist) uses it.
+  - Mixed tables carry presence columns from the grain event and cover columns from the cover event, each labelled. No per-plot latest-year selection remains; a plot outside an event is reported as unsupported, never silently included.
+  - Registered local choices: a 1 m² quadrat whose parent 10 m² subplot carries no rows still counts as one surveyed 10 m² unit whose list is its own quadrat (NEON's coarser lists need not repeat nested species; effect at most 0.12 species per site); a row with no bout belongs to an event only when nothing in that year carries a bout; nativity conflicts are resolved within each event; the grain event is the latest full-grain year even when an earlier year had more full-grain plots, and the plot count travels with every figure (ABBY 11, OAES 12, WOOD 8 full-grain plots in their latest full-grain year).
+- Annual unit: one deterministic bout per plot-year, then a plot-level response. The annual richness response is mean 1 m² subplot richness, because the biennial 10/100 m² schedule would otherwise impose a sawtooth; the 2018 half-plot, 2019 subplot-cut and 2026 suspension design breaks (changeLog 16203, 16207, 110012) are drawn on every annual chart and no line is drawn across 2019.
 - Cross-year estimand: mean plot-level response over the recurrent plot panel represented in every included year.
 - Cover interpretation: relative ocular index with potentially overlapping vegetation layers; never a fraction of bare ground.
 - Known opportunity limitation: occurrence bundles do not preserve an explicit table of sampled-but-empty quadrats. No function may claim a complete structural-zero correction until that table exists.
@@ -24,25 +29,26 @@ After exact promotion, these bytes may support descriptive ecological values und
 
 | Estimand | Unit | Support | Permitted interpretation |
 |---|---|---|---|
-| Nested species-area | mean species / plot at 1, 10, 100, 400 m² | finite plot count per scale | grain-specific community richness |
-| Plot richness | species / 400 m² plot | plot snapshot | composition, not productivity or health |
-| Native/introduced cover | mean relative ocular cover / supported plot | supported plot and known 1 m² records | within-site composition context |
+| Nested species-area | mean species / plot at 1, 10, 100, 400 m² (grain event) | finite plot count per scale; 10 m² = mean over 10 m² subplots of their own rows plus the nested 1 m² quadrat; 100 m² = corner union; 400 m² = plot union | grain-specific community richness |
+| Plot richness | species / 400 m² plot (grain event) | full-grain plot snapshot | composition, not productivity or health |
+| Native/introduced cover | mean relative ocular cover / supported plot (cover event) | supported plot and known 1 m² records | within-site composition context |
+| Annual richness series | mean 1 m² subplot richness per plot over recurrent panel | plot, 1 m² unit, selected bout; design breaks drawn | descriptive registered endpoints |
 | Introduced-cover annual series | mean plot share over recurrent panel | plot, 1 m² unit, selected bout | descriptive registered endpoints |
-| Hill q0/q1/q2 | effective species from 1 m² cover weights | current snapshot | richness/evenness/dominance profile |
-| Bias-corrected Chao2 | incidence lower bound | 1 m² incidence units, uniques, doubletons | total-richness floor; difference from observed is the estimated unseen component |
+| Hill q0/q1/q2 | effective species from 1 m² cover weights | cover event | richness/evenness/dominance profile |
+| Bias-corrected Chao2 | incidence lower bound (cover event) | 1 m² incidence units, uniques, doubletons; always printed beside its own S_obs at 1 m² | total-richness floor for the 1 m² quadrat species; its gap from the 1 m² S_obs is the estimated unseen component; never compared with the plot-wide species count |
 | Cross-scale introduced occurrence | plot detections at 1 vs 400 m² | plot lists at both grains | detectability/patchiness review lead |
-| Expected/reference completeness | overlap with single-point NRCS list | reference ID, coordinate, list size | reference-list completeness context |
-| Annual environment association | Spearman scan over complete years | recurrent plots, complete months, matched years | descriptive short-record co-movement only |
+| Expected/reference completeness | overlap with single-point NRCS list (presence from the grain event, cover from the cover event) | reference ID, coordinate, list size; unavailable (`NA`, status `cropland: no native reference applies`) where the sampled plots are cultivated crops | reference-list completeness context |
+| Annual environment association | Spearman scan over complete years | recurrent plots, complete months, at least 6 matched years | descriptive short-record co-movement only; any pattern wording requires circular-shift p < 0.10 |
 
 ## Estimator rules
 
 ### Snapshot selection
 
-`snapshot_by_plot_year()` must be invariant to input row order. Bout selection is deterministic and exported. `latest_snapshot()` must select the latest registered plot snapshot without pooling bouts.
+`snapshot_by_plot_year()` must be invariant to input row order. Bout selection is deterministic and exported. `site_snapshot()` returns the grain event, the cover event and their labels; `grain_snapshot()` and `cover_snapshot()` are its halves. `latest_snapshot()` is a deprecated alias of `grain_snapshot()` so no caller can obtain a 1 m²-only year under a 400 m² label. The former per-plot latest-year rule survives only as `legacy_plot_latest_snapshot()`, used by the release validator to read a `data/site_index.rds` that still declares no `snapshot_contract` attribute (bundle-time; regenerated by the next refresh). Site events must be invariant to input row order; bout ties resolve to the later bout; an all-missing bout is one unspecified bout.
 
 ### Cover denominators
 
-The 1 m² sampling-unit denominator is determined before filtering to a focal species. Species absent from a known supported plot contribute zero at the plot aggregation step. Missing survey opportunity remains missing, not zero.
+The 1 m² sampling-unit denominator is determined before filtering to a focal species. Species absent from a known supported plot contribute zero at the plot aggregation step. Missing survey opportunity remains missing, not zero. Every surface that prints a species' mean cover (species table, invasive watchlist, network search index, Expected-vs-Observed buckets and their CSVs) uses this one recipe (`species_summary()`); presence-conditional means are not permitted.
 
 ### Chao2
 
@@ -67,17 +73,18 @@ Raw site richness remains visible only with support. Mean richness per 400 m² p
 
 - Annual precipitation, temperature, flowering, and green-up require 12 complete monthly values.
 - Fruiting intensity and incomplete seasonal windows are excluded.
-- Response years use one bout per plot-year and a recurrent plot panel.
-- Circular-shift nulls preserve ordered response structure.
+- Response years use one bout per plot-year and a recurrent plot panel; the richness response is mean 1 m² subplot richness.
+- Circular-shift nulls preserve ordered response structure. At least 6 matched years are required to scan, and any wording other than "no clear pattern" requires p < 0.10.
+- The default response shown is introduced-cover share; richness is offered under its 1 m² label.
 - No fitted line, causal wording, or Driver edge is allowed from this per-site screen.
 
 ## Parity requirements
 
 For a selected site and snapshot, the following must match exactly:
 
-- app headline values;
-- report PDF values;
-- `analysis_snapshot.csv` and `plots_snapshot.csv`;
+- app headline values, each carrying its event label;
+- report PDF values, carrying the same two labels;
+- `analysis_snapshot.csv` (grain event), `cover_snapshot.csv` (cover event) and `plots_snapshot.csv`;
 - science fixture outputs;
 - reference and provenance receipts, including the matching query-snapshot fields and durable raw-source inventory digest.
 

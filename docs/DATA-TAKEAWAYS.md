@@ -26,22 +26,25 @@ Current-state values legitimately move when a plot receives a newer selected sur
 
 ## Production QA example: SRER
 
-The candidate oracle reports 161 plant species across 33 selected current-state plots at Santa Rita Experimental Range, with 10.0% introduced relative cover in the known supported 1 m² cover records and a bias-corrected Chao2 lower bound of 194.5. All 33 SRER plots now select 2024 rather than 2023. The nested species-area view retains the registered 1, 10, 100, and 400 m² grains. These values require app/export/PDF parity on the reviewed head before promotion and are not an effort-standardized national rank, productivity signal, management grade, or temporal trend.
+**Correction, 2026-10-18 (audit item 3, P0).** The 2026-08 review above selected each plot's latest year, and at SRER that year (2024) carries 1 m² rows only: NEON has surveyed the 10 and 100 m² subplots every other year since 2019 (changeLog 16204/16207). The former "161 species across 33 plots" and the species-area 6.5 / 8.2 / 8.2 / 17.9 were 1 m² lists under a 400 m² label; the claim that the view "retains the registered grains" was false. Forty of 46 sites were affected (988 of 1,574 current-snapshot plots had no 10/100 m² rows).
+
+Under `plant-snapshot-v2` SRER reports two labelled events. Grain event 2023 · bout 2 · 33 plots: 203 species-level names and a species-area of 5.5 / 12.3 / 26.7 / 42.6 (the 10 m² point is the per-10 m² subplot union; the former corner union gave 15.2 by merging two 10 m² subplots). Cover event 2024 · bout 1 · 33 plots: 9.6% introduced relative cover, Chao2 191.9 from 157 species seen at 1 m². Two contrasting sites: CPER keeps its 33 plots surveyed in 2024 and drops 37 plots last surveyed in 2013/2014 (92 species at 400 m², Chao2 73.1 from 58 at 1 m², 0.4% introduced), where the old snapshot pooled 70 plots across 2013–2024 for 102 species; JORN (2024 · bout 1 · 33 plots for both events) shows 66 species at 400 m² and Chao2 46.5 beside its 1 m² count of 39, where the old compare modal printed Chao2 61.9 under a species row of 80. STER and KONA (every plot `cultivatedCrops`) no longer receive a "reference flora detected" percentage; their completeness status is "cropland: no native reference applies". The full 46-site before/after table is in the PR for this change. None of these values is an effort-standardized national rank, productivity signal, management grade, or temporal trend.
 
 ## Registered product contract
 
 ### Current-state analyses
 
 - `snapshot_by_plot_year()` deterministically selects one bout for each plot-year and is required to be invariant to input row order.
-- `latest_snapshot()` then retains each plot's latest selected year. Current-state richness, species-area, Chao2, cover, PDF summaries, and snapshot exports must use that same selection.
-- Richness always travels with its grain. The nested 1, 10, 100, and 400 m² curve is a direct description of the NEON sampling design, not an interpolation.
+- `site_snapshot()` selects two labelled site events: the grain event (latest year with 1, 10 and 100 m² rows; one bout; full-grain plots only) carries richness, species-area, plot lists and the Expected-vs-Observed presence set; the cover event (latest complete 1 m² bout) carries relative cover, Hill, Chao2 and the watchlist. App, PDF and exports print both labels. `latest_snapshot()` is a deprecated alias of the grain event.
+- Richness always travels with its grain and its event. The nested 1, 10, 100, and 400 m² curve is a direct description of the NEON sampling design, not an interpolation; the 10 m² point is the mean over 10 m² subplots of their own rows plus the nested 1 m² quadrat.
+- Chao2 is printed beside its own 1 m² S_obs and is never compared with the plot-wide species count.
 - Cover is an ocular relative index from 1 m² records. Vegetation layers may overlap, so cover is never described as a fraction of ground.
 
 ### Annual analyses
 
 - Annual plant responses first select one deterministic bout per plot-year.
 - Each response is calculated at plot level and summarized over the recurrent plot panel represented in every included year.
-- Annual outputs carry plot, sampling-unit, and selected-bout support. Changing plot effort is not allowed to masquerade as a temporal trend.
+- Annual outputs carry plot, sampling-unit, and selected-bout support. Changing plot effort is not allowed to masquerade as a temporal trend. The annual richness response is mean 1 m² subplot richness, because the biennial 10/100 m² schedule made the 400 m² series a sawtooth (SRER odd years 42.3, even years 16.7); the 2018, 2019 and 2026 design breaks are drawn on every annual chart.
 - Richness is a composition measure. It is not productivity, biomass, ecosystem health, or a Driver vote.
 
 ### Estimators and QC
@@ -58,7 +61,7 @@ The candidate oracle reports 161 plant species across 33 selected current-state 
 - Only annual precipitation, temperature, flowering, and green-up are registered as app-level environment context.
 - An annual value requires 12 non-missing monthly values. Fruiting intensity, incomplete seasonal windows, and the former winter/monsoon per-site Driver read are excluded.
 - Association screens use recurrent plot responses, complete annual windows, Spearman correlation, and circular-shift nulls that preserve response order.
-- Results remain descriptive short-record co-movement. No fitted line, causal wording, or per-site Driver/Cascade edge is authorized.
+- Results remain descriptive short-record co-movement. At least 6 matched years and circular-shift p < 0.10 are required before any pattern wording. No fitted line, causal wording, or per-site Driver/Cascade edge is authorized.
 
 ## Known limitations
 
@@ -89,7 +92,7 @@ These values may be reported only as descriptive results for the exact promoted 
 The whole-site ZIP distinguishes source records from analysis frames:
 
 - `occurrences_all.csv` retains every bundled taxon record, including coarse IDs;
-- `analysis_snapshot.csv` contains the exact current-state records selected by the snapshot contract;
+- `analysis_snapshot.csv` contains the grain-event records and `cover_snapshot.csv` the cover-event records, each with its event label;
 - `plots_snapshot.csv` contains plot-level snapshot estimates;
 - `ground_cover_all.csv` and `environment_context.csv` remain clearly scoped as bundled context;
 - expected/reference and release provenance are exported separately;

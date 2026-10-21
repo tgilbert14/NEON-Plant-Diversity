@@ -1482,3 +1482,8 @@ svg.smt-pin-lines {
 @media (prefers-reduced-motion: reduce) {
   .search-go { transition: none !important; }
 }
+
+/* snapshot contract v2: the two survey events every hero number names */
+.hero-events { margin-top: 10px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.hero-events .bi { color: var(--pine2); }
+.qc-events { font-size: 11.5px; opacity: .9; }
