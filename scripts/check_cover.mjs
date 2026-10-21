@@ -116,7 +116,7 @@ const imageAssets = [
   ["docs/assets/plant-nested-quadrat-hero-mobile-v1-source.png", 941, 1672, "a729f710a1580f89fc8db000c738321db7af487ad9a759f71a0445d427856f01"],
   ["docs/assets/cover-generated/plant-nested-quadrat-hero-v1.jpg", 1774, 887, "6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825"],
   ["docs/assets/cover-generated/plant-nested-quadrat-hero-mobile-v1.jpg", 941, 1672, "8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38"],
-  ["docs/og-image.png", 1200, 630, "4eb34b5e05e32d0a8d87534de612ab3b500ace097ceb07a71cbbcc79e7f12964"],
+  ["docs/og-image.png", 1200, 630, "c40e274c655a8d7cf1d7377328285226268bcdd73dc2c0720b349134505fbbac"],
   ["www/assets/plant-nested-quadrat-hero-v1.jpg", 1774, 887, "6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825"],
   ["www/assets/plant-nested-quadrat-hero-mobile-v1.jpg", 941, 1672, "8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38"],
 ];
@@ -135,7 +135,7 @@ for (const [file, expectedWidth, expectedHeight, expectedHash] of imageAssets) {
 }
 
 const svgHash = sha256(readFileSync(resolve(root, "docs/assets/cover-generated/plant-social-card-v1.svg")));
-if (svgHash !== "4d85e7e239a342d46aa841c04c55913522d4bf2f4667c4109fec7b82cad94233") {
+if (svgHash !== "5e56b679ff72fc7402b32bff9cad982002dfe425118d09a8ae814327becf2bd9") {
   fail(`social-card SVG hash changed: ${svgHash}`);
 }
 

@@ -1,8 +1,17 @@
 # Suite Learning Handoff
 
-App: Plant Diversity · pass 3 production closeout plus 2026-08-03 source-refresh review
+App: Plant Diversity · pass 3 production closeout plus 2026-08-03 and 2026-10-21 source-refresh reviews
 
 This file is the reusable learning package for the next companion app and the final Driver Cascade synthesis.
+
+## 2026-10-21 refresh-review addendum
+
+- Candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` (run `39546911504`, builder `280539c8713c16b6b13d47d5916e0f50a10edd24`) changed no occurrence or ground row at any of 46 sites, yet 43 of 46 `site_index` rows moved, because it is the first full refresh built under `plant-snapshot-v2`. A contract change moves indexes without a data change, and the review must say so with before/after values (SRER 161 to 203 species, CPER 70 to 33 plots) and the row-multiset evidence, rather than letting index movement read as new ecology.
+- The publisher's stale-base guard works and must stay. Run `39542458760` built the same candidate, but PR #22 merged mid-run and the publisher refused to push a branch built on an older master. Do not merge to the watched branch while a refresh is between fetch and publish; if it happens, rerun the refresh on the new base.
+- The runtime receipt covers `scripts/verify_bundle.R`, so changing the validator changes the receipt. A promotion commit may touch only the four release files (`data/search_index.rds`, `www/runtime-receipt.txt`, `docs/cover-receipt.txt`, `manifest.json`); validator edits belong in their own PR first (learned on PR #20).
+- The semantic post-deploy smoke must anchor on a durable marker, not on user-facing copy. A copy rewrite (the v2 overview sentence) broke the insight-marker read until PR #22 (issue #21).
+- Review oracles must be parameterized, not hardcoded to the last refresh's outcome. The row oracle now takes `PDE_EXPECTED_CHANGED_SITES`; the candidate oracle had to be rewritten to plant-snapshot-v2 because it still rebuilt the retired per-plot snapshot.
+- Disposition stays `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`.
 
 ## 2026-08-03 refresh-review addendum
 
@@ -51,6 +60,7 @@ This file is the reusable learning package for the next companion app and the fi
 14. A real Shiny `actionButton()` keeps its label as a text node inside `.action-label`; a sibling selector cannot hide that node. For compact icon-only presentation, retain the DOM text, zero the inherited visual font size, restore the icon's `em` basis, and prove a 44 x 44 px target at the actual 390/375/361/360/320 production widths.
 15. Treat 360 px as a breakpoint seam, not a synonym for 320 px. The Plant release required a full-width status track plus fixed Help and theme columns at and below 360, while 361 remained the compact flex case.
 16. Separate semantic row-multiset review from byte review. Deterministic ordering and a new R serialization can change every bundle byte while only a few sites gain ecological rows; report both layers.
+17. Raw-file digests track upstream byte order, not content. In the 2026-10-21 refresh all 46 raw digests (and so the receipt ID) changed while every occurrence and ground row multiset stayed equal; a new receipt ID alone is not evidence that the data changed, so pair it with a row-multiset comparison.
 
 ## Pattern to carry to every next app
 

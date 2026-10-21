@@ -1,6 +1,6 @@
 # Plant Diversity Science Contract
 
-Status: registered estimator contract; source-family review updated for validated query-snapshot candidate `374fb704c548ca830f05c46d5fab1331e0027302`. Public production remains on the 2026-07-19 legacy release until exact-head CI, merge, deployment, and public verification complete. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
+Status: registered estimator contract; source-family review updated for validated query-snapshot candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` (2026-10-21 refresh). Public production is master `280539c8713c16b6b13d47d5916e0f50a10edd24`, with the plant-snapshot-v2 code and the 2026-08-03 receipt, until this candidate passes exact-head CI, merge, deployment, and public verification. This document is normative; UI copy, exports, PDF output, tests, and Driver handoff must agree with it.
 
 ## Observation model
 
@@ -19,9 +19,11 @@ Status: registered estimator contract; source-family review updated for validate
 
 ## Plant source-receipt contract
 
-The candidate plant data are a receipt-complete 46-site `DP1.10058.001` query snapshot, not the former frozen legacy family. Every site bundle and `data/site_index.rds` carries `plant-source-receipt-v2` with build date `2026-08-03`, source interval `2013-01` through closed cutoff `2026-07-31`, immutable receipt ID `PDE-DP1.10058.001-query-through-2026-07-31-sha256-48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, raw-inventory digest `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`, builder commit `1734840a4f09e7acee356431ea1e57e9a637fb31`, `basic` query package, and `neonUtilities 4.0.1`. See [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
+The candidate plant data are a receipt-complete 46-site `DP1.10058.001` query snapshot, not the former frozen legacy family. Every site bundle and `data/site_index.rds` carries `plant-source-receipt-v2` with build date `2026-10-21`, source interval `2013-01` through closed cutoff `2026-09-30`, immutable receipt ID `PDE-DP1.10058.001-query-through-2026-09-30-sha256-d7e9e0de7d8e624cb4e4f9d6d64b4a41ae58f09ead497ce1307983b797811cc7`, raw-inventory digest `d7e9e0de7d8e624cb4e4f9d6d64b4a41ae58f09ead497ce1307983b797811cc7`, builder commit `280539c8713c16b6b13d47d5916e0f50a10edd24`, `basic` query package, and `neonUtilities 4.0.2`. See [Plant Source Receipt](PLANT-SOURCE-RECEIPT.md).
 
-No official NEON release was explicitly selected, so `neonRelease=NA`. That honest `NA` does not invalidate the complete query receipt. The closed 2026-07-31 cutoff states what the query requested; retained observations span 2013–2024 and must not be presented as 2026 observations. Repository dates, file mtimes, manifest/runtime hashes, and derived checksums remain ineligible substitutes for source fields.
+`data/site_index.rds` now declares `snapshot_contract = plant-snapshot-v2`, so `scripts/verify_bundle.R` reconciles it under the two-event rule, and its legacy warning ("site_index.rds predates plant-snapshot-v2") no longer applies once this candidate is promoted.
+
+No official NEON release was explicitly selected, so `neonRelease=NA`. That honest `NA` does not invalidate the complete query receipt. The closed 2026-09-30 cutoff states what the query requested; retained observations span 2013 to 2024 (provisional 2025 bouts at NEON are excluded) and must not be presented as 2026 observations. Repository dates, file mtimes, manifest/runtime hashes, and derived checksums remain ineligible substitutes for source fields.
 
 After exact promotion, these bytes may support descriptive ecological values under the estimand and support rules below. A complete query receipt closes the former source-provenance hold, but does not invent sampled-empty 1 m² opportunities, standardize national effort, establish causal currentness, or authorize a Driver vote. Every later refresh must again carry one complete matching receipt across all 46 bundles and `data/site_index.rds`; revalidation without download preserves the existing receipt and never stamps new provenance.
 
@@ -48,7 +50,7 @@ After exact promotion, these bytes may support descriptive ecological values und
 
 ### Cover denominators
 
-The 1 m² sampling-unit denominator is determined before filtering to a focal species. Species absent from a known supported plot contribute zero at the plot aggregation step. Missing survey opportunity remains missing, not zero. Every surface that prints a species' mean cover (species table, invasive watchlist, network search index, Expected-vs-Observed buckets and their CSVs) uses this one recipe (`species_summary()`); presence-conditional means are not permitted.
+The 1 m² sampling-unit denominator is determined before filtering to a focal species. Species absent from a known supported plot contribute zero at the plot aggregation step. Missing survey opportunity remains missing, not zero. Every surface that prints a species' mean cover (species table, invasive watchlist, network search index, Expected-vs-Observed buckets and their CSVs) uses this one recipe (`species_summary()`); presence-conditional means are not permitted. Registered precision step (observed 2026-10-21 by the independent oracle): each plot-species mean cover is rounded to two decimals before nativity and site sums, so a published site share can differ by 0.1 percentage point from an unrounded computation (YELL 0.7 published vs 0.75 unrounded). Reviewers reproducing the index must apply the same step; removing it is an app change that requires a new validator cycle and is held as a follow-up.
 
 ### Chao2
 
@@ -92,6 +94,6 @@ Any mismatch blocks release.
 
 ## Driver disposition
 
-Current status: **CONTEXT / NO DRIVER BYTE CHANGE.** The candidate closes the plant source-receipt gate, but current Driver ingestion and inferential promotion remain held on explicit sampled opportunity, a measured eligible join, an independent adapter, and old/new parity.
+Current status: **CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE.** The candidate closes the plant source-receipt gate, but current Driver ingestion and inferential promotion remain held on explicit sampled opportunity, a measured eligible join, an independent adapter, and old/new parity.
 
 Eligible after exact promotion as descriptive query-snapshot context: common-grain plot richness, introduced-cover composition, cross-scale occurrence, reference completeness, support, and uncertainty. Excluded: productivity vote, per-site climate–richness edges, management priority, and phenology signals owned by the Phenology app.

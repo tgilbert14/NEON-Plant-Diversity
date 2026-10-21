@@ -1,5 +1,21 @@
 # Plant Diversity cover image provenance
 
+## 2026-10-21 query-snapshot derivative review
+
+No new image-generation operation was used for the 2026-09-30 cutoff refresh
+(candidate a9fc28f, builder 280539c). The desktop/mobile source art, optimized
+hero derivatives, and byte-identical in-app mirrors remain unchanged. Human
+review changed only the live-vector social-card footer boundary from
+`QUERY THROUGH 2026-07-31` to `NEON DP1.10058.001 · QUERY THROUGH 2026-09-30`,
+then rerasterized the checked-in SVG at its exact 1200×630 canvas with Google
+Chrome 155.0.8059.85 using the same headless command as the 2026-08-03 review.
+The PNG was inspected at native size: headline, promise, field-quadrat
+illustration and Living Poster composition are unchanged; the footer is legible
+and does not overlap the art or copy. New checksums: SVG
+`5e56b679ff72fc7402b32bff9cad982002dfe425118d09a8ae814327becf2bd9`, PNG
+`c40e274c655a8d7cf1d7377328285226268bcdd73dc2c0720b349134505fbbac`
+(registered in `scripts/check_cover.mjs`).
+
 ## 2026-08-03 query-snapshot derivative review
 
 No new image-generation operation was used for the complete-query refresh.
@@ -52,8 +68,8 @@ SHA-256 checksums:
 | `assets/plant-nested-quadrat-hero-mobile-v1-source.png` | 941×1672 | Original mobile source | `a729f710a1580f89fc8db000c738321db7af487ad9a759f71a0445d427856f01` |
 | `assets/cover-generated/plant-nested-quadrat-hero-v1.jpg` | 1774×887 | Optimized desktop cover derivative | `6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825` |
 | `assets/cover-generated/plant-nested-quadrat-hero-mobile-v1.jpg` | 941×1672 | Optimized mobile cover derivative | `8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38` |
-| `assets/cover-generated/plant-social-card-v1.svg` | 1200×630 | Reproducible Living Poster social-card source | `4d85e7e239a342d46aa841c04c55913522d4bf2f4667c4109fec7b82cad94233` |
-| `og-image.png` | 1200×630 | Open Graph / Twitter social image | `4eb34b5e05e32d0a8d87534de612ab3b500ace097ceb07a71cbbcc79e7f12964` |
+| `assets/cover-generated/plant-social-card-v1.svg` | 1200×630 | Reproducible Living Poster social-card source | `5e56b679ff72fc7402b32bff9cad982002dfe425118d09a8ae814327becf2bd9` |
+| `og-image.png` | 1200×630 | Open Graph / Twitter social image | `c40e274c655a8d7cf1d7377328285226268bcdd73dc2c0720b349134505fbbac` |
 | `www/assets/plant-nested-quadrat-hero-v1.jpg` | 1774×887 | Byte-identical in-app desktop poster image | `6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825` |
 | `www/assets/plant-nested-quadrat-hero-mobile-v1.jpg` | 941×1672 | Byte-identical in-app mobile poster image | `8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38` |
 
