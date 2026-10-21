@@ -41,7 +41,13 @@ return (() => {
     siteReady: status?.dataset.siteReady === "true",
     statusText: (status?.textContent || "").replace(/\s+/g, " ").trim(),
     heroPresent: Boolean(document.querySelector(".hero-band")),
-    insightReady: (insight?.textContent || "").includes("The site holds"),
+    // The overview insight is "ready" when it carries the registered species
+    // sentence from server.R output$overviewInsight: "<n> plant species across
+    // <n> plots" (plant-snapshot-v2 copy; the pre-v2 "The site holds" phrase is
+    // kept so an older deployment still reads ready). check_custom_message_handlers.mjs
+    // asserts server.R still emits this sentence.
+    insightReady: /\d+ plant species across \d+ plots|The site holds/.test(
+      (insight?.textContent || "").replace(/\s+/g, " ")),
     outputErrors,
     connected: !document.getElementById("shiny-disconnected-overlay"),
     hostError: /startup error|application failed to start|application error|service unavailable/i.test(bodyText),

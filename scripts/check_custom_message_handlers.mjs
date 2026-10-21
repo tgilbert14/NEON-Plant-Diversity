@@ -124,4 +124,16 @@ if (hillEventReads.length !== 1) {
   throw new Error(`expected one deferred hillSrc event_data() read, found ${hillEventReads.length}`);
 }
 
-console.log(`OK: ${seen} handlers, semantic readiness, final-cascade mobile site header, and deferred Plotly event wiring passed.`);
+// The post-deploy semantic smoke (scripts/chromedriver_semantic_smoke.py) reads
+// output$overviewInsight for the sentence "<n> plant species across <n> plots".
+// Both files must move together, or production health reports DOWN on a healthy
+// app (issue #21, 2026-10-20).
+const smoke = readFileSync("scripts/chromedriver_semantic_smoke.py", "utf8");
+if (!server.includes("plant species across %d plots")) {
+  throw new Error("server.R output$overviewInsight must emit '<n> plant species across <n> plots'; the semantic smoke reads it");
+}
+if (!smoke.includes("plant species across \\d+ plots")) {
+  throw new Error("chromedriver_semantic_smoke.py insightReady must match 'plant species across <n> plots'");
+}
+
+console.log(`OK: ${seen} handlers, semantic readiness, insight smoke marker, final-cascade mobile site header, and deferred Plotly event wiring passed.`);
