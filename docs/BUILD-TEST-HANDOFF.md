@@ -2,6 +2,29 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-20 - [Claude Fable 5.1] semantic smoke marker after PR #20 (issue #21)
+
+- Post-deploy run `39541330109` (`semantic_health`) reported DOWN for master merge
+  `e6f35b58d233c76c913e461eaa167bd30eeb46ce` although the live Connect app answered
+  with `appReady`, `siteReady`, "SRER ready", hero present and no output errors:
+  `insightReady` never turned true because the smoke matched the literal
+  pre-v2 sentence "The site holds", which the plant-snapshot-v2 overview copy
+  replaced. Issue #21 was opened by the workflow.
+- Verified on the live app (built-in browser, `?site=SRER`): hero 203 species
+  (2023 full-grain survey), 33 plots, 9.6% introduced cover (2024 bout 1), event
+  receipt line present, overview insight rendered ("... records 203 plant species
+  across 33 plots"), zero `.shiny-output-error` nodes, websocket connected. The
+  new readiness expression evaluates true on the live page; the old one false.
+- Change (scripts only; no runtime byte, receipt or manifest change):
+  `scripts/chromedriver_semantic_smoke.py` reads `insightReady` from
+  "<n> plant species across <n> plots" (keeping the old phrase for older
+  deployments); `scripts/check_custom_message_handlers.mjs` now fails CI if
+  `server.R` stops emitting that sentence or the smoke stops matching it (proved
+  by a temporary copy mutation). `write_release_receipts.mjs --check` still OK.
+- Not run locally: the ChromeDriver smoke itself (no chromedriver on this Mac).
+  Post-deploy runs only on push to master, so the receipt-exact smoke re-executes
+  when this merges; issue #21 closes with that explanation.
+
 ## 2026-10-20 - [Claude Fable 5.1] second release-byte promotion for PR #20
 
 - Validator rerun `39539903313` on `11d572973bb80f8715c552f0a0d0398edf9722be` passed
