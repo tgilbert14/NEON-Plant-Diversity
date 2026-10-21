@@ -2,6 +2,20 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-20 - [Claude Fable 5.1] second release-byte promotion for PR #20
+
+- Validator rerun `39539903313` on `11d572973bb80f8715c552f0a0d0398edf9722be` passed
+  every gate and stopped again at the committed-bytes guard because the runtime
+  receipt also covers `scripts/verify_bundle.R`, which the previous promotion
+  commit changed; the receipt moved, so the manifest (which lists the receipt)
+  moved. `data/search_index.rds` and `docs/cover-receipt.txt` were byte-identical.
+- Promoted that run's `manifest.json` and `www/runtime-receipt.txt` (now
+  `sha256:8a6ad67b14d799879449189e35dceb262d8e77561d5d10b84e8182bf9e1ba9d1`)
+  byte-exact; terra 1.8-50, no neonUtilities. No covered file changes in this
+  commit, so the next run reaches a fixed point. Local `--check` and
+  `verify_bundle.R` PASSED. Lesson: a promotion commit must touch only the four
+  release files and docs outside the receipt inventory.
+
 ## 2026-10-20 - [Claude Fable 5.1] release-byte promotion for PR #20
 
 - PR #20 head `6add300f2b4e9d330b4231b5a11c055053ee601d` ran validator
