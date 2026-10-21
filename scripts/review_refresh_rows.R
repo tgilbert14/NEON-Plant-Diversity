@@ -78,10 +78,20 @@ cat(sprintf("changed ground sites: %s\n",
             paste(review$site[!review$ground_equal], collapse = ",")))
 cat(sprintf("schema-class change sites: %s\n",
             paste(review$site[!review$schema_equal], collapse = ",")))
-if (!identical(review$site[!review$occ_equal], c("JORN", "KONZ", "SRER")) ||
-    !identical(review$site[!review$ground_equal], c("JORN", "KONZ", "SRER")) ||
+# The reviewer states which sites are EXPECTED to carry refreshed rows through
+# PDE_EXPECTED_CHANGED_SITES (comma-separated; empty = no site may change rows).
+# The 2026-08-03 review expected JORN,KONZ,SRER; the 2026-10-21 review expected
+# none (stamp-and-contract refresh). Any other family fails closed.
+expected_changed <- sort(unique(Filter(nzchar, trimws(strsplit(
+  Sys.getenv("PDE_EXPECTED_CHANGED_SITES", ""), ",", fixed = TRUE)[[1L]]))),
+  method = "radix")
+if (!identical(sort(review$site[!review$occ_equal], method = "radix"), expected_changed) ||
+    !identical(sort(review$site[!review$ground_equal], method = "radix"), expected_changed) ||
     length(unique(review$candidate_schema)) != 1L) {
-  stop("row review found an unexpected changed-site family or candidate schema",
+  stop(sprintf("row review found an unexpected changed-site family or candidate schema (expected changed sites: %s)",
+               if (length(expected_changed)) paste(expected_changed, collapse = ",") else "none"),
        call. = FALSE)
 }
-cat("REVIEW ASSERTIONS PASSED: 43 site row families are semantically unchanged; JORN, KONZ, and SRER are the only refreshed row families; every candidate bundle shares one retained schema.\n")
+cat(sprintf("REVIEW ASSERTIONS PASSED: %d site row families are semantically unchanged; refreshed row families: %s; every candidate bundle shares one retained schema.\n",
+            sum(review$occ_equal),
+            if (length(expected_changed)) paste(expected_changed, collapse = ", ") else "none"))

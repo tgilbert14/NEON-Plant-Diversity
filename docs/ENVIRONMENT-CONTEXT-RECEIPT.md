@@ -3,6 +3,7 @@
 Status: versioned static context; provenance is partial and this layer is not a Driver evidence source.
 
 2026-08-03 plant-refresh review: candidate `374fb704c548ca830f05c46d5fab1331e0027302` carries the environment directory byte-for-byte from parent `1734840a4f09e7acee356431ea1e57e9a637fb31`; both Git tree IDs are `3825e1f68fd6c99367d3959b64086a849c57538d`. No environment row, source label, or cutoff changed. The 34 site reference artifacts are likewise unchanged; only `data/expected/completeness_index.rds` was rebuilt against the refreshed plant snapshots.
+2026-10-21 plant-refresh review: candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` carries the environment directory byte-for-byte from master `280539c8713c16b6b13d47d5916e0f50a10edd24`; both Git tree IDs are `3825e1f68fd6c99367d3959b64086a849c57538d`, the same tree as the 2026-08-03 review. No environment row, source label, or cutoff changed. The 34 site reference artifacts and `data/expected/completeness_index.rds` are also carried unchanged from master (both `data/expected` tree IDs are `ddafa2a7667de6b6e375fb43a256b4fdd8464d08`); the completeness index had already been rebuilt under `plant-snapshot-v2` on master by PR #20, which is where STER and KONA moved to `pct_detected NA` with status "cropland: no native reference applies" and SRER to 52% (26 of 50).
 
 ## Identity
 

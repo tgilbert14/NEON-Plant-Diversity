@@ -2,6 +2,50 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-21 - [Claude Fable 5.1] refresh-review surfaces for candidate a9fc28f (PR #23)
+
+- Candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` was published by refresh run
+  `39546911504` (`workflow_dispatch`, `skip_download=false`) from master
+  `280539c8713c16b6b13d47d5916e0f50a10edd24`. The first dispatch `39542458760`
+  built an equivalent candidate but its publisher refused because master moved
+  mid-run (PR #22 merge); the stale-base guard worked as designed. Draft PR #23;
+  exact-head validator `39549684079` on a9fc28f failed only the refresh-review
+  surface gate (fifteen surfaces), which this pass completes.
+- Receipt on every bundle and `data/site_index.rds`: built `2026-10-21`, query
+  `2013-01` through `2026-09-30`, receipt id
+  `PDE-DP1.10058.001-query-through-2026-09-30-sha256-d7e9e0de7d8e624cb4e4f9d6d64b4a41ae58f09ead497ce1307983b797811cc7`,
+  raw digest `d7e9e0de...811cc7` (equal to the inventory file SHA-256),
+  neonUtilities `4.0.2`, builder `280539c`, `neonRelease=NA`; both indexes declare
+  `snapshot_contract = plant-snapshot-v2`. A digest quoted earlier from the refused
+  run's environment (`deec2058...`) was wrong and was corrected in PR #23.
+- Semantic review: `scripts/review_refresh_rows.R` (now parameterized by
+  `PDE_EXPECTED_CHANGED_SITES`, empty here) PASSED: 46/46 occurrence and 46/46
+  ground row multisets unchanged, one schema. `scripts/review_refresh_candidate.R`
+  was rewritten in base R to the plant-snapshot-v2 contract (it still sources no
+  app helper) and PASSED: 46-site identity, one receipt, independent grain-event
+  richness/plots and cover-event introduced-cover parity with `site_index`; every
+  per-site delta against master under the same rule is zero (1,375,149 occurrence
+  rows, 451,979 ground rows, 1,574 plots, 1,047 grain-event plots, 6,603 1 m²
+  units, 5,840 species-level names). The oracle surfaced one unregistered
+  precision step (per-plot 2 dp rounding before sums, 0.1 point at YELL); it is
+  now registered in SCIENCE-CONTRACT.md and held as an app follow-up.
+- Cover: social-card footer `NEON DP1.10058.001 · QUERY THROUGH 2026-09-30`,
+  rerasterized with Google Chrome 155.0.8059.85 at 1200×630 (inspected: footer
+  legible, art unchanged); SVG `5e56b679...`, PNG `c40e274c...` registered in
+  `scripts/check_cover.mjs` and IMAGE-PROVENANCE; cover receipt
+  `sha256:656709bd7746b8cdde4340a7436b31e5402a36a239ad957b4b9afd2c8f7760cb`;
+  runtime receipt unchanged (`sha256:6ab0fd66...`) because no runtime file changed.
+- Docs reviewed (Opus worker, lead-checked): README, DEPLOY, PLANT-SOURCE-RECEIPT,
+  SCIENCE-CONTRACT, DATA-TAKEAWAYS, EXPERT-REVIEW, DRIVER-KNOWLEDGE-PACKAGE,
+  SUITE-LEARNING-HANDOFF, ENVIRONMENT-CONTEXT-RECEIPT, docs/index.html.
+- Local PASS (R 4.5.2): parse, science fixtures, cover check, handler check,
+  receipts `--check`, `verify_bundle.R` (no legacy site-index warning; exact
+  manifest matches because no runtime file changed). Driver disposition unchanged:
+  `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`.
+- Next: exact-head validator on the pushed review head, then Tim merges; after
+  Connect republishes, post-deploy semantic smoke and desktop plus
+  390/375/361/360/320 public verification; record the deployed SHA here.
+
 ## 2026-10-20 - [Claude Fable 5.1] semantic smoke marker after PR #20 (issue #21)
 
 - Post-deploy run `39541330109` (`semantic_health`) reported DOWN for master merge

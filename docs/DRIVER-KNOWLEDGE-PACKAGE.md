@@ -17,13 +17,27 @@ Source app: NEON Plant Diversity Explorer (`DP1.10058.001`)
 
 - Repository: `tgilbert14/NEON-Plant-Diversity`
 - Product: NEON Plant Presence and Percent Cover `DP1.10058.001`
-- Validated data candidate: `374fb704c548ca830f05c46d5fab1331e0027302`
+- Validated data candidate under review: `a9fc28fdaebd318744dadde341c0cca55a91a899` (2026-10-21 refresh, run
+  `39546911504`, builder `280539c8713c16b6b13d47d5916e0f50a10edd24`, a direct child of master)
+- Previous data candidate (promoted 2026-08): `374fb704c548ca830f05c46d5fab1331e0027302`
 - Source-data merge: `a060ee64909431f7c694d32be9729f03cb7b04e0`
-- Current refreshed production/runtime authority:
+- 2026-08 refreshed production/runtime merge:
   `8fc0824493a52a1a7ca2054852a5d84b264a9c8c`
+- Current production: master `280539c8713c16b6b13d47d5916e0f50a10edd24`
+  (plant-snapshot-v2 code, 2026-08-03 receipt, pre-v2 site index; post-deploy
+  smoke `39544227599` passed)
 - Current documentation/default authority:
   `72924657ab93a05d28297616ed337bf55d4c8fbc`
-- Current source family: one matching 46-site `plant-source-receipt-v2`, built
+- Candidate source family: one matching 46-site `plant-source-receipt-v2`, built
+  `2026-10-21`, queried from `2013-01` through closed cutoff `2026-09-30` with
+  `neonUtilities 4.0.2`, receipt ID
+  `PDE-DP1.10058.001-query-through-2026-09-30-sha256-d7e9e0de7d8e624cb4e4f9d6d64b4a41ae58f09ead497ce1307983b797811cc7`,
+  raw-inventory digest `d7e9e0de7d8e624cb4e4f9d6d64b4a41ae58f09ead497ce1307983b797811cc7`, builder `280539c8713c16b6b13d47d5916e0f50a10edd24`,
+  `neonRelease=NA`, and a site index declaring `snapshot_contract =
+  plant-snapshot-v2`. No occurrence or ground row changed at any site; 43 of 46
+  index rows move because the index now follows plant-snapshot-v2.
+- Current production source family (master `280539c8713c16b6b13d47d5916e0f50a10edd24`): one matching 46-site
+  `plant-source-receipt-v2`, built
   `2026-08-03`, queried from `2013-01` through closed cutoff `2026-07-31`, raw-
   inventory digest
   `48167b04cc689fbcaaa3e83bdac7cc7ed1c8ac34f791e5e76d3f229862d61ac6`,
@@ -71,6 +85,11 @@ the sampled-empty opportunity ledger, a calendar intersection would not establis
 the registered annual denominator. The current Driver Plant pin is
 `73c92c6c67f7c982eaae76950f718ce932ff7a52`; its consumed `data/sites` tree
 differs from the promoted `8fc0824` family. A blind repin is therefore forbidden.
+The 2026-10-21 candidate does not change that: its rows equal the promoted family's,
+but its stamps, raw digests, and site index differ, and the Driver pin still names
+neither. Even after promotion, any repin must go through the measured join and
+old/new parity below, and the Driver must expect contract-driven index movement
+(for example SRER 161 to 203 species) with no underlying row change.
 
 This yields four separate facts:
 
@@ -122,6 +141,18 @@ Learning classes: `app-local`, `suite-platform`, `scientific-contract`, and
 `Driver-impacting` (context/held; no byte change).
 
 ## Publication receipt
+
+2026-10-21 candidate (not yet promoted):
+
+- Candidate commit: `a9fc28fdaebd318744dadde341c0cca55a91a899`; builder and master base: `280539c8713c16b6b13d47d5916e0f50a10edd24`.
+- Refresh run: `39546911504`; superseded stale-base run: `39542458760`.
+- Candidate `data/site_index.rds` SHA-256 (committed bytes):
+  `44600682c60ecc56d74d54da3bfac9d388dbd6d10dfe67ec34ecfebd8644dd4c`.
+- Exact-head CI run, merge commit, promoted manifest SHA-256, Pages, Connect, and
+  production-health runs: to be recorded at promotion.
+
+2026-08 promotion record (its site-index SHA-256 still matches master `280539c`;
+the manifest has changed since and is not re-recorded here):
 
 - Validated data candidate: `374fb704c548ca830f05c46d5fab1331e0027302`.
 - Source-data merge: `a060ee64909431f7c694d32be9729f03cb7b04e0`.
