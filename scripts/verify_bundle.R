@@ -413,9 +413,18 @@ if (!is.null(search)) {
           rk <- paste(rebuilt_taxa$site, rebuilt_taxa$scientificName, sep = "\r")
           j <- match(keys, rk)
           value_cols <- c("family", "nativity", "mean_cover", "n_plots", "plots_with_cover")
-          same <- !anyNA(j) && all(vapply(value_cols, function(column)
-            isTRUE(all.equal(as.data.frame(search$taxa)[[column]], rebuilt_taxa[[column]][j],
-                             tolerance = 1e-10, check.attributes = FALSE)), logical(1)))
+          # mean_cover is stored rounded to 2 dp; a sum that lands within binary
+          # noise of an .xx5 boundary rounds differently across BLAS/platforms
+          # (five taxon-site rows between macOS and the pinned Linux validator).
+          # Presence counts and labels stay exact; cover tolerates one half unit
+          # of its published rounding on each side (0.01 apart). The validator's own two-build check still
+          # requires identical bytes.
+          same <- !anyNA(j) && all(vapply(value_cols, function(column) {
+            a <- as.data.frame(search$taxa)[[column]]; b <- rebuilt_taxa[[column]][j]
+            if (identical(column, "mean_cover"))
+              all((is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & abs(a - b) <= 0.01 + 1e-9))
+            else isTRUE(all.equal(a, b, tolerance = 1e-10, check.attributes = FALSE))
+          }, logical(1)))
           if (!same) note("search taxon presence/cover values differ from search_taxa_for_site(F, Q)")
         }
       }

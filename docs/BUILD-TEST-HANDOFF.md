@@ -2,6 +2,28 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-20 - [Claude Fable 5.1] release-byte promotion for PR #20
+
+- PR #20 head `6add300f2b4e9d330b4231b5a11c055053ee601d` ran validator
+  `39196102150`: parse, science, portability, two-build search index, two-build
+  manifest, bundle/reference/index verification and offline source all passed; the
+  run stopped only at the committed-release-byte equality guard, by design.
+- Downloaded artifact `12162870484`
+  (`plant-diversity-release-candidate-6add300f...`, digest
+  `sha256:bf2ec96aa1bcf7e32ccc79602632f10fe2fa5fcdcc79bdb0ff374fb6788238fc`)
+  and promoted its four files byte-exact: `manifest.json` (packages identical to
+  the committed manifest, terra 1.8-50, no neonUtilities; only file checksums
+  changed), `data/search_index.rds`, `www/runtime-receipt.txt` (now
+  `sha256:9362f6d985a48d58eee797ea75fb03faffd62118198ce4dbe9a73f60c2ef7109`),
+  `docs/cover-receipt.txt` (unchanged). Nothing hand-edited.
+- Local `verify_bundle.R` against the promoted index first failed its new
+  search-value check on five taxon-site `mean_cover` values that round 0.01
+  apart between macOS and the pinned Linux validator (binary summation noise at
+  an .xx5 boundary). The check now tolerates one published rounding unit on
+  `mean_cover` only; counts and labels stay exact and the validator's two-build
+  byte equality is untouched. Local verifier then PASSED with the registered
+  site-index legacy warning. Next: rerun the validator on the amended head.
+
 ## 2026-10-18 20:45:00 MST - [Claude Fable 5.1] plant-snapshot-v2 candidate (audit items 3 and 11)
 
 - Scope began from clean exact `origin/master`
