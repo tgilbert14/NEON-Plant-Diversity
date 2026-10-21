@@ -2,6 +2,33 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-21 - [Claude Fable 5.1] production closeout: plant-snapshot-v2 data refresh deployed
+
+- Deployed application SHA: master merge `d39b8d4adc9107d6f86a1698349815189c4ede2a`
+  (PR #23, review head `d86377c0de4c1ea59255ac05a2b60d72c3d54afd`, candidate
+  `a9fc28f`). Exact-head validator `39551161098` passed on d86377c; Pages
+  `39615035539` and post-deploy semantic smoke `39615036337` (`semantic_health`,
+  receipt-exact) passed on d39b8d4. Runtime receipt
+  `sha256:6ab0fd66418da09494a84e40811029cf1e1b42f95b75c551a5624b9f5e675cbb`;
+  cover receipt `sha256:656709bd7746b8cdde4340a7436b31e5402a36a239ad957b4b9afd2c8f7760cb`.
+- Public verification (built-in browser, Connect `?site=SRER`): app and site
+  ready, hero 203 species (2023 full-grain survey) / 33 plots / 9.6% introduced
+  cover (2024 bout 1) / 10 introduced species, event receipt line present,
+  overview insight rendered, zero output errors; splash cards now read the
+  plant-snapshot-v2 index (SRER 203 · 9.6%, CPER 92 · 0.4%, JORN 66 · 0.2%,
+  STER 30 · 99.9%). Widths 390, 375, 361, 360 and 320: no horizontal overflow,
+  status pill, four KPI cards, receipt and event lines intact. Pages footer reads
+  "through September 30, 2026; retained observations currently end in 2024" and
+  serves the rerasterized 922,978-byte og-image.png.
+- This closes audit items 3 (P0) and 11 (P1) in production. Documentation-only
+  closeout; no manifest, runtime, cover or bundled-data input changes here.
+- Open follow-ups: Driver repository evidence register, implication backlog,
+  revamp plan and playbook entries (disposition `scientific-contract` +
+  `app-local`; Driver `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`);
+  the fleet's flora.md still certifies the retired per-plot snapshot; the
+  per-plot 2 dp cover rounding registered in SCIENCE-CONTRACT.md; the static
+  Expected-tab info_pops are not cropland-aware.
+
 ## 2026-10-21 - [Claude Fable 5.1] refresh-review surfaces for candidate a9fc28f (PR #23)
 
 - Candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` was published by refresh run
