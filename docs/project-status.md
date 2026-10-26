@@ -1,6 +1,6 @@
 # Project status
 
-Last updated 2026-10-22.
+Last updated 2026-10-26.
 
 ## Current state
 
@@ -48,12 +48,16 @@ Last updated 2026-10-22.
   `neon-audit-2026-10-18/reports/status/plant-diversity.md`, outside the repo).
 - PR #20: the two-event snapshot contract (audit items 3 and 11). PR #23: the
   first refresh built under it. PR #22: the post-deploy smoke marker.
-- This round's PR: release pin and DOI, NEON change-log notices, cover
+- PR #26 (this round's PR): release pin and DOI, NEON change-log notices, cover
   denominator over sampled quadrats, ground cover on the cover event, exact
   duplicate rows removed at build time, clickable QC flags with CSV, in-app data
   dictionary, page title and language, map-picker fixes, accessibility and copy
   fixes, an independent oracle in `scripts/verify_bundle.R`, and a refresh that
-  publishes only when content changes.
+  publishes only when content changes. It carries the validated RELEASE-2026
+  candidate from refresh run 40364543238. No observation changed: 5,678 exact
+  duplicate occurrence rows and 921 ground rows were dropped, six site-index
+  introduced-cover values moved by 0.1 to 0.5 points, and SRER stays at 203
+  species, 33 plots and 9.6% introduced cover.
 
 ## Deliberately deferred
 
@@ -74,3 +78,10 @@ Last updated 2026-10-22.
 - Connect Cloud sends no CSP, HSTS or frame-ancestors header. That is a platform
   setting; it can be set at a proxy if a custom domain ever fronts the app.
 - Switching releases automatically. The workflow only reports a newer release.
+- A keepalive job for the 60-day schedule rule. GitHub turns off a public repo's
+  schedule after 60 days without activity; a merged commit re-arms it. Ground
+  Beetle trials the keepalive job first.
+- Chao2's sampling-unit count. It counts quadrats with a species-level record,
+  not every sampled quadrat (18 sites differ; TEAK 86 of 120, JORN 155 of 198).
+  The (m-1)/m factor moves by at most 0.33%, which is at most 0.16 species of
+  Chao2. Aligning it is a registered estimator change for a later pass.

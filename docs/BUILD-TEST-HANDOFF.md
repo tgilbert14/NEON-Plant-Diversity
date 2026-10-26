@@ -2,6 +2,73 @@
 
 This is the release boundary for Plant Diversity. A local success, a green deployment log, and a healthy public app are three different receipts; release requires all three.
 
+## 2026-10-26 17:47 UTC - [Claude Opus 5.5] finish pass: audit closeout and RELEASE-2026 candidate (PR #26)
+
+- Scope: every 2026-10-18 audit finding located in this repo (finish ledger key `plant-diversity`), the
+  cross-cutting list and the suite rows that name it. Commits: `75049c4` (code, gates, workflows, copy, cover),
+  `8e06ab7` (de-duplicate on the retained columns), `587378f` and `486304d` (three first-run pipeline fixes), `c5ec0becef5e64f73cdb893b15ec5e1c7ee41d62`
+  (validated data), and these review surfaces. Planned and reviewed on Opus 5.5 at max because Fable was capped;
+  workers on Opus 5.5 at medium.
+- Data: refresh run `40364543238` (`workflow_dispatch` from `fix/finish-audit-2026-10`, `skip_download=false`,
+  builder `486304df47c87068386d306b597a0655351b19fc`) fetched NEON RELEASE-2026 and built twice with identical
+  bytes. It passed the validator (independent oracle, release pin, change log, zero exact duplicates, runtime
+  receipt, manifest, offline source) and uploaded `plant-diversity-refresh-486304d...`. Its publisher stopped
+  at "Only master publishes", by design. The artifact's `data/`, `data-sample/demo.rds`, `www/runtime-receipt.txt`
+  and `manifest.json` were promoted byte for byte. Receipt: built `2026-10-26`, query `2013-01` through
+  `2026-09-30`, release `RELEASE-2026`, receipt ID `PDE-DP1.10058.001-query-through-2026-09-30-sha256-3e484580d6c3198cb9eff6c1e300a9da31fa18d82c91b31daae450408f19e6bc`, digest `3e484580d6c3198cb9eff6c1e300a9da31fa18d82c91b31daae450408f19e6bc` (equal to the inventory file
+  SHA-256), neonUtilities `4.0.2`, change log with 19 entries.
+- Failed attempts and cleanup: run `40348600215` at `8e06ab7` fetched cleanly. Its runners hung twice in
+  `setup-r` (fetch on attempt 1, build on attempt 2; a plain cancel did not take, force-cancel did), and its third attempt stopped at the content-key
+  guard, which rejected the colon in `occ:<SITE>`. A local replay of the remaining validator steps on that
+  run's raw artifact (`gh run download`, local bundle, `verify_bundle.R`) showed that the inventory check would
+  refuse `data/source` once the change log sat there. Both are fixed in `587378f` with a regression test. Run
+  `40359047336` at `587378f` then rejected ABBY and BARR: the citation check looked for the lower-case DOI
+  suffix, which NEON's BibTeX carries only in the entry key (the doi field reads `10.48443/9G4S-HQ52`). DOI
+  names are case-insensitive; `486304d` compares without case and adds a test. Run `40364543238` itself
+  hung in `setup-r` twice more (fetch on attempt 1, build on attempt 2); each was force-cancelled and only
+  the unfinished jobs rerun, and attempt 3 built the candidate from attempt 2's raw artifact.
+  The scratch worktree was removed.
+- Review: `scripts/review_refresh_rows.R` (`PDE_EXPECTED_CHANGED_SITES` empty) PASSED. There is no new or changed
+  observation: 44 occurrence and 35 ground families changed only by exact-duplicate removal (5,678 and 921
+  rows), under one schema. `scripts/review_refresh_candidate.R` PASSED: rebuilt under one rule, no headline
+  moves at any site. Six index introduced-cover values move 0.1 to 0.5 points (GUAN, LAJA, MOAB, SOAP, WOOD,
+  YELL) because of the sampled-quadrat denominator. SRER is unchanged at 203 / 33 / 9.6% (Chao2 191.9 from
+  157); JORN summed species mean cover goes from 5.68 to 4.15.
+- Local PASS (R 4.5.2, macOS): parse, `test_science_contracts.R`, `test_build_script_portability.R`,
+  `test_raw_portability.R`, `test_ui_contracts.R`, handler check (6 handlers), `check_cover.mjs`, receipts
+  `--check`, offline app source, and `verify_bundle.R` on the promoted bytes. Suite lint is GREEN (0 red,
+  0 yellow).
+- Browser check, local app on the earlier bundles:
+  - title and `lang`;
+  - hero aria labels;
+  - `?site=` kept and cleared;
+  - after a deep link, change site shows 46 markers;
+  - popup Explore with no RangeError;
+  - QC flag modal and CSV;
+  - phone fold at 375x812 and 320;
+  - 44 px radios.
+
+  In the pane, the Expected tab stayed "recalculating" until a resize nudge. Live master does the same, so it
+  is a harness artifact. The WebKit slab was not re-measured.
+- Cover: the footer and the social card name RELEASE-2026. Cover receipt
+  `sha256:83cb694f36278736d9200a2fdfaf4e8043b7f7ea5ef476582ac910895dcdfb40`; runtime receipt `sha256:f2c9f1c2240d923a4254f6e0ab120db07fa08510b05314638481bd4507d435c9`.
+- Residual risks:
+  - Chao2's sampling-unit count still counts quadrats with a species-level record (18 sites differ from the
+    sampled count; TEAK 86 of 120), so its (m-1)/m factor moves by at most 0.33%, at most 0.16 species of Chao2.
+  - The 60-day schedule rule: the merge re-arms it, and the keepalive job waits for the Ground Beetle trial.
+- Driver disposition unchanged: `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`. The Atlas reads
+  this repo's bundles at the checked-out commit. Its owner was told the measured effect of a rebuild: no
+  richness or plot change in 439 site-years; Hill q1 and q2 change in 96 (at most about 2 effective species);
+  introduced share changes in 72 (at most 0.86 points).
+- Next:
+  - exact-head CI on the PR head;
+  - Tim merges with a merge commit, not squash;
+  - Connect republishes;
+  - post-deploy smoke, then desktop plus 390/375/361/360/320 public verification;
+  - record the deployed SHA here.
+
+  Owner steps: `CARTO_BASEMAP_KEY`, the master ruleset, auto-delete of head branches.
+
 ## 2026-10-21 - [Claude Fable 5.1] production closeout: plant-snapshot-v2 data refresh deployed
 
 - Deployed application SHA: master merge `d39b8d4adc9107d6f86a1698349815189c4ede2a`

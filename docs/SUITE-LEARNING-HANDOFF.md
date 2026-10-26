@@ -1,8 +1,18 @@
 # Suite Learning Handoff
 
-App: Plant Diversity · pass 3 production closeout plus 2026-08-03 and 2026-10-21 source-refresh reviews
+App: Plant Diversity · pass 3 production closeout plus 2026-08-03, 2026-10-21 and 2026-10-26 source-refresh reviews
 
 This file is the reusable learning package for the next companion app and the final Driver Cascade synthesis.
+
+## 2026-10-26 finish-pass addendum (RELEASE-2026 candidate, PR #26)
+
+- A guard and the script it guards must share one vocabulary. The content-key step's safety pattern never allowed a colon, and `scripts/content_key.R` reports `occ:<SITE>`; the first real run stopped there. Test a guard against the script's actual output, not the example in its comment.
+- Check named files, not a directory's file count. The raw-inventory check required `data/source` to hold exactly one file and would have refused the build once NEON's change log was saved beside it.
+- Replay the validator on the run's own raw artifact before re-dispatching. `gh run download` of the fetched raw files and a local build plus `verify_bundle.R` found the second defect in minutes; each CI round trip costs about 30 minutes.
+- De-duplicate on the columns you keep. Taking `distinct()` with `endDate` and then dropping `endDate` left exact duplicates in the bundle; distinct on the retained columns removed 5,678 occurrence and 921 ground rows and moved no headline.
+- Pinning the release changed no row: the unpinned query already returned the newest release. Pin it anyway, because a citation, a DOI and a release watch need the name.
+- A runner can hang in `setup-r`. When cancel does not take, force-cancel the run and rerun only the failed jobs; the fetched raw artifact stays with the run.
+- Classification: `app-local`, `scientific-contract` (sampled-quadrat cover denominator, duplicate removal), `suite-platform` (release pin, change log, content key, independent oracle). Driver disposition stays `CONTEXT / HOLD DRIVER INGESTION / NO DRIVER BYTE CHANGE`.
 
 ## 2026-10-21 refresh-review addendum
 
