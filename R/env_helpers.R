@@ -59,7 +59,9 @@ PLANT_METRICS <- list(
 
 # ---- load + shape --------------------------------------------------------
 load_env <- function(site) {
-  if (is.null(site) || !nzchar(site)) return(NULL)
+  # allowlist before any path is built: a NEON site code only (no traversal)
+  if (!is.character(site) || length(site) != 1L || is.na(site) ||
+      !grepl("^[A-Z0-9]{4}$", site)) return(NULL)
   f <- file.path(ENV_DIR, paste0(site, ".rds"))
   if (!file.exists(f)) return(NULL)
   e <- tryCatch(readRDS(f), error = function(err) NULL)
@@ -108,8 +110,8 @@ env_annual <- function(env, layer) {
 }
 
 # annual plant-metric series: one value per survey year for the chosen metric
-plant_metric_series <- function(occ, metric = "richness") {
-  out <- balanced_plant_metric_series(occ, metric)
+plant_metric_series <- function(occ, metric = "richness", ground = NULL) {
+  out <- balanced_plant_metric_series(occ, metric, ground = ground)
   if (is.null(out) || nrow(out) < 2) return(NULL)
   out$value <- round(out$value, if (metric == "richness") 2 else 1)
   out

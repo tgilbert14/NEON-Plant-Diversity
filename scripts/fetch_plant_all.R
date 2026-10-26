@@ -7,6 +7,7 @@
 suppressPackageStartupMessages(library(neonUtilities))
 source("R/site_metadata.R")
 source("R/source_receipt.R")
+source("R/plant_release.R")
 source("scripts/plant_raw_portability.R")
 
 read_required_env <- function(name) {
@@ -21,6 +22,37 @@ start_d <- Sys.getenv("PDE_FETCH_START", "2013-01")
 end_d <- read_required_env("PDE_FETCH_END")
 query_package <- read_required_env("PDE_QUERY_PACKAGE")
 token <- read_required_env("NEON_TOKEN")
+release_pin <- read_required_env("PDE_NEON_RELEASE")
+if (!identical(release_pin, PLANT_NEON_RELEASE))
+  stop(sprintf(
+    "PDE_NEON_RELEASE (%s) must equal PLANT_NEON_RELEASE in R/plant_release.R (%s)",
+    release_pin, PLANT_NEON_RELEASE
+  ), call. = FALSE)
+release_doi <- plant_release_doi(release_pin)
+if (is.na(release_doi))
+  stop(sprintf("No DOI is registered for %s in R/plant_release.R", release_pin),
+       call. = FALSE)
+release_doi_suffix <- sub("^https://doi[.]org/10[.]48443/", "", release_doi)
+
+# The citation element loadByProduct returns for the pinned release must name
+# that release's DOI; a missing element is a warning, not a failure.
+citation_problems <- function(result, site) {
+  citation_names <- grep("^citation_10058", names(result), value = TRUE)
+  if (!length(citation_names)) {
+    message(sprintf(
+      "WARNING [%s]: loadByProduct returned no citation_10058* element; release checked from row values only",
+      site
+    ))
+    return(character(0))
+  }
+  text <- paste(unlist(result[citation_names], use.names = FALSE), collapse = " ")
+  if (!plant_citation_names_release(text, release_pin))
+    return(sprintf(
+      "citation element(s) %s do not name the %s DOI suffix %s",
+      paste(citation_names, collapse = ","), release_pin, release_doi_suffix
+    ))
+  character(0)
+}
 
 if (!grepl("^[0-9]{4}-[0-9]{2}$", start_d) ||
     !grepl("^[0-9]{4}-[0-9]{2}$", end_d))
@@ -65,7 +97,8 @@ for (site in requested) {
     neonUtilities::loadByProduct(
       dpID = "DP1.10058.001", site = site,
       startdate = start_d, enddate = end_d,
-      package = query_package, check.size = "FALSE", token = token
+      package = query_package, release = release_pin,
+      include.provisional = FALSE, check.size = "FALSE", token = token
     ),
     error = function(error) {
       message(sprintf("FETCH FAILED [%s]: %s", site, conditionMessage(error)))
@@ -90,7 +123,12 @@ for (site in requested) {
     plant_source_row_problems(
       result$div_10m2Data100m2Data, site, "div_10m2Data100m2Data",
       query_start_date, query_cutoff_date
-    )
+    ),
+    plant_release_row_problems(result$div_1m2Data, release_pin, "div_1m2Data"),
+    plant_release_row_problems(
+      result$div_10m2Data100m2Data, release_pin, "div_10m2Data100m2Data"
+    ),
+    citation_problems(result, site)
   )
   if (length(semantic_problems)) {
     message(sprintf(
@@ -125,6 +163,10 @@ for (site in requested) {
     plant_source_row_problems(
       result$div_10m2Data100m2Data, site, "div_10m2Data100m2Data",
       query_start_date, query_cutoff_date
+    ),
+    plant_release_row_problems(result$div_1m2Data, release_pin, "div_1m2Data"),
+    plant_release_row_problems(
+      result$div_10m2Data100m2Data, release_pin, "div_10m2Data100m2Data"
     )
   )
   if (length(materialized_semantic_problems)) {
@@ -182,5 +224,5 @@ if (length(failed) || !identical(actual, requested) || length(small)) {
   ), call. = FALSE)
 }
 
-cat(sprintf("RAW CANDIDATE PASSED: %d/%d sites through %s.\n",
-            length(actual), length(requested), end_d))
+cat(sprintf("RAW CANDIDATE PASSED: %d/%d sites through %s, %s (%s).\n",
+            length(actual), length(requested), end_d, release_pin, release_doi))

@@ -65,7 +65,7 @@ requireText(/How much can one square hold\?/i, "poster hook is missing");
 requireText(/Explore plant communities from one square metre outward\./i, "poster promise is missing");
 requireText(/Pick a place/i, "poster CTA must be contextual");
 for (const [source, surface] of [[html, "Pages"], [ui, "in-app"]]) {
-  if (/Editorial illustration—not a field photograph or data record\./i.test(source)) {
+  if (/Editorial illustration\u2014not a field photograph or data record\./i.test(source)) {
     fail(`${surface} poster must not restore the visible illustration disclaimer`);
   }
   if (/<figcaption\b/i.test(source)) {
@@ -73,7 +73,7 @@ for (const [source, surface] of [[html, "Pages"], [ui, "in-app"]]) {
   }
 }
 requireText(/nested survey grains/i, "cover must state the observation scope");
-requireText(/not productivity, total landscape diversity, ecological health/i, "cover must state the primary claim boundary");
+requireText(/not (?:measure )?productivity, total landscape diversity, ecological health/i, "cover must state the primary claim boundary");
 requireText(/DP1\.10058\.001/i, "cover must identify the source data product");
 requireText(/Explore 46 places/i, "cover must identify the 46-place bundle scope");
 if (count(/https:\/\/tgilbert14\.github\.io\/NEON-Driver-Cascade\//g) !== 1) {
@@ -116,7 +116,7 @@ const imageAssets = [
   ["docs/assets/plant-nested-quadrat-hero-mobile-v1-source.png", 941, 1672, "a729f710a1580f89fc8db000c738321db7af487ad9a759f71a0445d427856f01"],
   ["docs/assets/cover-generated/plant-nested-quadrat-hero-v1.jpg", 1774, 887, "6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825"],
   ["docs/assets/cover-generated/plant-nested-quadrat-hero-mobile-v1.jpg", 941, 1672, "8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38"],
-  ["docs/og-image.png", 1200, 630, "c40e274c655a8d7cf1d7377328285226268bcdd73dc2c0720b349134505fbbac"],
+  ["docs/og-image.png", 1200, 630, "50a0984786f9e9fbf3f8bc5bc1408e6b1a1be4661cf566778e8c101bbfde8543"],
   ["www/assets/plant-nested-quadrat-hero-v1.jpg", 1774, 887, "6f150f3949082ecefa0d94055d9ac7ff5e36701d73debb1d03d2dc8c39314825"],
   ["www/assets/plant-nested-quadrat-hero-mobile-v1.jpg", 941, 1672, "8856dbee5ba5883da18b75d68e5dafde8ea8f14707160e4cf3f2c2352d870d38"],
 ];
@@ -134,9 +134,59 @@ for (const [file, expectedWidth, expectedHeight, expectedHash] of imageAssets) {
   }
 }
 
-const svgHash = sha256(readFileSync(resolve(root, "docs/assets/cover-generated/plant-social-card-v1.svg")));
-if (svgHash !== "5e56b679ff72fc7402b32bff9cad982002dfe425118d09a8ae814327becf2bd9") {
+const socialCardSvg = readFileSync(resolve(root, "docs/assets/cover-generated/plant-social-card-v1.svg"));
+const svgHash = sha256(socialCardSvg);
+if (svgHash !== "3c47fcbd9dd71af98ba8c216105d5611249286e79283b46b3450c8fbdaaa82b6") {
   fail(`social-card SVG hash changed: ${svgHash}`);
+}
+
+// Suite copy rule: no em dashes on any visible cover surface, literal or encoded.
+const emDash = /\u2014|&mdash;|&#8212;|&#x0*2014;/gi;
+for (const [source, surface] of [
+  [html, "docs/index.html"],
+  [socialCardSvg.toString("utf8"), "docs/assets/cover-generated/plant-social-card-v1.svg"],
+]) {
+  const hits = count(emDash, source);
+  if (hits) fail(`${surface} contains ${hits} em dash(es) (U+2014 or an entity); use a comma, colon, period or middle dot`);
+}
+
+// In-app document identity: the page_fillable() call itself must pass the
+// registered title and language and must not use window_title or fillable.
+function topLevelCallText(source, callPattern) {
+  const start = source.search(callPattern);
+  if (start < 0) return null;
+  let index = source.indexOf("(", start);
+  let depth = 0;
+  let quote = "";
+  let out = "";
+  for (; index < source.length; index += 1) {
+    const ch = source[index];
+    if (quote) {
+      if (depth === 1) out += ch;
+      if (ch === "\\") { index += 1; if (depth === 1) out += source[index] ?? ""; continue; }
+      if (ch === quote) quote = "";
+      continue;
+    }
+    if (ch === "#") {
+      const end = source.indexOf("\n", index);
+      index = end < 0 ? source.length : end - 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { quote = ch; if (depth === 1) out += ch; continue; }
+    if (ch === "(" || ch === "[" || ch === "{") { depth += 1; if (depth === 1) continue; }
+    if (ch === ")" || ch === "]" || ch === "}") { depth -= 1; if (depth === 0) return out; }
+    if (depth === 1) out += ch;
+  }
+  return null;
+}
+const pageCall = topLevelCallText(ui, /bslib::page_fillable\s*\(|\bpage_fillable\s*\(/);
+if (pageCall === null) {
+  fail("ui.R must build the app with a page_fillable() call");
+} else {
+  if (!/\btitle\s*=\s*"/.test(pageCall)) fail('ui.R page_fillable() must pass title = "..."');
+  if (!/\blang\s*=\s*"en"/.test(pageCall)) fail('ui.R page_fillable() must pass lang = "en"');
+  if (/\bwindow_title\b/.test(pageCall)) fail("ui.R page_fillable() must not pass window_title (use title)");
+  if (/\bfillable\s*=/.test(pageCall)) fail("ui.R page_fillable() must not pass fillable =");
 }
 
 for (const match of html.matchAll(/<a\b[^>]*target="_blank"[^>]*>/gi)) {

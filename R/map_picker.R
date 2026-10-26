@@ -1,10 +1,10 @@
 # ==========================================================================
-# map_picker.R — the reusable national site-PICKER map for the NEON suite.
+# map_picker.R: the reusable national site-PICKER map for the NEON suite.
 # The feature that defines the flagship: a US map of every bundled site, tap a
 # dot to load it. Marker size = sampling support (log1p-scaled), colour = a
 # headline context metric. Raw biodiversity outcomes must never drive national
 # marker size because site effort differs. CRITICAL: the leafletOutput is STATIC in ui.R (placed via
-# mapPickerUI) — NEVER inside a renderUI — because a leaflet htmlwidget delivered
+# mapPickerUI), NEVER inside a renderUI, because a leaflet htmlwidget delivered
 # through renderUI loses the dependency-deliver → re-bind race on Posit Connect
 # Cloud and the spinner hangs forever. mapPickerServer keeps it alive while the
 # splash is hidden (suspendWhenHidden=FALSE) so the proxy stays valid.
@@ -35,11 +35,11 @@ mapPickerUI <- function(id, height = "560px", spinner = "#2f7fb5") {
 # label_fn  : function(one-row df) -> HTML string for the hover label
 # popup_fn  : OPTIONAL function(one-row df) -> HTML string for a CLICK popup. When
 #   supplied, a marker click OPENS this popup (an Explore | About choice card)
-#   instead of auto-selecting the site — the load then comes from the popup's
+#   instead of auto-selecting the site, the load then comes from the popup's
 #   Explore button (which sets input$siteExplore). picked() is NOT fired in that
 #   mode, so a tap can't silently load behind the popup.
 # RETURNS a reactiveVal of the tapped site code. The CALLER observes it and loads
-# the site IN THE MAIN SERVER — do NOT load inside the module: shinyjs::hide("splash")
+# the site IN THE MAIN SERVER, do NOT load inside the module: shinyjs::hide("splash")
 # called from a module session namespaces the id ("picker-splash") and silently no-ops.
 mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, popup_fn = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
@@ -51,8 +51,13 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, p
       pops <- if (!is.null(popup_fn))
         vapply(seq_len(nrow(st)), function(i) as.character(popup_fn(st[i, , drop = FALSE])), character(1))
         else NULL
-      pop_opts <- if (!is.null(popup_fn)) leaflet::popupOptions(maxWidth = 300, minWidth = 230,
-        autoPan = TRUE, autoPanPadding = c(40, 55), keepInView = TRUE,
+      # keepInView = FALSE: with it on, a window resize while the splash is hidden
+      # re-pans the open popup into a 0-px map and Leaflet recurses until the stack
+      # overflows (RangeError on every popup Explore, PD-20). autoPan still pans the
+      # popup into view while the map is visible. 260/200 px + 12 px padding keep
+      # the card inside a 280-330 px phone map (PD-44).
+      pop_opts <- if (!is.null(popup_fn)) leaflet::popupOptions(maxWidth = 260, minWidth = 200,
+        autoPan = TRUE, autoPanPadding = c(12, 12), keepInView = FALSE,
         closeButton = TRUE, closeOnClick = FALSE, className = "pm-pop-card") else NULL
       leaflet::leaflet(st, options = leaflet::leafletOptions(minZoom = 2, worldCopyJump = TRUE)) %>%
         add_suite_basemap("light_all", noWrap = TRUE) %>%  # keyed CARTO Positron (global.R helper; CARTO watermarks unkeyed tiles)
@@ -70,17 +75,40 @@ mapPickerServer <- function(id, site_table, radius_metric, color_fn, label_fn, p
         # 0-width container, so we FORCE a reflow (dispatch resize) on a few timers,
         # invalidateSize each time, and watch for the container finally getting width
         # via ResizeObserver. Belt-and-suspenders, but reliably fills the map.
-        htmlwidgets::onRender("function(el, x) { var m = this;
-          function kick(){ try { window.dispatchEvent(new Event('resize')); m.invalidateSize(); } catch(e){} }
+        # (2026-10 hardening, PD-19/20/44) every invalidateSize is guarded by a
+        # non-zero width: on a hidden map it loops with an open popup's autoPan.
+        # A render that arrived while the container was 0 px is parked by leaflet
+        # in pendingRenderData and only the widget's own resize() replays it, so
+        # the ResizeObserver and the timed kicks call that first. On a narrow
+        # (phone) map the view fits every site marker so AK, HI and PR show.
+        htmlwidgets::onRender("function(el, x) { var m = this; var fitted = false;
+          function refit(){
+            try {
+              var w = window.HTMLWidgets && el.id ? HTMLWidgets.find('#' + el.id) : null;
+              if (w && typeof w.resize === 'function' && el.clientWidth > 0 && el.clientHeight > 0) w.resize(el.clientWidth, el.clientHeight);
+              else if (el.clientWidth > 0) m.invalidateSize();
+            } catch(e){}
+          }
+          function fitNarrow(){
+            if (fitted || !(el.clientWidth > 0) || el.clientWidth >= 500) return;
+            try {
+              var pts = [];
+              m.eachLayer(function(l){ if (l instanceof L.CircleMarker && l.getLatLng) pts.push(l.getLatLng()); });
+              if (pts.length) m.fitBounds(L.latLngBounds(pts), { padding: [14, 14], animate: false });
+              else m.setZoom(3, { animate: false });
+              fitted = true;
+            } catch(e){}
+          }
+          function kick(){ try { if (el.clientWidth > 0) window.dispatchEvent(new Event('resize')); refit(); fitNarrow(); } catch(e){} }
           [120, 400, 900, 1800, 3000].forEach(function(t){ setTimeout(kick, t); });
-          if (window.ResizeObserver) { var ro = new ResizeObserver(function(){ if (el.clientWidth > 0) m.invalidateSize(); }); ro.observe(el); }
-          window.addEventListener('resize', function(){ m.invalidateSize(); }); }")
+          if (window.ResizeObserver) { var ro = new ResizeObserver(function(){ if (el.clientWidth > 0) { refit(); fitNarrow(); } }); ro.observe(el); }
+          window.addEventListener('resize', function(){ if (el.clientWidth > 0) m.invalidateSize(); }); }")
     })
     # keep the map bound after the splash hides, so leafletProxy stays valid
     shiny::outputOptions(output, "map", suspendWhenHidden = FALSE)
     # expose the tapped site; the main server observes this and loads it. BUT when
     # popup_fn is supplied the click OPENS the popup (the user chooses Explore /
-    # About there), so we must NOT also fire picked() — otherwise the tap would
+    # About there), so we must NOT also fire picked(), otherwise the tap would
     # silently load the site behind the popup. The load then comes from the
     # popup's Explore button via input$siteExplore in the main server.
     picked <- shiny::reactiveVal(NULL)

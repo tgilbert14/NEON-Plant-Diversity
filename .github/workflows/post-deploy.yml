@@ -3,6 +3,10 @@ name: Verify Plant Diversity production after master publication
 on:
   push:
     branches: [master]
+  schedule:
+    # Weekly production health: Monday 14:30 UTC == 07:30 America/Phoenix.
+    - cron: "30 14 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,8 +39,10 @@ jobs:
           SMOKE_TOTAL_DEADLINE: "780"
           SMOKE_REQUIRE_RECEIPTS: "1"
         run: |
-          export SMOKE_APP_RECEIPT="$(tr -d '\r\n' < www/runtime-receipt.txt)"
-          export SMOKE_COVER_RECEIPT="$(tr -d '\r\n' < docs/cover-receipt.txt)"
+          SMOKE_APP_RECEIPT="$(tr -d '\r\n' < www/runtime-receipt.txt)"
+          export SMOKE_APP_RECEIPT
+          SMOKE_COVER_RECEIPT="$(tr -d '\r\n' < docs/cover-receipt.txt)"
+          export SMOKE_COVER_RECEIPT
           sleep 45
           bash scripts/post_deploy_smoke.sh \
             "Connect Cloud app=https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/" \

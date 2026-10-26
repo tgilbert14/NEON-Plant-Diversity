@@ -5,6 +5,7 @@
 
 suppressWarnings(suppressMessages(library(dplyr)))
 source("R/site_metadata.R")
+source("R/plant_release.R")
 source("R/source_receipt.R")
 source("R/plant_helpers.R")
 

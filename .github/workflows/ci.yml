@@ -146,12 +146,13 @@ jobs:
           bash -n scripts/post_deploy_smoke.sh
           python3 -m py_compile scripts/chromedriver_semantic_smoke.py
 
-      - name: Run registered science and build-portability contracts
+      - name: Run registered science, build-portability, and UI contracts
         run: |
           set -euo pipefail
           Rscript --vanilla scripts/test_science_contracts.R
           Rscript --vanilla scripts/test_build_script_portability.R
           Rscript --vanilla scripts/test_raw_portability.R
+          Rscript --vanilla scripts/test_ui_contracts.R
 
       - name: Rebuild the derived search index twice and require identical bytes
         run: |

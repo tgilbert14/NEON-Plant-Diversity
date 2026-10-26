@@ -1,11 +1,16 @@
 # ===========================================================================
-# NEON Plant Diversity Explorer — one-page site report PDF (base graphics).
-# Streamed by output$reportPdf. No LaTeX / no Chrome — grDevices::cairo_pdf +
-# base plotting only, Herbarium-themed. Every section is defensive (draws "—"
+# NEON Plant Diversity Explorer, one-page site report PDF (base graphics).
+# Streamed by output$reportPdf. No LaTeX / no Chrome, grDevices::cairo_pdf +
+# base plotting only, Herbarium-themed. Every section is defensive (draws ", "
 # rather than erroring) so it can never break the downloadHandler.
 # ===========================================================================
 
-build_diversity_report <- function(file, occ, ground = NULL, label = "site", expected = NULL) {
+build_diversity_report <- function(file, occ, ground = NULL, label = "site", expected = NULL,
+                                   release = NULL, doi = NULL) {
+  if (is.null(release) && exists("PLANT_SOURCE_STATUS")) release <- PLANT_SOURCE_STATUS$neon_release
+  release <- if (is.null(release) || !length(release) || is.na(release[1]) || !nzchar(release[1])) NA_character_ else as.character(release[1])
+  if (is.null(doi) && !is.na(release) && exists("plant_release_doi", mode = "function")) doi <- plant_release_doi(release)
+  doi <- if (is.null(doi) || !length(doi) || is.na(doi[1]) || !nzchar(doi[1])) NA_character_ else as.character(doi[1])
   P <- list(pine = "#1F5C3D", pine2 = "#2E7D52", terra = "#C56A3A", gold = "#C99A2E",
             green = "#2E7D32", ink = "#232B22", muted = "#6B7468", paper = "#ffffff",
             line = "#E2DCCB", intro = "#B85C38")
@@ -13,7 +18,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
   # plant-snapshot-v2: grain figures (species, plots, species-area) from the
   # latest full-grain site event F; cover figures (top species, introduced cover,
   # Chao2) from the latest complete 1 m² bout Q. Never fall back to raw occ.
-  ss <- ok(site_snapshot(occ))
+  ss <- ok(site_snapshot(occ, ground = ground))
   grain_tbl <- ss$grain
   cover_tbl <- ss$cover
   has_rows <- function(d) !is.null(d) && is.data.frame(d) && nrow(d) > 0
@@ -52,12 +57,13 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
     graphics::text(x + 11, yb + 4.4, v, col = P$pine, cex = 1.25, font = 2)
     graphics::text(x + 11, yb + 1.4, l, col = P$muted, cex = 0.62) }
   n_sp <- if (!is.null(sp)) nrow(sp) else NA
-  n_plots <- if (!is.null(pl)) nrow(pl) else NA
-  chip(3,  if (is.finite(n_sp)) format(n_sp, big.mark = ",") else "—", "SPECIES (FULL-GRAIN SURVEY)")
-  chip(27, if (!is.null(intro) && is.finite(intro)) paste0(intro, "%") else "—", "INTRODUCED COVER")
-  chip(51, if (!is.null(cv) && is.finite(cv$chao2)) paste0(cv$chao2) else "—",
+  # same population as the app hero and site_index: every plot in the grain event
+  n_plots <- if (has_rows(grain_tbl)) dplyr::n_distinct(grain_tbl$plotID) else NA
+  chip(3,  if (is.finite(n_sp)) format(n_sp, big.mark = ",") else "n/a", "SPECIES (FULL-GRAIN SURVEY)")
+  chip(27, if (!is.null(intro) && is.finite(intro)) paste0(intro, "%") else "n/a", "INTRODUCED COVER")
+  chip(51, if (!is.null(cv) && is.finite(cv$chao2)) paste0(cv$chao2) else "n/a",
        if (!is.null(cv)) sprintf("CHAO2 (1 m², %d SEEN)", cv$S_obs) else "CHAO2 (1 m²)")
-  chip(75, if (is.finite(n_plots)) format(n_plots, big.mark = ",") else "—", "PLOTS SAMPLED")
+  chip(75, if (is.finite(n_plots)) format(n_plots, big.mark = ",") else "n/a", "PLOTS SAMPLED")
 
   # ---- composition: top species by mean cover ----------------------------
   graphics::text(3, 78, "Most abundant plants · by mean 1 m² cover", col = P$pine2, cex = 1.0, font = 2, adj = 0)
@@ -76,8 +82,8 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
         graphics::text(x0 + w + 1, yc[i], sprintf("%.1f", topn$mean_cover[i]), col = P$muted, cex = 0.55, adj = 0)
       }
       graphics::text(92, 55, "green = native · clay = introduced", col = P$muted, cex = 0.5, adj = 1)
-    } else graphics::text(50, 67, "—", col = P$muted)
-  } else graphics::text(50, 67, "—", col = P$muted)
+    } else graphics::text(50, 67, "n/a", col = P$muted)
+  } else graphics::text(50, 67, "n/a", col = P$muted)
 
   # ---- species-area curve (nested quadrats) ------------------------------
   graphics::text(3, 52, "Species–area curve (nested quadrats, 1 → 400 m², full-grain survey)", col = P$pine2, cex = 1.0, font = 2, adj = 0)
@@ -92,14 +98,14 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
       graphics::text(px(sa$area_m2[i]), ybot - 1.6, paste0(sa$area_m2[i], "m²"), col = P$muted, cex = 0.5)
       graphics::text(px(sa$area_m2[i]), py(sa$richness[i]) + 1.4, round(sa$richness[i]), col = P$ink, cex = 0.55)
     }
-  } else graphics::text(50, 40, if (has_rows(grain_tbl)) "—" else "No full-grain survey in the bundled record", col = P$muted)
+  } else graphics::text(50, 40, if (has_rows(grain_tbl)) "n/a" else "No full-grain survey in the bundled record", col = P$muted)
 
   # ---- completeness (Expected vs Observed), if a reference list exists ----
   graphics::text(3, 28, "Observed vs a local NRCS ecological-site reference", col = P$pine2, cex = 1.0, font = 2, adj = 0)
   evo <- if (!is.null(expected)) ok(expected_vs_observed(occ, expected, if (exists("PLANT_AUTHORITY")) PLANT_AUTHORITY else NULL)) else NULL
   if (!is.null(evo)) {
     if (isFALSE(evo$applicability$applies) || !is.finite(evo$overlap_pct))
-      graphics::text(3, 24.5, sprintf("Reference flora detected: —  (%s)", evo$applicability$status %||% "no detected-share available"), col = P$ink, cex = 0.72, adj = 0)
+      graphics::text(3, 24.5, sprintf("Reference flora detected: n/a  (%s)", evo$applicability$status %||% "no detected-share available"), col = P$ink, cex = 0.72, adj = 0)
     else
       graphics::text(3, 24.5, sprintf("Reference flora detected: %.0f%%  (%d of %d species)", evo$overlap_pct, evo$n_overlap, evo$n_ref), col = P$ink, cex = 0.72, adj = 0)
     dom <- if (isFALSE(evo$applicability$applies)) "reference dominants: not scored (no native reference applies)"
@@ -107,7 +113,7 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
       else "dominants not production-ranked for this ecological site"
     graphics::text(3, 22.4, dom, col = P$ink, cex = 0.72, adj = 0)
     graphics::text(3, 20.3, sprintf("%d observed but not in the reference list (%d introduced · %d native), the review lane.", nrow(evo$C), evo$n_review_intro, evo$n_review_native), col = P$muted, cex = 0.62, adj = 0)
-    graphics::text(3, 17.6, sprintf("Reference community: %s (%s) · single site-coordinate soil unit.", evo$ecosite_name %||% "—", evo$ecoclassid %||% "—"), col = P$muted, cex = 0.56, adj = 0)
+    graphics::text(3, 17.6, sprintf("Reference community: %s (%s) · single site-coordinate soil unit.", evo$ecosite_name %||% "n/a", evo$ecoclassid %||% "n/a"), col = P$muted, cex = 0.56, adj = 0)
   } else graphics::text(3, 23, "No NRCS reference list bundled for this site.", col = P$muted, cex = 0.7, adj = 0)
 
   # ---- honesty footer ----------------------------------------------------
@@ -116,6 +122,11 @@ build_diversity_report <- function(file, occ, ground = NULL, label = "site", exp
   graphics::text(3, 8.2, "the latest 1 m² bout; both are named above. Chao2 is a bias-corrected lower bound from 1 m² quadrat species only.", col = P$muted, cex = 0.55, adj = 0)
   graphics::text(3, 6.8, "Cover is an ocular estimate and vegetation layers overlap, so site-summed cover is a relative index, not a share of ground.", col = P$muted, cex = 0.55, adj = 0)
   graphics::text(3, 5.4, "Reference-but-absent species reflect completeness against one local soil unit, not site-wide truth or error.", col = P$muted, cex = 0.55, adj = 0)
+  graphics::text(3, 3.6, if (is.na(release))
+      "Data: NEON Plant presence and percent cover (DP1.10058.001), NEON release n/a (query snapshot) · CC BY 4.0"
+    else sprintf("Data: NEON Plant presence and percent cover (DP1.10058.001), %s%s · CC BY 4.0",
+                 release, if (is.na(doi)) "" else paste0(" · ", doi)),
+    col = P$muted, cex = 0.55, adj = 0)
   graphics::text(3, 2.0, "Built by Desert Data Labs · unofficial · not affiliated with NEON, Battelle, or the NSF · desertdatalabs.com", col = P$muted, cex = 0.55, adj = 0)
   invisible(TRUE)
 }

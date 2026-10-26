@@ -21,8 +21,17 @@ Thumbs.db
 data/authority/_profile_cache.rds
 
 # local secrets (.env.example is the committed template)
-.env
-*.env
-!.env.example
 .Renviron
 .Renviron.*
+.env
+.env.*
+*.env
+!.env.example
+
+# rsconnect/ deploy metadata (Connect Cloud deploys from git; never commit it)
+rsconnect/
+
+# Local build litter (R graphics device, Python bytecode)
+Rplots.pdf
+__pycache__/
+*.pyc

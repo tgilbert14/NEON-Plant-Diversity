@@ -49,7 +49,7 @@ function runtimeFiles() {
     return (path.endsWith(".rds") && (
       !rel.includes("/") || rel.startsWith("sites/") || rel.startsWith("env/") ||
       rel.startsWith("expected/") || rel === "authority/plants_lookup.rds"
-    )) || (rel.startsWith("source/") && path.endsWith(".txt"));
+    )) || (rel.startsWith("source/") && (path.endsWith(".txt") || path.endsWith(".json")));
   }));
   files.push(...filesUnder(join(dataRoot, "data-sample"), (path) => path.endsWith(".rds")));
   return [...new Set(files.map((path) => resolve(path)))].filter(existsSync).sort();

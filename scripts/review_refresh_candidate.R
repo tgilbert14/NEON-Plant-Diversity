@@ -8,7 +8,8 @@
 # base R: the grain event F (latest full-grain 1/10/100 m2 year, best bout, only
 # full-grain plots) and the cover event Q (newest year whose best-covered bout holds
 # at least max(3, half of F's plots) plots with 1 m2 rows; 1 m2 rows only). It then
-# derives species support, the structural-zero cover denominator, and the
+# derives species support, the structural-zero cover denominator (sampled 1 m2
+# units: occurrence rows of any rank plus the event's ground cover), and the
 # incidence-based Chao2 inputs, and reconciles the candidate to data/site_index.rds.
 # The first argument is the last-known-good repository root and the optional
 # second argument is the candidate root (default: the current working directory).
@@ -43,119 +44,14 @@ as_text <- function(value) {
   value
 }
 
-# Bout identity for every row, within its year (plant-snapshot-v2).
-# Returns list(year = numeric year or NA, key = canonical bout key or NA when the
-# row belongs to no event, rank = within-year order of the key, higher = later).
-row_bout_keys <- function(occ) {
-  n <- nrow(occ)
-  year <- suppressWarnings(as.numeric(as.character(occ$year)))
-  key <- rep(NA_character_, n)
-  rank <- rep(NA_real_, n)
-  if (!n) return(list(year = year, key = key, rank = rank))
-  bouts <- trimws(as.character(occ$bout))
-  usable <- !is.na(bouts) & nzchar(bouts)
-  has_year <- is.finite(year)
-  for (rows in split(which(has_year), year[has_year], drop = TRUE)) {
-    if (!any(usable[rows])) {
-      # Nothing in this year carries a bout: one unspecified bout.
-      key[rows] <- "<unspecified>"
-      rank[rows] <- 0
-      next
-    }
-    identified <- rows[usable[rows]]
-    values <- bouts[identified]
-    numeric_values <- suppressWarnings(as.numeric(values))
-    if (all(is.finite(numeric_values))) {
-      key[identified] <- format(numeric_values, scientific = FALSE, trim = TRUE,
-                                digits = 15)
-      rank[identified] <- numeric_values
-    } else {
-      ordered <- sort(unique(values), method = "radix")
-      key[identified] <- values
-      rank[identified] <- match(values, ordered)
-    }
-    # Blank-bout rows in a year where something carries a bout: no event.
-  }
-  list(year = year, key = key, rank = rank)
-}
-
-# Choose the bout with the most qualifying plots; tie goes to the later bout.
-best_bout <- function(bout_keys, bout_ranks, plot_sets) {
-  counts <- vapply(plot_sets, length, integer(1))
-  if (!length(counts) || max(counts) == 0L) return(NULL)
-  candidates <- which(counts == max(counts))
-  pick <- candidates[which.max(bout_ranks[candidates])]
-  list(key = bout_keys[[pick]], rank = bout_ranks[[pick]],
-       plots = plot_sets[[pick]])
-}
-
-site_events <- function(occ) {
-  keys <- row_bout_keys(occ)
-  scale <- suppressWarnings(as.numeric(as.character(occ$scale)))
-  plot <- as.character(occ$plotID)
-  in_event <- is.finite(keys$year) & !is.na(keys$key) & !is.na(plot)
-  event_years <- sort(unique(keys$year[in_event]), decreasing = TRUE)
-
-  bouts_in_year <- function(y) {
-    rows <- which(in_event & keys$year == y)
-    bk <- unique(keys$key[rows])
-    list(rows = rows, keys = bk,
-         ranks = vapply(bk, function(k) keys$rank[rows][match(k, keys$key[rows])],
-                        numeric(1)))
-  }
-
-  grain <- NULL
-  for (y in event_years) {
-    yb <- bouts_in_year(y)
-    sets <- lapply(yb$keys, function(k) {
-      r <- yb$rows[keys$key[yb$rows] == k]
-      by_plot <- split(scale[r], plot[r])
-      sort(names(by_plot)[vapply(by_plot, function(s) all(c(1, 10, 100) %in% s),
-                                 logical(1))], method = "radix")
-    })
-    chosen <- best_bout(yb$keys, yb$ranks, sets)
-    if (!is.null(chosen)) { grain <- c(list(year = y), chosen); break }
-  }
-  grain_keep <- if (is.null(grain)) rep(FALSE, nrow(occ)) else
-    in_event & keys$year == grain$year & keys$key == grain$key & plot %in% grain$plots
-  n_grain <- if (is.null(grain)) 0L else length(grain$plots)
-  threshold <- max(3, ceiling(0.5 * n_grain))
-
-  cover <- NULL
-  for (y in event_years) {
-    yb <- bouts_in_year(y)
-    sets <- lapply(yb$keys, function(k) {
-      r <- yb$rows[keys$key[yb$rows] == k & scale[yb$rows] %in% 1]
-      sort(unique(plot[r]), method = "radix")
-    })
-    chosen <- best_bout(yb$keys, yb$ranks, sets)
-    if (!is.null(chosen) && length(chosen$plots) >= threshold) {
-      cover <- c(list(year = y), chosen); break
-    }
-  }
-  cover_keep <- if (is.null(cover)) rep(FALSE, nrow(occ)) else
-    in_event & keys$year == cover$year & keys$key == cover$key &
-      plot %in% cover$plots & scale %in% 1
-  list(grain = grain, grain_keep = grain_keep, cover = cover,
-       cover_keep = cover_keep)
-}
-
-resolve_nativity <- function(frame) {
-  if (!nrow(frame)) return(frame)
-  taxon <- as.character(frame$taxonID)
-  missing <- is.na(taxon) | !nzchar(taxon)
-  taxon[missing] <- as.character(frame$scientificName[missing])
-  keys <- paste(taxon, sep = "\r")
-  conflicts <- names(which(vapply(split(as.character(frame$nativity), keys),
-                                    function(values) {
-    values <- unique(values[!is.na(values)])
-    all(c("Native", "Introduced") %in% values)
-  }, logical(1))))
-  frame$nativity <- as.character(frame$nativity)
-  frame$nativity[keys %in% conflicts] <- "Unknown"
-  attr(frame, "nativity_conflicts") <- length(conflicts)
-  frame
-}
+# The independent plant-snapshot-v2 reconstruction (events, sampled 1 m2 units
+# incl. ground cover, nativity, species-area, Chao2) lives in
+# scripts/plant_oracle.R, shared with scripts/verify_bundle.R. Base R only.
+script_dir <- local({
+  f <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+  if (length(f)) dirname(normalizePath(sub("^--file=", "", f[[1L]]))) else "scripts"
+})
+source(file.path(script_dir, "plant_oracle.R"))
 
 event_label <- function(event) {
   if (is.null(event)) return(NA_character_)
@@ -169,71 +65,32 @@ site_metrics <- function(path) {
     stop(sprintf("invalid bundle structure: %s", path), call. = FALSE)
   }
   occ <- as.data.frame(bundle$occ, stringsAsFactors = FALSE)
-  events <- site_events(occ)
+  events <- oracle_events(occ)
+  o <- oracle_site_metrics(occ, bundle$ground)
 
   # Grain event F: richness, plot count and plot lists.
   grain_rows <- occ[events$grain_keep, , drop = FALSE]
-  grain_species <- grain_rows[grain_rows$is_species %in% TRUE, , drop = FALSE]
+  grain_species <- grain_rows[oracle_is_species(grain_rows), , drop = FALSE]
   plot_ids <- if (is.null(events$grain)) character(0) else events$grain$plots
   plot_richness <- vapply(plot_ids, function(plot_id) {
     length(unique(as.character(
       grain_species$scientificName[grain_species$plotID == plot_id])))
   }, integer(1))
-
-  # Cover event Q: scale-1 rows only; nativity conflicts resolved within Q.
-  cover_rows <- occ[events$cover_keep, , drop = FALSE]
   cover_plots <- if (is.null(events$cover)) character(0) else events$cover$plots
-  one <- resolve_nativity(cover_rows[cover_rows$is_species %in% TRUE, , drop = FALSE])
-  # Structural-zero denominator: distinct 1 m2 subplots per plot represented by
-  # at least one eligible (species-level) record in Q, fixed before any focal
-  # species filter (SCIENCE-CONTRACT "Cover denominators").
-  n_subplots <- vapply(cover_plots, function(plot_id) {
-    length(unique(as.character(one$subplotID[one$plotID == plot_id])))
-  }, integer(1))
-  names(n_subplots) <- cover_plots
 
-  positive <- one[is.finite(one$percentCover) & one$percentCover > 0, , drop = FALSE]
-  cover_by_group <- numeric(0)
-  if (nrow(positive)) {
-    cover_keys <- paste(as_text(positive$plotID), as_text(positive$scientificName),
-                        as_text(positive$family), as_text(positive$nativity), sep = "\r")
-    cover_sums <- tapply(positive$percentCover, cover_keys, sum)
-    key_parts <- strsplit(names(cover_sums), "\r", fixed = TRUE)
-    cover_table <- data.frame(
-      plotID = vapply(key_parts, `[[`, character(1), 1L),
-      scientificName = vapply(key_parts, `[[`, character(1), 2L),
-      family = vapply(key_parts, `[[`, character(1), 3L),
-      nativity = vapply(key_parts, `[[`, character(1), 4L),
-      cover_sum = as.numeric(cover_sums), stringsAsFactors = FALSE
-    )
-    # The registered index publishes each plot-species mean cover rounded to two
-    # decimals before the nativity sums; reproduce that published precision (it
-    # moves YELL's 2024 b1 share from 0.752 to below 0.75).
-    cover_table$mean_cover <- round(cover_table$cover_sum /
-      n_subplots[match(cover_table$plotID, names(n_subplots))], 2)
-    cover_by_group <- tapply(cover_table$mean_cover, cover_table$nativity, sum)
-  }
-  total_cover <- sum(cover_by_group, na.rm = TRUE)
-  introduced_cover <- unname(cover_by_group["Introduced"])
-  unknown_cover <- unname(cover_by_group["Unknown"])
-  if (!length(introduced_cover) || !is.finite(introduced_cover)) introduced_cover <- 0
-  if (!length(unknown_cover) || !is.finite(unknown_cover)) unknown_cover <- 0
-
-  incidence <- one
-  unit <- paste(as_text(incidence$plotID), as_text(incidence$subplotID),
-                as_text(incidence$year), as_text(incidence$bout), sep = "|")
-  incidence_counts <- if (nrow(incidence)) tapply(
-    unit, as.character(incidence$scientificName), function(value) length(unique(value))
-  ) else integer(0)
-  observed <- length(incidence_counts)
-  uniques <- sum(incidence_counts == 1L)
-  doubletons <- sum(incidence_counts == 2L)
-  units <- length(unique(unit))
-  chao2 <- if (units >= 2L && observed > 0L) {
-    observed + ((units - 1) / units) * uniques * (uniques - 1) /
-      (2 * (doubletons + 1))
+  # Unknown-cover share on the same sampled-unit denominator as the oracle.
+  q <- occ[events$cover_keep, , drop = FALSE]
+  one <- oracle_resolve_nativity(q[oracle_is_species(q), , drop = FALSE])
+  pos <- one[is.finite(one$percentCover) & one$percentCover > 0, , drop = FALSE]
+  unknown_share <- if (nrow(pos) && sum(pos$percentCover) > 0) {
+    # share of summed plot means; the oracle's units are per plot
+    unit_n <- o$units_per_plot
+    m <- pos$percentCover / as.numeric(unit_n[as.character(pos$plotID)])
+    round(100 * sum(m[pos$nativity == "Unknown"]) / sum(m), 1)
   } else NA_real_
-
+  units <- o$incidence_units
+  observed <- o$S_obs; chao2 <- o$chao2_raw
+  uniques <- o$Q1; doubletons <- o$Q2
 
   years <- sort(unique(as.integer(occ$year[!is.na(occ$year)])))
   data.frame(
@@ -254,15 +111,13 @@ site_metrics <- function(path) {
     n_plots_cover = length(cover_plots),
     snapshot_species = length(unique(as.character(grain_species$scientificName))),
     mean_plot_richness_400m2 = if (length(plot_richness)) mean(plot_richness) else NA_real_,
-    pct_introduced_cover = if (is.finite(total_cover) && total_cover > 0)
-      round(100 * introduced_cover / total_cover, 1) else NA_real_,
-    pct_unknown_cover = if (is.finite(total_cover) && total_cover > 0)
-      round(100 * unknown_cover / total_cover, 1) else NA_real_,
+    pct_introduced_cover = o$pct_introduced,
+    pct_unknown_cover = unknown_share,
+    sampled_units_1m2 = o$n_units,
     incidence_units_1m2 = units, chao2_observed = observed,
     chao2_lower_bound = round(chao2, 1), chao2_uniques = uniques,
     chao2_doubletons = doubletons,
-    nativity_conflicts = if (is.null(attr(one, "nativity_conflicts"))) 0L else
-      attr(one, "nativity_conflicts"),
+    nativity_conflicts = o$nativity_conflicts,
     stringsAsFactors = FALSE
   )
 }

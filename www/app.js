@@ -1,12 +1,13 @@
-/* =========================================================================
-   app.js — count-up stat counters + loading overlay + Shiny message wiring
+/* Shared suite chrome: adapted from tgilbert14/NEON-Small-Mammal-Tracker-App@78aed45 (2026-06-18); the copies have diverged since.
+   =========================================================================
+   app.js: count-up stat counters, loading overlay, Shiny message wiring
    ========================================================================= */
 
 // ---- animated count-up for the hero stat band ----------------------------
 function animateCount(el) {
   if (el.dataset.animated === "1") return;
   el.dataset.animated = "1";
-  // A freshly-rendered hero counter means a site just finished loading — the
+  // A freshly-rendered hero counter means a site just finished loading, the
   // most reliable signal to dismiss the loading overlay (no reliance on a
   // custom Shiny message, which doesn't always register in time).
   if (typeof smtLoadDone === "function") smtLoadDone({ site: window.__plantSite || "" });
@@ -44,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // ---- loading overlay (opaque, indeterminate) -----------------------------
 // A site load is one synchronous blocking call whose duration we can't know,
-// so we show an INDETERMINATE animated bar (no fake %) on an OPAQUE backdrop —
+// so we show an INDETERMINATE animated bar (no fake %) on an OPAQUE backdrop -
 // it just spins until the server signals it's done. No number to "stall" at,
 // and you don't see half-rendered data through it.
 var smtSafetyTimer = null;
@@ -54,7 +55,7 @@ function smtLoadStart(label) {
   // Raise the overlay IMMEDIATELY, synchronously, on the click. A site load is
   // 1–3s of BLOCKING work on the worker (decompress + clean + leaderboard + the
   // Overview tab's plotly renders). A server-sent "show" message can't paint
-  // until that block ends — by then it's too late — so the only honest feedback
+  // until that block ends, by then it's too late, so the only honest feedback
   // is to show it client-side right now. (Loads are never truly instant, so the
   // old 250ms defer just hid the feedback during exactly the freeze it's for.)
   var siteText = label || "";
@@ -70,6 +71,8 @@ function smtLoadStart(label) {
   if (recovery) recovery.style.display = "none";
   ov.style.display = "flex";
   ov.setAttribute("aria-busy", "true");
+  // Bring the hero into view once, when this load finishes (PD-21).
+  window.__smtPendingReveal = true;
   var status = document.getElementById("appStatus");
   if (status) status.textContent = "Loading site…";
   if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }  // tactile "got it"
@@ -85,14 +88,43 @@ function smtLoadDone(message) {
   clearTimeout(smtSafetyTimer);
   var ov = document.getElementById("loadOverlay");
   if (ov) { ov.style.display = "none"; ov.setAttribute("aria-busy", "false"); }
+  var site = message && message.site ? String(message.site) : "";
   var status = document.getElementById("appStatus");
   if (status) {
-    var site = message && message.site ? String(message.site) : "";
     status.textContent = site ? site + " ready" : "App connected";
     status.dataset.appReady = "true";
     status.dataset.siteReady = site ? "true" : "false";
   }
+  if (!site) return;
+  // Keep the address on the loaded site so a refresh or a shared link reopens
+  // it (PD-32). replaceState only: Back keeps its ordinary meaning.
+  smtSetSiteParam(site);
+  // animateCount calls this once per hero counter, so the scroll and focus run
+  // once per load, gated by the flag smtLoadStart raised (PD-21). behavior
+  // 'auto' because smooth scrollIntoView no-ops inside bslib fill containers.
+  if (window.__smtPendingReveal) {
+    window.__smtPendingReveal = false;
+    var target = document.getElementById("main-content") || document.querySelector(".hero-band");
+    if (target) {
+      try { target.scrollIntoView({ behavior: "auto", block: "start" }); } catch (e) { target.scrollIntoView(); }
+      try { target.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
 }
+
+// ?site=<code> mirrors the loaded site; null removes it (change site).
+function smtSetSiteParam(site) {
+  try {
+    if (!window.history || typeof history.replaceState !== "function") return;
+    var u = new URL(window.location.href);
+    if (site && /^[A-Za-z0-9]{4}$/.test(site)) u.searchParams.set("site", site.toUpperCase());
+    else u.searchParams.delete("site");
+    if (u.href !== window.location.href) history.replaceState(history.state, "", u.href);
+  } catch (e) {}
+}
+document.addEventListener("click", function (event) {
+  if (event.target.closest && event.target.closest("#changeSite")) smtSetSiteParam(null);
+});
 
 function smtMarkConnected() {
   var status = document.getElementById("appStatus");
@@ -108,7 +140,7 @@ function smtHandleShinyConnected() {
   requested = requested ? requested.trim().toUpperCase() : "";
   if (!/^[A-Z0-9]{4}$/.test(requested)) return;
   smtDeepLinkSent = true;
-  smtLoadStart(requested + " · loading…");
+  smtLoadStart(requested + " · loading");
   Shiny.setInputValue("pickSite", requested, { priority: "event" });
 }
 
@@ -135,7 +167,7 @@ if (window.jQuery) {
 }
 
 // (The site report card is now a server-side PDF streamed by a Shiny
-//  downloadHandler — output$reportPdf, via the hero downloadLink — so the old
+//  downloadHandler, output$reportPdf, via the hero downloadLink, so the old
 //  browser-print path (smtPrintReport) has been removed.)
 
 // ---- dismiss any open info popover (click-outside + Esc) -----------------
@@ -160,6 +192,23 @@ document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") smtClosePopovers();
 });
 
+// Re-fit one Leaflet widget. A render that arrived while the container was
+// 0 px wide (a ?site= deep link hides the picker before it draws) is parked in
+// leaflet's pendingRenderData, and only the widget's own resize() replays it;
+// invalidateSize alone leaves the map blank (PD-19). invalidateSize on a hidden
+// map is skipped: with an open popup it recurses (PD-20).
+function smtRefitLeaflet(el) {
+  try {
+    if (!el || !el.id || !window.HTMLWidgets) return;
+    var widget = HTMLWidgets.find("#" + el.id);
+    if (!widget) return;
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (typeof widget.resize === "function" && w > 0 && h > 0) widget.resize(w, h);
+    var map = typeof widget.getMap === "function" ? widget.getMap() : null;
+    if (map && typeof map.invalidateSize === "function" && w > 0) map.invalidateSize({ pan: false });
+  } catch (e) {}
+}
+
 // ---- Shiny custom message handlers ---------------------------------------
 document.addEventListener("DOMContentLoaded", function () {
   if (window.Shiny) {
@@ -180,11 +229,7 @@ document.addEventListener("DOMContentLoaded", function () {
     Shiny.addCustomMessageHandler("kickMaps", function (_message) {
       var kick = function () {
         document.querySelectorAll(".leaflet.html-widget, .leaflet").forEach(function (el) {
-          try {
-            var widget = window.HTMLWidgets && el.id ? HTMLWidgets.find("#" + el.id) : null;
-            var map = widget && typeof widget.getMap === "function" ? widget.getMap() : null;
-            if (map && typeof map.invalidateSize === "function") map.invalidateSize({ pan: false });
-          } catch (e) {}
+          smtRefitLeaflet(el);
         });
         try { window.dispatchEvent(new Event("resize")); } catch (e) {}
       };
@@ -198,11 +243,7 @@ document.addEventListener("DOMContentLoaded", function () {
 document.addEventListener("shown.bs.tab", function () {
   setTimeout(function () {
     document.querySelectorAll(".leaflet.html-widget, .leaflet").forEach(function (el) {
-      try {
-        var widget = window.HTMLWidgets && el.id ? HTMLWidgets.find("#" + el.id) : null;
-        var map = widget && typeof widget.getMap === "function" ? widget.getMap() : null;
-        if (map && typeof map.invalidateSize === "function") map.invalidateSize({ pan: false });
-      } catch (e) {}
+      smtRefitLeaflet(el);
     });
     try { window.dispatchEvent(new Event("resize")); } catch (e) {}
   }, 60);
@@ -215,6 +256,25 @@ document.addEventListener("click", function (event) {
   var button = event.target.closest(".plot-table-open[data-plot-id]");
   if (!button || !window.Shiny) return;
   Shiny.setInputValue("qcCardRequest", button.dataset.plotId, { priority: "event" });
+});
+
+// QC flags: one delegated handler for every [data-qc-flag] header. A native
+// <button> fires click on Enter and Space by itself; any other element that
+// carries the attribute gets the same keys here.
+function smtOpenQcFlag(el) {
+  if (!el || !window.Shiny || !el.dataset || !el.dataset.qcFlag) return;
+  Shiny.setInputValue("qcFlagOpen", el.dataset.qcFlag, { priority: "event" });
+}
+document.addEventListener("click", function (event) {
+  var el = event.target.closest && event.target.closest("[data-qc-flag]");
+  if (el) smtOpenQcFlag(el);
+});
+document.addEventListener("keydown", function (event) {
+  if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") return;
+  var el = event.target.closest && event.target.closest("[data-qc-flag]");
+  if (!el || el.tagName === "BUTTON") return;
+  event.preventDefault();
+  smtOpenQcFlag(el);
 });
 
 // DataTables can measure a zero-width container when rendered inside a closed

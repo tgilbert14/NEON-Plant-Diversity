@@ -3,6 +3,10 @@ name: Propose NEON plant-diversity refresh
 # Fetch, build, validation, and publication are separate trust boundaries. The
 # fetch job has no write token. The validator builds twice under pinned R 4.5.2.
 # Only the final job can write, and it publishes a review branch—never master.
+#
+# Public repo: GitHub disables this schedule after 60 days without repository
+# activity; a merged commit re-arms it. The suite trials a keepalive job in
+# Ground Beetle first; add it here only after that trial survives a cliff.
 
 on:
   schedule:
@@ -46,6 +50,13 @@ jobs:
       neon_release: ${{ steps.receipt.outputs.neon_release }}
       builder_commit: ${{ steps.receipt.outputs.builder_commit }}
     steps:
+      - name: Check out the release pin
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - id: check
         shell: bash
         env:
@@ -162,10 +173,16 @@ jobs:
           echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
           echo "source_receipt_label=$source_receipt_label" >> "$GITHUB_OUTPUT"
           echo "query_package=$QUERY_PACKAGE" >> "$GITHUB_OUTPUT"
-          # loadByProduct is a cutoff query, not an official immutable NEON release selector.
-          echo "neon_release=" >> "$GITHUB_OUTPUT"
+          # The fetch selects one official NEON release: the pin in R/plant_release.R
+          # (loadByProduct release = pin, include.provisional = FALSE).
+          neon_release=$(sed -n 's/^PLANT_NEON_RELEASE <- "\(RELEASE-[0-9]\{4\}\)".*/\1/p' R/plant_release.R)
+          if [[ ! "$neon_release" =~ ^RELEASE-[0-9]{4}$ ]]; then
+            echo "::error title=Missing NEON release pin::R/plant_release.R must define exactly one PLANT_NEON_RELEASE <- \"RELEASE-YYYY\" line"
+            exit 1
+          fi
+          echo "neon_release=$neon_release" >> "$GITHUB_OUTPUT"
           echo "builder_commit=$BUILDER_COMMIT" >> "$GITHUB_OUTPUT"
-          echo "Candidate query: source_start=$SOURCE_START source_cutoff=$source_cutoff package=$QUERY_PACKAGE build_date=$build_date source_receipt_label=$source_receipt_label builder_commit=$BUILDER_COMMIT neon_release=NA"
+          echo "Candidate query: source_start=$SOURCE_START source_cutoff=$source_cutoff package=$QUERY_PACKAGE build_date=$build_date source_receipt_label=$source_receipt_label builder_commit=$BUILDER_COMMIT neon_release=$neon_release"
 
   fetch_raw:
     needs: gate
@@ -198,10 +215,15 @@ jobs:
           packages: neonUtilities, dplyr, tibble, tidyr, stringr, RColorBrewer
           pak-version: stable
           dependencies: '"hard"'
-          cache-version: plant-diversity-fetch-r411-2024-12-31-v2
+          # pak resolves the newest CRAN neonUtilities (the dated RSPM lane only seeds
+          # the rest of the fetch closure); the next step asserts the auth floor.
+          cache-version: plant-diversity-fetch-r411-neonutilities-v3
           cache: always
           install-pandoc: 'false'
           install-quarto: 'false'
+
+      - name: Require the neonUtilities token-auth floor
+        run: Rscript -e 'stopifnot(packageVersion("neonUtilities") >= "4.0.1")'
 
       - name: Capture the actual fetch runtime receipt
         id: fetch_runtime
@@ -227,6 +249,7 @@ jobs:
           PDE_FETCH_START: ${{ needs.gate.outputs.source_start }}
           PDE_FETCH_END: ${{ needs.gate.outputs.fetch_end_month }}
           PDE_QUERY_PACKAGE: ${{ needs.gate.outputs.query_package }}
+          PDE_NEON_RELEASE: ${{ needs.gate.outputs.neon_release }}
         run: |
           set -euo pipefail
           if [ -z "${NEON_TOKEN:-}" ]; then
@@ -237,6 +260,19 @@ jobs:
           Rscript --vanilla scripts/fetch_plant_all.R
           count=$(find "$PDE_RAW_OUT_DIR" -maxdepth 1 -name '*_raw.rds' -type f | wc -l)
           test "$count" -eq 46
+
+      - name: Save the NEON change log beside the raw staging
+        env:
+          PDE_RAW_OUT_DIR: ${{ runner.temp }}/plant-raw
+        run: |
+          # Anonymous metadata call (no token). No retrieval timestamp, keys sorted and
+          # entries sorted by id, so identical upstream content yields identical bytes.
+          # The raw-family digest stays over *_raw.rds only.
+          set -euo pipefail
+          curl -fsS --retry 3 --max-time 60 https://data.neonscience.org/api/v0/products/DP1.10058.001 | jq -S --arg src "https://data.neonscience.org/api/v0/products/DP1.10058.001" '{product: .data.productCode, source: $src, changeLogs: ([.data.changeLogs[] | {id, issueDate, resolvedDate, dateRangeStart, dateRangeEnd, locationAffected, issue, resolution}] | sort_by(.id))}' > "$PDE_RAW_OUT_DIR/neon-change-log.json"
+          jq -e '.product == "DP1.10058.001" and (.changeLogs | type == "array")' \
+            "$PDE_RAW_OUT_DIR/neon-change-log.json" > /dev/null
+          echo "NEON change log: $(jq '.changeLogs | length' "$PDE_RAW_OUT_DIR/neon-change-log.json") entries for DP1.10058.001"
 
       - name: Bind the exact raw-file family to an immutable digest
         id: source_digest
@@ -276,6 +312,9 @@ jobs:
       effective_source_receipt_id: ${{ steps.effective_receipt.outputs.effective_source_receipt_id }}
       source_digest: ${{ needs.fetch_raw.outputs.source_digest }}
       neon_utilities_version: ${{ needs.fetch_raw.outputs.neon_utilities_version }}
+      content_changed: ${{ steps.content_key.outputs.content_changed }}
+      changed: ${{ steps.content_key.outputs.changed }}
+      new_change_log_ids: ${{ steps.content_key.outputs.new_change_log_ids }}
     env:
       RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
       RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
@@ -404,6 +443,7 @@ jobs:
                 PDE_SOURCE_DIGEST="$CANDIDATE_SOURCE_DIGEST" \
                 PDE_BUILDER_COMMIT="$CANDIDATE_BUILDER_COMMIT" \
                 NEON_RELEASE="$CANDIDATE_NEON_RELEASE" \
+                PDE_REQUIRE_CHANGE_LOG=1 \
                 Rscript --vanilla scripts/bundle_plant_data.R
               PDE_OUTPUT_ROOT="$stage" PDE_BUILD_DATE="$CANDIDATE_BUILD_DATE" \
                 PDE_SOURCE_START="$CANDIDATE_SOURCE_START" \
@@ -428,6 +468,41 @@ jobs:
               > "$RUNNER_TEMP/plant-$pass.sha256"
           done
           diff -u "$RUNNER_TEMP/plant-first.sha256" "$RUNNER_TEMP/plant-second.sha256"
+
+      - name: Compare candidate content with the committed content
+        id: content_key
+        env:
+          CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
+        run: |
+          # Runs before promotion, while data/ still holds the committed bytes. A
+          # candidate whose only differences are build stamps reports
+          # content_changed=false and the publisher skips it (PD-08).
+          set -euo pipefail
+          out="$RUNNER_TEMP/content-key.txt"
+          PDE_CONTENT_KEY_OUT="$out" Rscript --vanilla scripts/content_key.R \
+            "$RUNNER_TEMP/plant-stage-first" .
+          content_changed=$(sed -n 's/^content_changed=//p' "$out" | tail -n 1)
+          changed=$(sed -n 's/^changed=//p' "$out" | tail -n 1)
+          new_ids=$(sed -n 's/^new_change_log_ids=//p' "$out" | tail -n 1)
+          if [ "$content_changed" != true ] && [ "$content_changed" != false ]; then
+            echo "::error title=Content key incomplete::scripts/content_key.R did not report content_changed=true|false"
+            exit 1
+          fi
+          # changed lists occ:<SITE>, ground:<SITE> and index names (scripts/content_key.R).
+          if [[ ! "$new_ids" =~ ^[0-9,]*$ ]] || [[ ! "$changed" =~ ^[A-Za-z0-9_.,:/-]*$ ]]; then
+            echo "::error title=Content key malformed::unexpected changed or new_change_log_ids value"
+            exit 1
+          fi
+          {
+            echo "content_changed=$content_changed"
+            echo "changed=$changed"
+            echo "new_change_log_ids=$new_ids"
+          } >> "$GITHUB_OUTPUT"
+          echo "Content key against committed data: content_changed=$content_changed changed=${changed:-none} (query through $CANDIDATE_SOURCE_CUTOFF)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "$new_ids" ]; then
+            echo "::warning title=New NEON change-log entries::DP1.10058.001 change-log ids not in the committed copy: ${new_ids}. Review them before merging the candidate."
+            echo "New NEON change-log entries for DP1.10058.001 (not in the committed copy): ${new_ids}" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Promote staged bytes and validate the complete candidate
         env:
@@ -473,7 +548,6 @@ jobs:
               PDE_EXPECT_SOURCE_DIGEST="$CANDIDATE_SOURCE_DIGEST" \
               PDE_EXPECT_BUILDER_COMMIT="$CANDIDATE_BUILDER_COMMIT" \
               PDE_EXPECT_RELEASE="$CANDIDATE_NEON_RELEASE" \
-              PDE_EXPECT_RELEASE_MISSING=1 \
               Rscript --vanilla scripts/verify_bundle.R
           fi
           node scripts/check_custom_message_handlers.mjs
@@ -481,6 +555,7 @@ jobs:
           Rscript --vanilla scripts/test_science_contracts.R
           Rscript --vanilla scripts/test_build_script_portability.R
           Rscript --vanilla scripts/test_raw_portability.R
+          Rscript --vanilla scripts/test_ui_contracts.R
           Rscript --vanilla -e 'Sys.setenv(PDE_LIVE="0"); source("global.R"); source("ui.R"); source("server.R"); stopifnot((inherits(ui,"shiny.tag.list") || inherits(ui,"shiny.tag")), is.function(server), length(BUNDLED) == 46L)'
           git diff --check
 
@@ -502,21 +577,70 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
+      - name: Only master publishes
+        id: branch_gate
+        env:
+          REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          # A dispatch from a code branch builds and validates the candidate artifact
+          # for the lead to promote onto that branch; it never publishes.
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/master" ]; then
+            msg="validated candidate artifact plant-diversity-refresh-${SOURCE_SHA} built for a code branch (${REF}); only master publishes"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Code-branch candidate not published::$msg"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip a candidate with no new content
+        id: content_gate
+        if: steps.branch_gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          CONTENT_CHANGED: ${{ needs.build_candidate.outputs.content_changed }}
+          CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
+        run: |
+          set -euo pipefail
+          if [ "$CONTENT_CHANGED" != "false" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          msg="Fetched through ${CANDIDATE_SOURCE_CUTOFF}: no new NEON plant observations or index content; review branch not updated"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=No new plant content::$msg"
+          title="Plant Diversity refresh candidate awaiting review"
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$msg. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.content_gate.outputs.publish == 'true'
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Download validated candidate
+        if: steps.content_gate.outputs.publish == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: plant-diversity-refresh-${{ github.sha }}
           path: ${{ runner.temp }}/refresh-candidate
 
       - name: Publish or update the review branch
+        if: steps.content_gate.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_NEON_RELEASE: ${{ needs.gate.outputs.neon_release }}
+          NEW_CHANGE_LOG_IDS: ${{ needs.build_candidate.outputs.new_change_log_ids }}
           CANDIDATE_SOURCE_START: ${{ needs.gate.outputs.source_start }}
           CANDIDATE_SOURCE_CUTOFF: ${{ needs.gate.outputs.source_cutoff }}
           CANDIDATE_BUILD_DATE: ${{ needs.gate.outputs.build_date }}
@@ -528,6 +652,19 @@ jobs:
           SKIP_DOWNLOAD: ${{ github.event.inputs.skip_download }}
         run: |
           set -euo pipefail
+          # One open tracking issue per waiting candidate (PD-07): comment when it is
+          # open, create it when it is not. Closed by candidate_watch once the review
+          # branch is no longer ahead of master.
+          track_issue() {
+            local title="Plant Diversity refresh candidate awaiting review" number
+            number=$(gh issue list --state open --search "$title in:title" --json number,title \
+              | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "$1"
+            else
+              gh issue create --title "$title" --body "$1"
+            fi
+          }
           if [ "$SKIP_DOWNLOAD" != "true" ]; then
             if [[ ! "$CANDIDATE_SOURCE_DIGEST" =~ ^[0-9a-f]{64}$ ]] || \
                [[ "$CANDIDATE_SOURCE_RECEIPT_ID" != *"$CANDIDATE_SOURCE_DIGEST"* ]] || \
@@ -595,7 +732,7 @@ jobs:
           if [ "$SKIP_DOWNLOAD" = "true" ]; then
             receipt="revalidation-only; committed source receipts unchanged"
           else
-            receipt="source query ${CANDIDATE_SOURCE_START} through ${CANDIDATE_SOURCE_CUTOFF}; package ${CANDIDATE_QUERY_PACKAGE}; neonUtilities ${CANDIDATE_NEON_UTILITIES_VERSION}; build date ${CANDIDATE_BUILD_DATE}; app receipt ${CANDIDATE_SOURCE_RECEIPT_ID}; raw family sha256 ${CANDIDATE_SOURCE_DIGEST}; builder ${CANDIDATE_BUILDER_COMMIT}; official NEON release not selected"
+            receipt="source query ${CANDIDATE_SOURCE_START} through ${CANDIDATE_SOURCE_CUTOFF}; package ${CANDIDATE_QUERY_PACKAGE}; neonUtilities ${CANDIDATE_NEON_UTILITIES_VERSION}; build date ${CANDIDATE_BUILD_DATE}; app receipt ${CANDIDATE_SOURCE_RECEIPT_ID}; raw family sha256 ${CANDIDATE_SOURCE_DIGEST}; builder ${CANDIDATE_BUILDER_COMMIT}; NEON release ${CANDIDATE_NEON_RELEASE}"
           fi
           git commit -m "data: propose validated plant-diversity refresh [bot]" \
                      -m "Source ${GITHUB_SHA}; ${receipt}; two exact plant builds, 46 static environment-context byte/schema checks, runtime receipt, manifest, and offline source passed."
@@ -638,6 +775,14 @@ jobs:
               echo "- [Open the reviewer-authenticated draft PR](${compare_url})"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::notice title=Validated draft review branch ready::Open a reviewer-authenticated draft PR from $branch to master after reviewing run ${GITHUB_RUN_ID}; that pull_request event is the exact-head CI trigger. $body Exact candidate head: $published_commit."
+            track_issue "Validated candidate waiting for review.
+          - Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Compare (open the draft PR from here): ${compare_url}
+          - Exact head: ${published_commit}
+          - Receipt: ${receipt}
+          - New NEON change-log ids: ${NEW_CHANGE_LOG_IDS:-none}
+
+          Automation never opens the PR or merges; a person reviews and merges, and the merge is the deploy."
             exit 0
           fi
 
@@ -663,3 +808,103 @@ jobs:
           fi
           gh pr comment "$pr_url" --body "$body Exact candidate head: ${published_commit}.${draft_warning} GitHub will hold the pull_request synchronize checks triggered by this automation update for approval; a repository write user must select **Approve workflows to run**. Do not merge until every required human-review surface is updated and checks are green on exact head ${published_commit}."
           echo "::notice title=Approve exact-head draft-review checks::Existing PR updated to $published_commit.${draft_warning} A repository write user must approve workflows, keep the review draft until the required science/provenance surfaces are complete, and verify green checks on that exact head."
+          track_issue "Existing review PR ${pr_url} updated to exact head ${published_commit} by run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Receipt: ${receipt}. New NEON change-log ids: ${NEW_CHANGE_LOG_IDS:-none}."
+
+  candidate_watch:
+    # Weekly reminder for a waiting candidate, independent of the calendar gate (PD-07).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Remind about or close the refresh tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title="Plant Diversity refresh candidate awaiting review"
+          branch="automation/plant-diversity-data-refresh"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')
+          compare=$(gh api "repos/${GITHUB_REPOSITORY}/compare/master...${branch}" 2>/dev/null || true)
+          ahead=0
+          if [ -n "$compare" ]; then
+            ahead=$(jq -r '.ahead_by // 0' <<< "$compare" 2>/dev/null || echo 0)
+          fi
+          if [[ "$ahead" =~ ^[0-9]+$ ]] && [ "$ahead" -gt 0 ]; then
+            head=$(jq -r '.commits | last | .sha' <<< "$compare")
+            committed=$(jq -r '.commits | last | .commit.committer.date' <<< "$compare")
+            days=$(( ( $(date -u +%s) - $(date -u -d "$committed" +%s) ) / 86400 ))
+            msg="candidate ${head} still unreviewed, ${days} days (branch ${branch}, ${ahead} commit(s) ahead of master). Compare: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/master...${branch}?expand=1. Check: ${run_url}"
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "$msg"
+            else
+              gh issue create --title "$title" --body "$msg"
+            fi
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$number" ]; then
+            gh issue close "$number" --comment "The review branch ${branch} is no longer ahead of master (merged or removed). Closing. Check: ${run_url}"
+            echo "Refresh tracking issue #${number} closed: no waiting candidate." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No waiting refresh candidate." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  release_watch:
+    # Opens one issue when NEON publishes a release newer than the pin (decision 1).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Compare the newest NEON release with the pin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PRODUCTS_URL: https://data.neonscience.org/api/v0/products/DP1.10058.001
+        run: |
+          # Anonymous metadata call. A network or parse error is a warning only.
+          set -uo pipefail
+          pin=$(sed -n 's/^PLANT_NEON_RELEASE <- "\(RELEASE-[0-9]\{4\}\)".*/\1/p' R/plant_release.R)
+          if [[ ! "$pin" =~ ^RELEASE-[0-9]{4}$ ]]; then
+            echo "::warning title=Release watch::could not read PLANT_NEON_RELEASE from R/plant_release.R"
+            exit 0
+          fi
+          body=$(curl -fsS --retry 3 --max-time 60 "$PRODUCTS_URL") || {
+            echo "::warning title=Release watch::NEON products endpoint unreachable; release check skipped"
+            exit 0
+          }
+          newest=$(jq -r '[.data.releases[]?.release | select(test("^RELEASE-[0-9]{4}$"))] | sort | last // empty' <<< "$body" 2>/dev/null) || newest=""
+          if [ -z "$newest" ]; then
+            echo "::warning title=Release watch::no RELEASE-YYYY tag in the products response"
+            exit 0
+          fi
+          echo "NEON release watch: pin ${pin}, newest ${newest}." | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ ! "$newest" > "$pin" ]]; then
+            exit 0
+          fi
+          doi=$(jq -r --arg r "$newest" '[.data.releases[]? | select(.release == $r) | .productDoi.url // empty] | first // empty' <<< "$body" 2>/dev/null) || doi=""
+          title="NEON ${newest} available for DP1.10058.001"
+          number=$(gh issue list --state open --search "$title in:title" --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty') || number=""
+          if [ -n "$number" ]; then
+            echo "Issue #${number} already tracks ${newest}." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh issue create --title "$title" --body "NEON has published ${newest} for DP1.10058.001 (DOI: ${doi:-not yet listed}); the app is pinned to ${pin}.
+          1. Update R/plant_release.R: set PLANT_NEON_RELEASE to ${newest} and add its row (release, DOI, year) to PLANT_NEON_RELEASES.
+          2. Dispatch the refresh workflow (Propose NEON plant-diversity refresh) from master.
+          3. Review the validated candidate on automation/plant-diversity-data-refresh and merge it; the merge is the deploy.
+          Source: ${PRODUCTS_URL}" \
+            || echo "::warning title=Release watch::could not open the release issue"

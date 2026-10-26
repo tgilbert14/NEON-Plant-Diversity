@@ -23,9 +23,11 @@ read_checked <- function(path) {
 }
 
 source("R/site_metadata.R")
+source("R/plant_release.R")
 source("R/source_receipt.R")
 source("R/plant_helpers.R")
 source("R/expected_qc.R")
+source("scripts/plant_oracle.R")
 EXPECTED_SITES <- sort(as.character(neon_sites$site))
 EXPECTED_R_PLATFORM <- "4.5.2"
 EXPECTED_REPOSITORY <-
@@ -118,6 +120,9 @@ for (path in site_files) {
     if ("nativity" %in% names(bundle$occ) &&
         any(!bundle$occ$nativity %in% c("Native", "Introduced", "Unknown")))
       note(sprintf("%s has an unsupported nativity bucket", path))
+    # PD-18: the bundler drops exact duplicate rows; none may remain
+    n_dup <- sum(duplicated(as.data.frame(bundle$occ)))
+    if (n_dup) note(sprintf("%s occurrence carries %d exact duplicate rows", path, n_dup))
   }
   if (!is.data.frame(bundle$ground)) {
     note(sprintf("%s ground cover is not a data frame", path))
@@ -127,6 +132,8 @@ for (path in site_files) {
     if ("percentCover" %in% names(bundle$ground) &&
         any(bundle$ground$percentCover < 0 | bundle$ground$percentCover > 100, na.rm = TRUE))
       note(sprintf("%s has ground cover outside 0..100", path))
+    n_dup <- sum(duplicated(as.data.frame(bundle$ground)))
+    if (n_dup) note(sprintf("%s ground carries %d exact duplicate rows", path, n_dup))
   }
   meta <- bundle$meta
   if (!is.list(meta) ||
@@ -158,7 +165,7 @@ for (site in names(bundles)) {
   occ <- bundles[[site]]$occ
   if (!is.data.frame(occ) || !nrow(occ) ||
       !all(c("plotID", "year", "scale", "bout") %in% names(occ))) next
-  ss <- tryCatch(site_snapshot(occ), error = function(error) error)
+  ss <- tryCatch(site_snapshot(occ, ground = bundles[[site]]$ground), error = function(error) error)
   if (inherits(ss, "error")) {
     note(sprintf("%s snapshot events failed: %s", site, conditionMessage(ss)))
     next
@@ -182,6 +189,29 @@ for (site in names(bundles)) {
   }
   if (is.null(attr(cover_tbl, "event", exact = TRUE)) || !nrow(cover_tbl) || any(as.numeric(cover_tbl$scale) != 1))
     note(sprintf("%s has an empty or non-1 m2 cover event", site))
+}
+
+# ---- independent oracle vs app helpers --------------------------------------
+# scripts/plant_oracle.R rebuilds every headline from the contract text in base
+# R; the app helpers (snapshot_headlines()) must agree exactly on every site.
+oracles <- list()
+for (site in names(snapshots)) {
+  o <- tryCatch(oracle_site_metrics(bundles[[site]]$occ, bundles[[site]]$ground),
+                error = function(error) error)
+  if (inherits(o, "error")) { note(sprintf("%s oracle failed: %s", site, conditionMessage(o))); next }
+  oracles[[site]] <- o
+  h <- snapshot_headlines(snapshots[[site]])
+  same <- function(a, b) isTRUE(all.equal(as.numeric(unname(a)), as.numeric(unname(b)),
+                                          tolerance = 1e-10, check.attributes = FALSE))
+  checks <- c(
+    species = same(h$species, o$richness), plots = same(h$n_plots, o$n_plots),
+    pct_introduced = same(h$pct_introduced, o$pct_introduced),
+    introduced_species = same(h$n_introduced_species, o$n_introduced_species),
+    species_area = same(h$species_area, o$species_area),
+    chao2 = same(h$chao2, o$chao2), S_obs = same(h$S_obs, o$S_obs))
+  if (!all(checks))
+    note(sprintf("%s app headlines differ from the independent oracle: %s", site,
+                 paste(names(checks)[!checks], collapse = ",")))
 }
 
 # ---- environmental overlays ------------------------------------------------
@@ -298,7 +328,7 @@ if (!is.null(site_index)) {
           snapshot <- legacy_plot_latest_snapshot(bundles[[site]]$occ)
           cover_table <- snapshot
         } else {
-          ss <- snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ)
+          ss <- snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ, ground = bundles[[site]]$ground)
           snapshot <- ss$grain
           cover_table <- ss$cover
         }
@@ -306,6 +336,17 @@ if (!is.null(site_index)) {
         expected_richness <- length(unique(species$scientificName))
         expected_plots <- length(unique(snapshot$plotID))
         expected_invasion <- site_invasion(cover_table)
+        if (identical(index_rule, "v2") && !is.null(oracles[[site]])) {
+          # the independent oracle (same 1-dp rounding the index publishes)
+          o <- oracles[[site]]
+          if (!identical(as.integer(row$richness), as.integer(o$richness)) ||
+              !identical(as.integer(row$n_plots), as.integer(o$n_plots)) ||
+              !isTRUE(all.equal(as.numeric(row$pct_introduced), as.numeric(o$pct_introduced),
+                                tolerance = 1e-10)))
+            note(sprintf("site_index differs from the independent oracle at %s (richness %s/%s, plots %s/%s, pct_introduced %s/%s)",
+                         site, row$richness, o$richness, row$n_plots, o$n_plots,
+                         row$pct_introduced, o$pct_introduced))
+        }
         families <- sort(table(species$family[!is.na(species$family)]),
                          decreasing = TRUE)
         expected_family <- if (length(families)) names(families)[1L] else NA_character_
@@ -362,6 +403,29 @@ if (!is.null(source_status)) {
   }
 }
 
+# ---- pinned release and NEON change log -------------------------------------
+if (!is.null(source_status) && !is.na(source_status$neon_release)) {
+  if (!source_status$neon_release %in% PLANT_NEON_RELEASES$release)
+    note(sprintf("plant source release %s is not a registered DP1.10058.001 release",
+                 source_status$neon_release))
+  log_path <- "data/source/neon-change-log.json"
+  if (!file.exists(log_path)) {
+    note("data/source/neon-change-log.json is missing for a release-pinned family")
+  } else {
+    raw_log <- tryCatch(jsonlite::fromJSON(log_path, simplifyVector = FALSE),
+                        error = function(error) NULL)
+    ids <- if (is.null(raw_log)) NULL else
+      suppressWarnings(as.numeric(vapply(raw_log$changeLogs %||% list(), function(x)
+        as.character(x$id %||% NA), character(1))))
+    issues <- if (is.null(raw_log)) NULL else vapply(raw_log$changeLogs %||% list(), function(x)
+      as.character(x$issue %||% NA), character(1))
+    if (is.null(raw_log) || !identical(raw_log$product, "DP1.10058.001") ||
+        !length(ids) || anyNA(ids) || any(ids != floor(ids)) || anyDuplicated(ids) ||
+        is.unsorted(ids, strictly = TRUE) || any(is.na(issues) | !nzchar(trimws(issues))))
+      note("data/source/neon-change-log.json is not a parsable DP1.10058.001 change log (unique sorted integer ids with issue text)")
+  }
+}
+
 if (!is.null(source_status))
   tryCatch(
     verify_plant_durable_source_inventory(source_status, EXPECTED_SITES),
@@ -401,7 +465,7 @@ if (!is.null(search)) {
         note("search taxa contains an unknown site")
       if (length(bundles) == length(EXPECTED_SITES)) {
         expected_keys <- sort(unique(unlist(lapply(names(bundles), function(site) {
-          grain_tbl <- (snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ))$grain
+          grain_tbl <- (snapshots[[site]] %||% site_snapshot(bundles[[site]]$occ, ground = bundles[[site]]$ground))$grain
           species <- species_level_only(grain_tbl)
           paste(site, species$scientificName, sep = "\r")
         }))))
@@ -413,12 +477,10 @@ if (!is.null(search)) {
           rk <- paste(rebuilt_taxa$site, rebuilt_taxa$scientificName, sep = "\r")
           j <- match(keys, rk)
           value_cols <- c("family", "nativity", "mean_cover", "n_plots", "plots_with_cover")
-          # mean_cover is stored rounded to 2 dp; a sum that lands within binary
-          # noise of an .xx5 boundary rounds differently across BLAS/platforms
-          # (five taxon-site rows between macOS and the pinned Linux validator).
-          # Presence counts and labels stay exact; cover tolerates one half unit
-          # of its published rounding on each side (0.01 apart). The validator's own two-build check still
-          # requires identical bytes.
+          # mean_cover is stored unrounded (PD-14/PD-22); summation order may
+          # differ across BLAS/platforms only at binary-noise level.  An index
+          # built before that change stored 2 dp, so 0.01 is still tolerated
+          # there. The validator's own two-build check requires identical bytes.
           same <- !anyNA(j) && all(vapply(value_cols, function(column) {
             a <- as.data.frame(search$taxa)[[column]]; b <- rebuilt_taxa[[column]][j]
             if (identical(column, "mean_cover"))
@@ -523,7 +585,7 @@ if (!is.null(completeness) && is.data.frame(completeness) &&
   rebuilt_rows <- lapply(expected_codes, function(site) {
     expected <- load_expected(site, "data/expected")
     comparison <- if (is.null(expected)) NULL else
-      expected_vs_observed(bundles[[site]]$occ, expected, authority)
+      expected_vs_observed(bundles[[site]]$occ, expected, authority, ground = bundles[[site]]$ground)
     if (is.null(comparison)) return(NULL)
     # Same applicability rule as scripts/build_completeness_index.R: cropland
     # sites carry pct_detected NA and a cropland status.
