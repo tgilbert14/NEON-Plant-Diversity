@@ -1,0 +1,196 @@
+{
+  "changeLogs": [
+    {
+      "dateRangeEnd": "2018-12-31T00:00:00Z",
+      "dateRangeStart": "2018-02-01T00:00:00Z",
+      "id": 16203,
+      "issue": "Reduced sampling: Financial and logistical constraints caused a reduction in sampling capacity.",
+      "issueDate": "2018-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "At each site and for each bout, the number of plots at which the 10 and 100m2 subplots were measured was reduced. The complete plot – including the 10, and 100m2 subplots reported in the div_10m2Data100m2Data as well as the 1m2 subplots reported in the 1m2Data table – was observed at half of the plots and only 1m2 subplots were observed at the other half of the plots. This was a one‐time sampling reduction in response to budget constraints.",
+      "resolvedDate": "2018-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2013-01-01T00:00:00Z",
+      "id": 16204,
+      "issue": "Reduced sampling: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions.",
+      "issueDate": "2019-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Prior to the 2019 field sampling season, the full plot - the 1m2 subplots and the 10 and 100m2 subplots - was observed at every plot targeted for sampling at each bout and each site. For 2019 and subsequent sampling years, the 10 and 100m2 subplots at every plot are sampled every other year at each site.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2013-01-01T00:00:00Z",
+      "id": 16205,
+      "issue": "Reduced sampling: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions.",
+      "issueDate": "2019-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Prior to the 2019 field sampling season, the full plot - the 1m2 subplots and the 10 and 100m2 subplots - was observed at every plot targeted for sampling at each bout and each site. For 2019 and subsequent sampling years, the 10 and 100m2 subplots at every plot are sampled every other year at each site.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2013-01-01T00:00:00Z",
+      "id": 16206,
+      "issue": "Reduced sampling: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions.",
+      "issueDate": "2019-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Prior to the 2019 field sampling season, the full plot - the 1m2 subplots and the 10 and 100m2 subplots - was observed at every plot targeted for sampling at each bout and each site. For 2019 and subsequent sampling years, the 10 and 100m2 subplots at every plot are sampled every other year at each site.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2019-02-01T00:00:00Z",
+      "id": 16207,
+      "issue": "Reduced sampling: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions. (Part 2)",
+      "issueDate": "2019-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Prior to 2019 field sampling season, two additional 1 and 10m2 subplots were sampled at each plot. The presence and percent cover of species and ancillary data was observed in eight 1m2 subplots. The presence of species was observed in eight 10m2 subplots and the four 100m2 subplots. For the 2019 and subsequent sampling years, the presence and percent cover of species and ancillary data is observed in six 1m2 subplots. The presence of species is observed in six 10m2 subplots and the four 100m2 subplots.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2020-10-16T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 16208,
+      "issue": "No sampling impractical: Prior to 2020, there was no mechanism to communicate that fewer than the targeted number of subplots and plots were sampled.  Incomplete sampling, results in reduced sampling effort and additional records should not be expected.",
+      "issueDate": "2020-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "In 2020, NEON added the quality flag \"samplingImpractical\" to the div_1m2Data and  div_10m2Data100m2Data tables of this data product to assist users in understanding when data for this product are temporarily missing versus permanently unavailable. Beginning in 2020, there will *always* be one record generated per subplot in each plot scheduled for sampling in the div_1m2Data and div_10m2Data100m2Data tables. For example, if field sampling was not possible **samplingImpractical** is populated with a value other than 'OK' (e.g., 'location flooded') and no plant species data are recorded in the associated subplot.",
+      "resolvedDate": "2020-10-16T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2020-02-01T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 16209,
+      "issue": "Add \"biophysicalCritera': Prior to 2020, there was no mechanism to communicate to data users instances of data collection when conditions were suboptimal for the identification of plant species.",
+      "issueDate": "2020-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "In 2020, NEON added the quality flag \"biophysicalCritera\" to the div_1m2Data and  div_10m2Data100m2Data tables to assist users in understanding when data for this product was collected when conditions were not optimal. If conditions were suboptimal - the majority of species present do not possess plant parts conducive to identification - the field **biophysicalCriteria** is populated with a value other than \"OK - no known exceptions\" (e.g., conditions not met: most plants not yet flowering) but plant species and ancillary data are recorded.",
+      "resolvedDate": "2020-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2021-12-31T00:00:00Z",
+      "dateRangeStart": "2020-03-23T00:00:00Z",
+      "id": 17950,
+      "issue": "Safety measures to protect personnel during the COVID-19 pandemic resulted in reduced or canceled sampling activities for extended periods at NEON sites. Data availability may be reduced during this time.",
+      "issueDate": "2021-01-06T00:00:00Z",
+      "locationAffected": "All",
+      "resolution": "The primary impact of the pandemic on observational data was reduced data collection. Training procedures and data quality reviews were maintained throughout the pandemic, although some previously in-person training was conducted virtually.  Scheduled measurements and sampling that were not carried out due to COVID-19 or any other causes are indicated in data records via the samplingImpractical data field.",
+      "resolvedDate": "2021-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2021-12-31T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 38404,
+      "issue": "State-level taxa obfuscation: Prior to the 2022 data release, publication of species identifications were obfuscated to a higher taxonomic rank when the taxon was found to be listed as threatened, endangered, or sensitive at the state level where the observation was recorded. Obfuscating state-listed taxa has created challenges for data users studying biodiversity.",
+      "issueDate": "2021-12-09T00:00:00Z",
+      "locationAffected": "All",
+      "resolution": "The state-level obfuscation routine was removed from the data publication process at all locations excluding sites located in D01 and D20. Data have been reprocessed to remove the obfuscation of state-listed taxa. Federally listed threatened and endangered or sensitive species remain obfuscated at all sites and sensitive species remain redacted at National Park sites.",
+      "resolvedDate": "2021-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2022-12-31T00:00:00Z",
+      "dateRangeStart": "2020-03-23T00:00:00Z",
+      "id": 68518,
+      "issue": "Toolik Field Station required a quarantine period prior to starting work in the 2020, 2021, and 2022 field seasons to protect all personnel during the COVID-19 pandemic. This complicated NEON field scheduling logistics, which typically involves repeated travel across the state on short time frames. Consequently, NEON reduced staff traveling to Toolik and was thus unable to complete all planned sampling efforts. Missed data collection events are indicated in data records via the samplingImpractical field.",
+      "issueDate": "2022-09-15T00:00:00Z",
+      "locationAffected": "TOOL",
+      "resolution": "The quarantine policy at Toolik Field Station ended after the 2022 field season.",
+      "resolvedDate": "2022-10-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2022-10-31T00:00:00Z",
+      "dateRangeStart": "2022-06-12T00:00:00Z",
+      "id": 68519,
+      "issue": "Severe flooding destroyed several roads into Yellowstone National Park in June 2022, making the YELL and BLDE sites inaccessible to NEON staff. Observational data collection was halted during this time. Canceled data collection events are indicated in data records via the samplingImpractical field.",
+      "issueDate": "2022-09-15T00:00:00Z",
+      "locationAffected": "YELL",
+      "resolution": "Normal operations resumed on October 31, 2022, when the National Park Service opened a newly constructed road from Gardiner, MT to Mammoth, WY with minimal restrictions. For more details about data impacts, see Data Notification https://www.neonscience.org/impact/observatory-blog/data-impacts-neons-yellowstone-sites-yell-blde-due-catastrophic-flooding-0",
+      "resolvedDate": "2022-10-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2023-04-25T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 79009,
+      "issue": "D01 state-level taxa obfuscation: Prior to the 2024 data release, publication of species identifications were obfuscated to a higher taxonomic rank when the taxon was found to be listed as threatened, endangered, or sensitive by any state within the domain. Obfuscating state-listed taxa across an entire domain has created challenges for data users studying biodiversity.",
+      "issueDate": "2023-05-09T00:00:00Z",
+      "locationAffected": "D01",
+      "resolution": "To reduce the number of records in which taxonomic identifications are obfuscated in D01, the state-level obfuscation routine has been applied to data using site-level granularity as of 25 April 2023. Previously published data have been reprocessed using the more precise obfuscation routine for the 2024 data release and onward. Federally listed threatened and endangered or sensitive species remain obfuscated at all sites.",
+      "resolvedDate": "2023-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2023-12-31T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 81906,
+      "issue": "SubplotId change:The Base plot subplot naming convention was ambiguous with respect to location and scale, and not well differentiated from the identifiers of the points that spatially define Base plots.",
+      "issueDate": "2023-11-09T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "The subplot naming convention is updated across all data products with observations and samples that originate from Base plots. The format consists of the identity of the plot point in the southwest corner of the subplot, the scale or size of the subplot, and, for those subplots smaller than 100 m2, the corner of the 100 m2 subplot in which the smaller subplot is located. For example, ‘21_400’ refers to point 21 in the southwest corner and is 400 m2 (20 m x 20 m), and ‘31_1_1’ is a subplot with point 31 in the southwest corner, is 1 m2, and is in corner 1 of the 100 m2 subplot with point 31 in the southwest corner. See the associated Data Notification for further detail: https://www.neonscience.org/impact/observatory-blog/neon-terrestrial-observation-system-tos-base-plot-subplot-renaming.",
+      "resolvedDate": "2023-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2023-01-01T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 84505,
+      "issue": "Identification history: updates to taxonomic determinations were not previously tracked.",
+      "issueDate": "2023-12-22T00:00:00Z",
+      "locationAffected": "All",
+      "resolution": "In provisional data, RELEASE-2024, and all subsequent releases, if taxonomic determinations are updated for any records, past determinations are archived in the `div_identificationHistory` table, where the archived determinations are linked to current records using identificationHistoryID.",
+      "resolvedDate": "2024-01-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2013-01-01T00:00:00Z",
+      "id": 91804,
+      "issue": "Reduced sampling: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions.",
+      "issueDate": "2019-02-01T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Prior to the 2019 field sampling season, the full plot - the 1m2 subplots and the 10 and 100m2 subplots - was observed at every plot targeted for sampling at each bout and each site. For 2019 and subsequent sampling years, the 10 and 100m2 subplots at every plot are sampled every other year at each site.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2019-02-01T00:00:00Z",
+      "dateRangeStart": "2014-01-01T00:00:00Z",
+      "id": 92504,
+      "issue": "Reduced number of plots: Consultation with the external Technical Working Group guided statistical analyses that resulted in data-driven sampling reductions.",
+      "issueDate": "2024-08-28T00:00:00Z",
+      "locationAffected": "BLAN, SERC, ORNL",
+      "resolution": "Prior to the 2019 field season, additional plots were sampled at BLAN, SERC, and ORNL. The number of Distributed Base plots was reduced to 20 plots at BLAN and SERC, and 25 plots at ORNL for 2019 and ensuing years.",
+      "resolvedDate": "2019-02-01T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2025-12-31T00:00:00Z",
+      "dateRangeStart": "2012-01-01T00:00:00Z",
+      "id": 107504,
+      "issue": "Voucher ‘associatedTaxa’ missing: Field ‘associatedTaxa’ not publishing in the terrestrial plant voucher table (div_voucher). This field is intended to include a list of species in close proximity to the vouchered individual. These associated species are documented in the field, appear on the voucher label, but the aggregated list is not publishing to a single field in the div_voucher table.",
+      "issueDate": "2025-11-25T00:00:00Z",
+      "locationAffected": "All",
+      "resolution": "",
+      "resolvedDate": null
+    },
+    {
+      "dateRangeEnd": "2026-12-31T00:00:00Z",
+      "dateRangeStart": "2026-01-01T00:00:00Z",
+      "id": 110012,
+      "issue": "Suspended sampling: Data collection for Plant presence and percent cover was temporarily suspended for calendar year 2026. This suspension was implemented due to unusual budget demands in 2026. For more details, see https://www.neonscience.org/impact/observatory-blog/2026-product-modifications.",
+      "issueDate": "2026-01-28T00:00:00Z",
+      "locationAffected": "All terrestrial sites",
+      "resolution": "Data collection will resume in 2027.",
+      "resolvedDate": "2026-12-31T00:00:00Z"
+    },
+    {
+      "dateRangeEnd": "2025-12-31T00:00:00Z",
+      "dateRangeStart": "2025-12-31T00:00:00Z",
+      "id": 110614,
+      "issue": "NEON Operations ended at the Dead Lake (DELA) terrestrial site in the fall of 2025, at the request of the site host. Instrument Systems (IS) data collection discontinued as of Oct. 6, 2025, and Observation Systems (OS) data collection discontinued as of Dec 31, 2025. Airborne Observation Platform (AOP) data will continue to be collected. For more details, see  https://www.neonscience.org/impact/observatory-blog/neon-operations-coming-close-dead-lake-alabama-field-site.",
+      "issueDate": "2026-01-29T00:00:00Z",
+      "locationAffected": "DELA",
+      "resolution": "All data and samples collected at DELA up until the site decommissioning will remain available on the NEON Data Portal and Biorepository Data Portal for the lifetime of NEON.",
+      "resolvedDate": "2025-12-31T00:00:00Z"
+    }
+  ],
+  "product": "DP1.10058.001",
+  "source": "https://data.neonscience.org/api/v0/products/DP1.10058.001"
+}
