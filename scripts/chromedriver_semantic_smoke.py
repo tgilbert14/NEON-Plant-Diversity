@@ -52,6 +52,7 @@ return (() => {
     connected: !document.getElementById("shiny-disconnected-overlay"),
     hostError: /startup error|application failed to start|application error|service unavailable/i.test(bodyText),
     title: document.title,
+    lang: document.documentElement.lang || "",
   };
 })();
 """
@@ -185,6 +186,8 @@ def successful(state: dict[str, Any], site: str) -> bool:
             not state.get("outputErrors"),
             state.get("connected") is True,
             state.get("hostError") is False,
+            state.get("title") == "NEON Plant Diversity Explorer",
+            state.get("lang") == "en",
         )
     )
 

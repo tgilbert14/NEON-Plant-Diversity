@@ -1,5 +1,5 @@
 /* =========================================================================
-   plant.css — NEON Plant Diversity Explorer additions on top of the ported
+   plant.css, NEON Plant Diversity Explorer additions on top of the ported
    styles.css (Desert Data Labs house style). Only the plant-specific bits live
    here: the hero band, splash site cards, native/introduced bar, insight list.
    ========================================================================= */
@@ -181,8 +181,8 @@
 .picker-start-head { max-width: 760px; margin: 0 0 18px; }
 .picker-start-kicker {
   margin-bottom: 5px;
-  color: var(--terra);
-  font-size: 11px;
+  color: var(--pine2);
+  font-size: 12px;
   font-weight: 850;
   letter-spacing: .16em;
 }
@@ -198,29 +198,30 @@
   .pde-poster { grid-template-columns: 1fr; min-height: 0; }
   .pde-poster-copy { grid-row: 2; padding: 30px 26px 34px; }
   .pde-poster-topline { margin-bottom: 22px; }
-  .pde-poster-art { grid-row: 1; min-height: 310px; height: 43svh; }
-  .pde-poster-art img { min-height: 310px; height: 43svh; object-position: 58% 57%; }
+  .pde-poster-art { grid-row: 1; min-height: 0; height: 26svh; max-height: 260px; }
+  .pde-poster-art img { min-height: 0; height: 26svh; max-height: 260px; object-position: 58% 57%; }
   .pde-poster-art::after { background: linear-gradient(0deg, var(--pde-cream) 0%, transparent 43%); }
   .pde-poster h1 { font-size: clamp(52px, 12.5vw, 74px); }
 }
 @media (max-width: 560px) {
   .pde-poster { width: calc(100% - 20px); margin-bottom: 20px; border-radius: 0 0 18px 18px; }
-  .pde-poster-copy { padding: 24px 20px 27px; }
-  .pde-poster-topline { gap: 10px; margin-bottom: 18px; padding-bottom: 10px; }
+  .pde-poster-copy { padding: 16px 18px 20px; }
+  .pde-poster-topline { gap: 10px; margin-bottom: 12px; padding-bottom: 8px; }
   .pde-poster-brand, .pde-poster-suite-link { font-size: 8.3px; }
   .pde-poster-suite-link { max-width: 124px; line-height: 1.2; white-space: normal; text-align: right; }
   .pde-poster-app { margin-bottom: 13px; font-size: 9px; }
-  .pde-poster h1 { font-size: clamp(45px, 14.2vw, 58px); }
-  .pde-poster .pde-poster-promise { margin-top: 18px; font-size: 15px; }
-  .pde-poster-cta { width: 100%; margin-top: 21px; }
-  .pde-poster .pde-poster-note { margin-top: 14px; font-size: 9.5px; }
-  .pde-poster-art, .pde-poster-art img { min-height: 275px; height: 39svh; }
+  .pde-poster h1 { font-size: clamp(36px, 11vw, 46px); }
+  .pde-poster .pde-poster-promise { margin-top: 12px; font-size: 15px; }
+  .pde-poster-cta { width: 100%; margin-top: 16px; }
+  .pde-poster .pde-poster-note { margin-top: 10px; font-size: 9.5px; }
+  /* compact echo of the cover (PD-28): keep the art, start the picker within one screen */
+  .pde-poster-art, .pde-poster-art img { min-height: 0; height: 20svh; max-height: 170px; }
 }
 @media (max-width: 340px) {
   .pde-poster-brand { font-size: 7.8px; }
   .pde-poster-brand::before { width: 22px; height: 22px; margin-right: 5px; }
   .pde-poster-suite-link { max-width: 114px; font-size: 7.8px; }
-  .pde-poster h1 { font-size: 42px; }
+  .pde-poster h1 { font-size: 36px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pde-poster-cta { transition: none; }
@@ -305,7 +306,7 @@
 [data-bs-theme="dark"] .site-card { background: var(--paper); }
 
 /* =========================================================================
-   Expected vs Observed (completeness + QC) — buckets, value boxes, flags.
+   Expected vs Observed (completeness + QC), buckets, value boxes, flags.
    All colours read the shared tokens so dark mode flips for free. The hard
    rule: nothing in the completeness lane is ever red.
    ========================================================================= */
@@ -337,7 +338,7 @@
 .evo-card.evo-b { border-left: 4px solid var(--muted) !important; }
 .evo-dl-row { display: flex; justify-content: flex-end; margin: -2px 0 8px; }
 /* anchor DT width so the fill-container flex column can't collapse it to 0
-   (the shinycssloaders spinner-wrapper bug — see map_picker). */
+   (the shinycssloaders spinner-wrapper bug, see map_picker). */
 .evo-tbl-wrap { width: 100%; min-width: 0; }
 .evo-tbl-wrap .dataTables_wrapper { width: 100%; }
 /* Overview tools-strip (compare / export buttons) + compare modal table */
@@ -364,7 +365,7 @@
 .evo-subhead { display: flex; gap: 7px; align-items: baseline; font-size: 13px; color: var(--muted);
   margin: 0 0 10px; font-style: italic; }
 .evo-subhead > .bi { color: var(--sky); flex: none; }
-/* bigger tap target for the info-dot 'i' (the only path to every explanation) —
+/* bigger tap target for the info-dot 'i' (the only path to every explanation) -
    keep the 20px glyph, expand the hittable area to ~44px for thumbs */
 .info-dot { padding: 12px; margin: -12px; }
 @media (max-width: 560px) {
@@ -380,7 +381,7 @@
 .evo-flag-clean > .bi { color: var(--green); }
 .evo-flag-muted { border-left: 4px solid var(--muted); color: var(--muted); }
 .evo-flag-warn  { border-left: 4px solid var(--terra); }
-/* neutral, informational (not a problem) — the "set aside as regional associate" note */
+/* neutral, informational (not a problem), the "set aside as regional associate" note */
 .evo-flag-info  { border-left: 4px solid var(--pine); }
 .evo-flag-info > .bi { color: var(--pine); }
 .evo-flag-info .evo-flag-h { color: var(--pine); }
@@ -391,3 +392,41 @@
 .evo-flag-more { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic; }
 .evo-flag-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
 @media (max-width: 560px) { .evo-box-v { font-size: 22px; } .evo-header { font-size: 13px; } }
+
+/* ---- 2026-10 finish (PD-50, QC flags, scope chips, notices) ------------ */
+/* colour-by radios on the splash map: 44 px touch rows */
+#splashColorBy .form-check, #splashColorBy .radio-inline { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* QC flag levels with the shared .qc-flag-* names, mirroring .evo-flag-* */
+.qc-flag-warn, .qc-flag-info, .qc-flag-clean { border-radius: 10px; padding: 11px 14px; margin: 8px 0;
+  font-size: 13.5px; line-height: 1.5; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.qc-flag-warn  { border-left: 4px solid var(--terra); }
+.qc-flag-info  { border-left: 4px solid var(--pine); }
+.qc-flag-clean { border-left: 4px solid var(--green); }
+.qc-flag-clean > .bi { color: var(--green); }
+.qc-flag-info > .bi { color: var(--pine2); }
+/* a flag header that opens its rows: a full-width button that reads as the header */
+.qc-flag-btn { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 44px; margin: 0 0 8px;
+  padding: 6px 4px; text-align: left; font: inherit; font-weight: 700; color: #4f6b16;
+  background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.evo-flag-info .qc-flag-btn, .qc-flag-info .qc-flag-btn { color: var(--pine2); }
+.qc-flag-btn:hover { background: rgba(31, 111, 55, .07); text-decoration: underline; }
+.qc-flag-btn:focus-visible { outline: 3px solid var(--sky2); outline-offset: 2px; }
+.qc-flag-btn .bi { flex: none; }
+[data-bs-theme="dark"] .qc-flag-btn { color: #c6e47a; }
+[data-bs-theme="dark"] .evo-flag-info .qc-flag-btn, [data-bs-theme="dark"] .qc-flag-info .qc-flag-btn { color: var(--pine2); }
+
+/* scope chip: says whether a view is this site or all sites */
+.scope-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; line-height: 1.6; white-space: nowrap; vertical-align: middle;
+  color: var(--pine2); background: rgba(31, 111, 55, .08); border: 1px solid rgba(31, 111, 55, .25); }
+.scope-chip .bi { font-size: 11px; }
+[data-bs-theme="dark"] .scope-chip { background: rgba(155, 230, 122, .10); border-color: rgba(155, 230, 122, .3); }
+
+/* NEON notices that start after the records end, and the data-through line */
+.hero-notices { margin: 8px 2px 0; padding: 0 0 0 18px; font-size: 12.5px; line-height: 1.45; color: #4f5b6c;
+  overflow-wrap: anywhere; }
+.hero-notices li { margin: 2px 0; }
+.data-through { font-size: 12.5px; line-height: 1.45; color: #4f5b6c; overflow-wrap: anywhere; margin: 4px 0; }
+[data-bs-theme="dark"] .hero-notices, [data-bs-theme="dark"] .data-through { color: var(--muted); }
+@media (max-width: 360px) { .hero-notices, .data-through { font-size: 12px; } }

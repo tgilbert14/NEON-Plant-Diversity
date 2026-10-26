@@ -224,7 +224,10 @@ verify_legacy_plant_source_receipt <- function(site_dir, expected_sites,
       !.receipt_hex(values$source_digest, 64L) ||
       !grepl(values$source_digest, values$source_receipt_id, fixed = TRUE) ||
       !.receipt_hex(values$builder_commit, 40L) ||
-      (!is.na(release) && !grepl("^[A-Za-z0-9._:-]+$", release)))
+      (!is.na(release) && !grepl("^[A-Za-z0-9._:-]+$", release)) ||
+      # a non-NA release must be a registered NEON release (R/plant_release.R)
+      (!is.na(release) && exists("PLANT_NEON_RELEASES") &&
+       !release %in% get("PLANT_NEON_RELEASES")$release))
     stop("Plant bundles contain an invalid refreshed source receipt", call. = FALSE)
   invisible(TRUE)
 }

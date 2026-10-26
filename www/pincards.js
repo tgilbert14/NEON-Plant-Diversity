@@ -1,20 +1,21 @@
-/* =========================================================================
-   pincards.js — tap-to-pin cards + export-with-pins for the Size Lab scatter.
+/* Shared suite chrome: adapted from tgilbert14/NEON-Small-Mammal-Tracker-App@78aed45 (2026-06-18); the copies have diverged since.
+   =========================================================================
+   pincards.js: tap-to-pin cards + export-with-pins for the Size Lab scatter.
 
    Ported from the Big 12 Girth Index pin-card system (ggiraph) onto PLOTLY:
    the same draggable/resizable navy card + gold leader line + html-to-image
-   "download with the pins baked in" — but the click is detected with plotly's
+   "download with the pins baked in", but the click is detected with plotly's
    native `plotly_click` event and the card HTML rides in each point's
    `customdata`, so there's no second rendering stack (the app stays plotly).
 
    The pins, the leader-line SVG layer, and the gold anchor dots all live INSIDE
    the chart's `.smt-pinnable` box (not the plot div), so they travel with the
-   box and — crucially — get captured when html-to-image snapshots the box.
+   box and, crucially, get captured when html-to-image snapshots the box.
 
    Anchors are stored as DATA coordinates (not frozen pixels), so they reposition
    correctly on resize / fullscreen / relayout. The plotly_click handler is
    RE-attached on every (re)render: a Shiny+plotly re-render runs purge+newPlot
-   on the SAME div, which silently wipes gd.on() listeners — so a one-time bind
+   on the SAME div, which silently wipes gd.on() listeners, so a one-time bind
    (the old __smtPinBound guard) left the chart dead after the first re-render.
    ========================================================================= */
 (function () {
@@ -42,7 +43,7 @@
      a pin's leader line follows the dot through any resize/relayout. */
   /* l2p wants the axis's LINEAR coordinate. plotly_click hands x/y back as the raw
      DATA value, so coerce against the axis type before projecting: log10 it on a log
-     axis (the species-area curve), epoch-ms it on a date axis — else the leader line
+     axis (the species-area curve), epoch-ms it on a date axis, else the leader line
      falls back to box-centre with no anchor. */
   function l2pVal(ax, v) {
     if (ax && ax.type === "log" && typeof v === "number" && v > 0) v = Math.log(v) / Math.LN10;
@@ -143,7 +144,7 @@
     });
 
     /* drag-to-move (clamped so a fat-thumb drag can't fling the card off-box).
-       A 4px move threshold (S8): a near-miss TAP — e.g. a few px off the QC chip —
+       A 4px move threshold (S8): a near-miss TAP, e.g. a few px off the QC chip -
        never engages the drag or preventDefaults, so the intended click still fires.
        move/up/cancel bound on WINDOW + capture released (S7): a pointerup off the
        card (scroll-steal, edge swipe, pointercancel) can never leave it stuck. */
@@ -211,7 +212,7 @@
     var dup = Array.prototype.find.call(box.querySelectorAll(".smt-pin"),
       function (p) { return p.__key === key; });
     if (dup) { dup.classList.remove("smt-pulse"); void dup.offsetWidth; dup.classList.add("smt-pulse"); return; }
-    /* anchor from the DATA point (not the finger): exact, and touch-safe — on
+    /* anchor from the DATA point (not the finger): exact, and touch-safe, on
        touch devices plotly's synthesized event has no usable clientX/Y */
     makePin(gd, box, html, pt.x, pt.y, key);
   }
@@ -232,7 +233,7 @@
     return tags.sort().join(",");
   }
 
-  /* (re)bind a plotly graph div. Safe to call repeatedly — it removes any prior
+  /* (re)bind a plotly graph div. Safe to call repeatedly, it removes any prior
      handler first. Clears pins when the underlying DATA changed (filter / select). */
   function bindPlot(gd) {
     if (!gd || typeof gd.on !== "function") return;
@@ -280,31 +281,48 @@
       allowOutsideClick: false, didOpen: function () { if (Swal.showLoading) Swal.showLoading(); } });
   }
   function toastDone(msg, isErr) {
-    if (typeof Swal === "undefined") return;
+    if (typeof Swal === "undefined") {
+      // no toast library: an error still has to reach the visitor
+      if (isErr && typeof window.alert === "function") { try { window.alert(msg); } catch (e) {} }
+      return;
+    }
     Swal.fire({ toast: true, position: "top-end", icon: isErr ? "error" : "success",
-      title: msg, showConfirmButton: false, timer: 2200 });
+      title: msg, showConfirmButton: false, timer: isErr ? 4200 : 2200 });
   }
   function downloadUrl(url, name) {
     var a = document.createElement("a"); a.download = name; a.href = url; a.click();
   }
   var saving = false;
   function snap(node, name, beforeEl) {
-    if (!node || typeof htmlToImage === "undefined" || saving) return;
+    if (!node || saving) return;
+    if (typeof htmlToImage === "undefined") {
+      toastDone("Download needs a file that didn't load. Check your network or ad-blocker, then reload.", true);
+      return;
+    }
     saving = true;
     // force the plotly chart to its current size first (a tab that rendered while
     // hidden, or a just-toggled fullscreen, can leave a 0-sized / stale SVG)
     var gd = node.querySelector ? node.querySelector(".js-plotly-plot") : null;
     if (gd && window.Plotly && Plotly.Plots) { try { Plotly.Plots.resize(gd); } catch (e) {} }
     node.querySelectorAll(".smt-pin.smt-pulse").forEach(function (p) { p.classList.remove("smt-pulse"); });
+    // capture class: drops the card shadow and pulse that WebKit's foreignObject
+    // render paints as a hard gray slab beside every card (follow-up 17)
+    node.classList.add("smt-capturing");
+    var finish = function () { node.classList.remove("smt-capturing"); saving = false; };
     toastStart("Rendering image…");
     setTimeout(function () {
-      htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: bgColor(), cacheBust: true, skipFonts: true,
-        filter: function (n) { return !(n.classList && (n.classList.contains("smt-pin-close") ||
-          n.classList.contains("smt-pin-resize") || n.classList.contains("smt-snap-btn") ||
-          n.classList.contains("smt-clear-btn"))); } })   // keep cards + leader lines; drop chrome buttons
-        .then(function (url) { downloadUrl(url, name); toastDone("Saved ✓"); })
-        .catch(function () { toastDone("Render failed — try again", true); })
-        .then(function () { saving = false; });
+      var job;
+      try {
+        job = htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: bgColor(), cacheBust: true, skipFonts: true,
+          filter: function (n) { return !(n.classList && (n.classList.contains("smt-pin-close") ||
+            n.classList.contains("smt-pin-resize") || n.classList.contains("smt-snap-btn") ||
+            n.classList.contains("smt-clear-btn"))); } });   // keep cards + leader lines; drop chrome buttons
+      } catch (e) {
+        finish(); toastDone("Render failed. Try again.", true); return;
+      }
+      Promise.resolve(job)
+        .then(function (url) { finish(); downloadUrl(url, name); toastDone("Saved ✓"); },
+              function () { finish(); toastDone("Render failed. Try again.", true); });
     }, 90);
   }
   function stamp() {
@@ -339,7 +357,7 @@
      • the card re-renders async (uiOutput) after the server selects the plot, so
        poll for the actual rendered node (#qcCardNode), ~2.5s.
      • behavior:"auto" (instant), NOT "smooth": the scroll happens inside a nested
-       bslib fill container where smooth scrollIntoView silently no-ops — instant
+       bslib fill container where smooth scrollIntoView silently no-ops, instant
        is reliable and respects reduced-motion by definition.
      Driven client-side from the chip click (below) so it can't depend on a server
      round-trip message to fire. */

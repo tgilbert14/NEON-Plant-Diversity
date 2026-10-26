@@ -16,7 +16,7 @@ Before promotion, record:
 - candidate commit SHA;
 - R `4.5.2` and the dated package repository in `.github/workflows/ci.yml`;
 - plant source-receipt class and exact-family guard;
-- either the registered legacy receipt (`builtAt=NA`, `neonRelease=NA`, `sourceCutoff=NA`, with separate `repositoryImportedAt` and `sourceBundleCommit`) or a complete matching refreshed receipt with actual build date, query cutoff/snapshot ID, true selected official release when applicable, raw/source digests, and builder commit;
+- either the registered legacy receipt (`builtAt=NA`, `neonRelease=NA`, `sourceCutoff=NA`, with separate `repositoryImportedAt` and `sourceBundleCommit`) or a complete matching refreshed receipt with actual build date, query cutoff/snapshot ID, the pinned NEON release (`neonRelease`, from `R/plant_release.R`), raw/source digests, and builder commit;
 - site, environment, reference, authority, and index inventory;
 - `manifest.json` SHA-256;
 - CI run URL.
@@ -79,19 +79,41 @@ The cover intentionally does not pre-warm or probe the app. A no-CORS request ca
 
 `.github/workflows/refresh-data.yml` creates a review candidate, never a direct production update:
 
-1. resolve an explicit closed query cutoff and immutable query/snapshot ID; record an official NEON release only if the fetch actually selected it;
-2. fetch exactly 46 sites on R `4.1.1` into empty, read-only staging, rejecting raw rows whose `siteID`/canonical `plotID` or `endDate` falls outside the requested site and source interval;
+1. resolve an explicit closed query cutoff, an immutable query/snapshot ID, and the pinned NEON release named once in `R/plant_release.R` (today `RELEASE-2026`, DOI 10.48443/9g4s-hq52); the fetch requests that release with `include.provisional = FALSE` and rejects any row whose `release` differs;
+2. fetch exactly 46 sites on R `4.1.1` (neonUtilities 4.0.1 or newer) into empty, read-only staging, rejecting raw rows whose `siteID`/canonical `plotID` or `endDate` falls outside the requested site and source interval, and save NEON's change log for the product as `neon-change-log.json` (it becomes `data/source/neon-change-log.json`; the validator warns on entries the committed copy does not have);
 3. preserve `data/source/plant-raw-SHA256SUMS.txt` plus its aggregate source digest, then build twice on R `4.5.2` in separate roots with the actual build date and builder commit recorded separately from the source cutoff;
 4. compare exact derived bytes, require one complete matching receipt across all 46 bundles and `data/site_index.rds`, and rebuild completeness plus the runtime receipt;
 5. preserve the separately versioned environment overlays byte-for-byte while validating their site identity/schema/ranges; do not relabel them with the plant cutoff;
 6. validate the complete inventory, science contracts, app boot, cover, handlers, and manifest;
-7. publish the candidate to a restricted refresh branch and open/update a PR.
+7. compare the candidate's content with the committed content (occurrence and ground rows, site and search indexes, completeness index, change log); when only receipts or checksums moved, publish nothing and say so in the run summary;
+8. otherwise, and only for a run on `master`, publish the candidate to `automation/plant-diversity-data-refresh` and open or update one issue, "Plant Diversity refresh candidate awaiting review". Automation never opens the PR; a person does. The issue closes itself once the branch is no longer ahead of `master`, and gets a weekly reminder while it waits.
 
 Fresh source-family PRs are opened as drafts. The PR CI gate remains red until human-reviewed changes cover the source receipt, science/current-status docs, Data Takeaways and Expert Review, Driver/suite handoffs, build handoff, empirical cover facts, social/OG artwork, image-provenance checksums, and cover receipt; deleting a required surface also fails. Once the branch contains a human review path, a later scheduled run must preserve it and post a newer-candidate notice instead of force-pushing. Artifact validation alone is not permission to retain claims from the previous source family.
 
 `skip_download=true` means revalidate the committed inputs and their unchanged receipt; it is not permission to reuse an unknown or partial cache, and it must not stamp a workflow date, invented release/cutoff, file mtime, or derived hash into source provenance. Any failed or missing site exits non-zero. Old and new bundles must never be mixed.
 
-`NEON_TOKEN` is required only by the scheduled fetch job and belongs in GitHub Actions secrets. It is never included in the app, manifest, logs, or exports.
+`NEON_TOKEN` is required only by the scheduled fetch job and belongs in GitHub Actions secrets. It is never included in the app, manifest, logs, or exports. The gate job probes a NEON data endpoint with it before any download, so a missing or rejected token fails by name. Anyone running the fetch by hand keeps `NEON_TOKEN` in `~/.Renviron`, never in the repository; `.env.example` lists every variable the scripts read, with empty values.
+
+### Release watch
+
+The refresh workflow's `release_watch` job reads NEON's product page each week and opens one issue, "NEON <release> available for DP1.10058.001", when NEON lists a release newer than the pin. Moving to it is a reviewed change to `R/plant_release.R` (release and DOI) followed by a full refresh through the review branch. Nothing switches releases automatically.
+
+### Code changes that move bundle-time values
+
+`data/site_index.rds`, the bundles and the completeness index are built by the refresh producer, never by hand. When a code change moves any of them (a snapshot, denominator or bundler change), dispatch `refresh-data.yml` from the code branch with `skip_download=false`. A run on any ref other than `master` fetches, builds twice and validates as usual, uploads `plant-diversity-refresh-<sha>`, and stops before publishing. Download that artifact, inspect it, and commit its `data/`, `data-sample/demo.rds`, `www/runtime-receipt.txt` and `manifest.json` bytes unchanged on the code branch, then let CI's four-file promotion settle the release bytes. The PR then carries code and data together, and the refresh-review surface gate applies to it.
+
+## Connect content variables
+
+- `CARTO_BASEMAP_KEY`: the suite's CARTO key for the basemap tiles. Set it in Connect Cloud on this content (Settings, Variables), then republish once; variables apply on restart. It is public by design (it travels in the tile URL), so restrict it by referrer in the CARTO dashboard to `share.connect.posit.cloud`. Without it the map falls back to the keyless Esri grey basemap, capped at zoom 16, and nothing errors. Verify by checking that tile requests go to `basemaps.cartocdn.com` with a key parameter, not by an HTTP 200.
+
+## Repository settings (owner)
+
+- Add a ruleset on `master`: require a pull request, require the `release_contracts` check from `ci.yml`, and block force pushes and deletions. The refresh publisher never targets `master`, so the workflow needs no change.
+- Turn on automatic deletion of head branches after merge.
+
+## Platform limits
+
+Connect Cloud sends no `Content-Security-Policy`, `Strict-Transport-Security` or `frame-ancestors` header, and the repository cannot set them. The app has no sign-in and no state-changing action, so framing risk is informational; output escaping (`htmltools::htmlEscape`) is the XSS control. If a custom domain ever fronts the app, set the headers at that proxy.
 
 ## Pages publication
 
@@ -105,6 +127,8 @@ node scripts/write_release_receipts.mjs --check
 Visually inspect both hero crops and `docs/og-image.png`; static metadata checks cannot judge art direction or text legibility.
 
 ## Failure and rollback
+
+`.github/workflows/post-deploy.yml` runs the same receipt-exact smoke on every push to `master`, weekly (Monday 14:30 UTC), and on demand. It also requires the served page title `NEON Plant Diversity Explorer` and `lang="en"`.
 
 If dependency restore, cold start, semantic readiness, site load, export parity, or cover publication fails:
 

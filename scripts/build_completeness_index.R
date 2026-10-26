@@ -63,7 +63,7 @@ for (s in sites) {
   e <- load_expected(s, BUILD_EXPECTED_DIR); if (is.null(e)) next # no reference list -> NA (omit)
   b <- tryCatch(readRDS(file.path(BUILD_SITE_DIR, paste0(s, ".rds"))), error = function(err) NULL)
   if (is.null(b) || is.null(b$occ)) next
-  ev <- tryCatch(expected_vs_observed(b$occ, e, auth), error = function(err) NULL)
+  ev <- tryCatch(expected_vs_observed(b$occ, e, auth, ground = b$ground), error = function(err) NULL)
   if (is.null(ev)) next
   rows[[s]] <- data.frame(site = s, pct_detected = ev$overlap_pct,
     n_ref = ev$n_ref, n_overlap = ev$n_overlap,

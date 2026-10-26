@@ -17,6 +17,9 @@
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
+# the sampled-unit frame of a cover snapshot (or NULL)
+q_units_frame <- function(Q) attr(Q, "sampled_units", exact = TRUE)
+
 EXPECTED_DIR  <- "data/expected"
 AUTHORITY_RDS <- "data/authority/plants_lookup.rds"
 
@@ -24,7 +27,9 @@ AUTHORITY_RDS <- "data/authority/plants_lookup.rds"
 # A site's EXPECTED reference flora, or NULL if unavailable (failed SDA fetch or
 # genuinely no correlated ESD). NULL drives an honest empty state, never "0%".
 load_expected <- function(site, dir = EXPECTED_DIR) {
-  if (is.null(site) || !nzchar(site)) return(NULL)
+  # allowlist before any path is built: a NEON site code only (no traversal)
+  if (!is.character(site) || length(site) != 1L || is.na(site) ||
+      !grepl("^[A-Z0-9]{4}$", site)) return(NULL)
   f <- file.path(dir, paste0(site, ".rds"))
   if (!file.exists(f)) return(NULL)
   e <- tryCatch(readRDS(f), error = function(err) NULL)
@@ -96,8 +101,8 @@ reference_applicability <- function(occ) {
 # snapshot Q with the structural-zero recipe: the sum of the symbol's per-plot
 # mean 1 m^2 cover divided by every supported Q plot, so absence counts as zero
 # (never a presence-conditional mean).  attrs grain_event / cover_event label both.
-observed_species <- function(occ, authority = NULL, snapshot = NULL) {
-  ss <- snapshot %||% site_snapshot(occ)
+observed_species <- function(occ, authority = NULL, snapshot = NULL, ground = NULL) {
+  ss <- snapshot %||% site_snapshot(occ, ground = ground)
   d <- species_level_only(ss$grain)
   if (is.null(d) || !nrow(d)) return(NULL)
   d <- d[!is.na(d$taxonID) & nzchar(d$taxonID), , drop = FALSE]
@@ -106,10 +111,13 @@ observed_species <- function(occ, authority = NULL, snapshot = NULL) {
   Q <- ss$cover
   cov_by <- numeric(0)
   if (!is.null(Q) && nrow(Q)) {
+    # denominator: Q's sampled 1 m^2 units (any rank + ground), fixed before
+    # the species / symbol filter
+    q_units <- cover_units_by_plot(Q, units = attr(Q, "sampled_units", exact = TRUE))
     q1 <- species_level_only(Q)
     q1 <- q1[!is.na(q1$taxonID) & nzchar(q1$taxonID), , drop = FALSE]
-    psc <- if (nrow(q1)) plot_species_cover(q1) else NULL
-    n_sup <- dplyr::n_distinct(Q$plotID[.scale_num(Q$scale) %in% 1])
+    psc <- if (nrow(q1)) plot_species_cover(q1, units = q_units_frame(Q)) else NULL
+    n_sup <- nrow(q_units)
     if (!is.null(psc) && nrow(psc) && n_sup > 0) {
       name_sym <- tapply(accept_symbol(q1$taxonID, authority), q1$scientificName, mode_chr)
       psym <- unname(name_sym[psc$scientificName])
@@ -129,7 +137,7 @@ observed_species <- function(occ, authority = NULL, snapshot = NULL) {
       nativity       = .resolve_nativity(.data$nativity), # conflicts route to Unknown/review
       n_plots        = dplyr::n_distinct(.data$plotID),
       .groups = "drop") %>%
-    dplyr::mutate(mean_cover = round(as.numeric(cov_by[.data$sym]), 2)) %>%
+    dplyr::mutate(mean_cover = as.numeric(cov_by[.data$sym])) %>%
     dplyr::arrange(dplyr::desc(.data$n_plots), dplyr::desc(.data$mean_cover))
   out <- out[, c("sym", "scientificName", "family", "nativity_conflict", "nativity",
                  "neon_status", "n_plots", "mean_cover")]
@@ -155,9 +163,9 @@ reference_species_clean <- function(expected, authority = NULL) {
 # B  Expected but Absent  -> completeness gap, sorted by rangeprod (neutral)
 # C  Observed but NOT in reference -> the genuine review lane (clay), split
 #    Introduced (invasion signal) vs Native-not-in-reference (range/mapping/misID)
-expected_vs_observed <- function(occ, expected, authority = NULL) {
+expected_vs_observed <- function(occ, expected, authority = NULL, ground = NULL) {
   if (is.null(expected)) return(NULL)
-  ss <- site_snapshot(occ)
+  ss <- site_snapshot(occ, ground = ground)
   applicability <- reference_applicability(occ)
   obs <- observed_species(occ, authority, snapshot = ss)
   ref <- reference_species_clean(expected, authority)
@@ -265,9 +273,9 @@ flag_coarse_rank <- function(occ) {
 # needs the authority; returns NULL (handled as "needs authority") when absent.
 # Only N-vs-I disagreements count; NEON NI/UNK and USDA unknown are NON-conflicting
 # (nativity is regional — a true scale mismatch, not a contradiction).
-flag_nativity_mismatch <- function(occ, authority = NULL) {
+flag_nativity_mismatch <- function(occ, authority = NULL, snapshot = NULL) {
   if (is.null(authority) || is.null(authority$authority) || !nrow(authority$authority)) return(NULL)
-  obs <- observed_species(occ, authority)
+  obs <- observed_species(occ, authority, snapshot = snapshot)
   empty <- data.frame(
     sym = character(), scientificName = character(), family = character(),
     nativity = character(), usda_nativity = character(), n_plots = integer(),
@@ -300,7 +308,7 @@ flag_cover_sum <- function(occ, ceiling_pct = 250) {
                       bout = character(), total_cover = numeric(), stringsAsFactors = FALSE)
   d <- occ[occ$scale == 1 & is.finite(occ$percentCover) & occ$percentCover > 0, , drop = FALSE]
   if (is.null(d) || !nrow(d)) return(list(rows = empty, n = 0L, ceiling = ceiling_pct))
-  d$.bout <- if ("bout" %in% names(d)) ifelse(is.na(d$bout), "—", as.character(d$bout)) else "—"
+  d$.bout <- if ("bout" %in% names(d)) ifelse(is.na(d$bout), "n/a", as.character(d$bout)) else "n/a"
   agg <- d %>% dplyr::group_by(.data$plotID, .data$subplotID, .data$year, .data$.bout) %>%
     dplyr::summarise(total_cover = sum(.data$percentCover), .groups = "drop")
   bad <- agg[is.finite(agg$total_cover) & agg$total_cover > ceiling_pct, , drop = FALSE]
@@ -310,6 +318,92 @@ flag_cover_sum <- function(occ, ceiling_pct = 250) {
   out <- out[order(-out$total_cover), , drop = FALSE]
   list(rows = out, n = nrow(out), ceiling = ceiling_pct)
 }
+
+# Flag 5 (PD-18) — duplicate records.  Rows that share one sampling key
+# (plotID, subplotID, scale, year, bout, taxonID) after the bundler dropped
+# exact duplicates: the same taxon recorded twice in one quadrat visit, usually
+# with different cover.  Kept (aggregation sums them) and flagged: verify, not
+# wrong.  `covers` lists the cover values ("18; 12").
+flag_duplicate_records <- function(occ) {
+  empty <- data.frame(plotID = character(), subplotID = character(), scale = integer(),
+                      year = integer(), bout = character(), taxonID = character(),
+                      scientificName = character(), n_records = integer(),
+                      covers = character(), stringsAsFactors = FALSE)
+  need <- c("plotID", "subplotID", "scale", "year", "taxonID")
+  if (is.null(occ) || !nrow(occ) || !all(need %in% names(occ))) return(list(rows = empty, n = 0L))
+  txt <- function(x) ifelse(is.na(x), "n/a", as.character(x))
+  bout <- if ("bout" %in% names(occ)) txt(occ$bout) else rep("n/a", nrow(occ))
+  key <- paste(txt(occ$plotID), txt(occ$subplotID), txt(occ$scale), txt(occ$year), bout,
+               txt(occ$taxonID), sep = "\r")
+  dup <- key %in% key[duplicated(key)]
+  if (!any(dup)) return(list(rows = empty, n = 0L))
+  ix <- split(which(dup), key[dup])
+  pc <- if ("percentCover" %in% names(occ)) occ$percentCover else rep(NA_real_, nrow(occ))
+  rows <- do.call(rbind, lapply(ix, function(i) data.frame(
+    plotID = as.character(occ$plotID[i[1]]), subplotID = as.character(occ$subplotID[i[1]]),
+    scale = as.integer(.scale_num(occ$scale[i[1]])),
+    year = as.integer(occ$year[i[1]]), bout = bout[i[1]],
+    taxonID = as.character(occ$taxonID[i[1]]),
+    scientificName = as.character(occ$scientificName[i[1]]),
+    n_records = length(i),
+    covers = paste(ifelse(is.na(pc[i]), "n/a", format(pc[i], trim = TRUE)), collapse = "; "),
+    stringsAsFactors = FALSE)))
+  rows <- rows[order(rows$plotID, rows$subplotID, rows$year, rows$bout, rows$taxonID,
+                     method = "radix"), , drop = FALSE]
+  rownames(rows) <- NULL
+  list(rows = rows, n = nrow(rows))
+}
+
+# One typed long frame of every data-quality flag at a site (PD-23), the
+# qc_flags.csv export and the suite's <entity>_qc() entry point.  Columns:
+# site, flag, level, plotID, subplotID, year, bout, symbol, scientificName,
+# family, nativity, usda_nativity, n_plots, observed_cover,
+# quadrat_cover_sum_pct, n_records.  Flags: nativity_mismatch (warn; needs the
+# USDA authority), cover_sum_gt_250 (warn), duplicate_record (info).  A
+# zero-row frame of the same types when the site is clean.
+qc_flags_table <- function(occ, authority = NULL, site = NA_character_, snapshot = NULL) {
+  site <- as.character(site %||% NA_character_)[1]
+  mk <- function(n, flag, level) data.frame(
+    site = rep(site, n), flag = rep(flag, n), level = rep(level, n),
+    plotID = rep(NA_character_, n), subplotID = rep(NA_character_, n),
+    year = rep(NA_integer_, n), bout = rep(NA_character_, n),
+    symbol = rep(NA_character_, n), scientificName = rep(NA_character_, n),
+    family = rep(NA_character_, n), nativity = rep(NA_character_, n),
+    usda_nativity = rep(NA_character_, n), n_plots = rep(NA_integer_, n),
+    observed_cover = rep(NA_real_, n), quadrat_cover_sum_pct = rep(NA_real_, n),
+    n_records = rep(NA_integer_, n), stringsAsFactors = FALSE)
+  parts <- list(mk(0L, character(), character()))
+  nm <- tryCatch(flag_nativity_mismatch(occ, authority, snapshot = snapshot), error = function(e) NULL)
+  if (!is.null(nm) && nm$n > 0) {
+    r <- nm$rows; x <- mk(nrow(r), "nativity_mismatch", "warn")
+    x$symbol <- as.character(r$sym); x$scientificName <- as.character(r$scientificName)
+    x$family <- as.character(r$family); x$nativity <- as.character(r$nativity)
+    x$usda_nativity <- as.character(r$usda_nativity); x$n_plots <- as.integer(r$n_plots)
+    x$observed_cover <- as.numeric(r$mean_cover)
+    parts[[length(parts) + 1L]] <- x
+  }
+  cs <- tryCatch(flag_cover_sum(occ), error = function(e) NULL)
+  if (!is.null(cs) && cs$n > 0) {
+    r <- cs$rows; x <- mk(nrow(r), "cover_sum_gt_250", "warn")
+    x$plotID <- as.character(r$plotID); x$subplotID <- as.character(r$subplotID)
+    x$year <- as.integer(r$year); x$bout <- as.character(r$bout)
+    x$quadrat_cover_sum_pct <- as.numeric(r$total_cover)
+    parts[[length(parts) + 1L]] <- x
+  }
+  dr <- tryCatch(flag_duplicate_records(occ), error = function(e) NULL)
+  if (!is.null(dr) && dr$n > 0) {
+    r <- dr$rows; x <- mk(nrow(r), "duplicate_record", "info")
+    x$plotID <- r$plotID; x$subplotID <- r$subplotID; x$year <- r$year; x$bout <- r$bout
+    x$symbol <- r$taxonID; x$scientificName <- r$scientificName; x$n_records <- r$n_records
+    parts[[length(parts) + 1L]] <- x
+  }
+  out <- do.call(rbind, parts)
+  rownames(out) <- NULL
+  out
+}
+
+# suite alias (<entity>_qc convention)
+plant_qc <- qc_flags_table
 
 # ---- match-rate honesty (publish on every name-join) ----------------------
 # % of observed symbols that resolved to a USDA accepted symbol (needs authority)

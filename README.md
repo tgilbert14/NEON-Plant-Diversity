@@ -1,14 +1,14 @@
 # NEON Plant Diversity Explorer
 
-See how plant communities change from **1 to 400 m²**, inspect native and introduced cover, and audit what the currently shipped bytes can—and cannot—support across 46 bundled NEON terrestrial sites.
+See how plant communities change from **1 to 400 m²**, inspect native and introduced cover, and see what the shipped records can and cannot support across 46 bundled NEON terrestrial sites.
 
-[Open the public cover](https://tgilbert14.github.io/NEON-Plant-Diversity/) · [Launch the app](https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/) · [Open Driver Cascade](https://tgilbert14.github.io/NEON-Driver-Cascade/)
+[Open the public cover](https://tgilbert14.github.io/NEON-Plant-Diversity/) · [Launch the app](https://019ee109-30ae-006e-cb3b-143afeac57e3.share.connect.posit.cloud/) · [Open the NEON Cross-Product Response Atlas](https://tgilbert14.github.io/NEON-Driver-Cascade/)
 
 Validated data candidate `a9fc28fdaebd318744dadde341c0cca55a91a899` refreshes the receipt-complete 46-site query snapshot: built 2026-10-21 from a `basic` query spanning 2013-01 through the closed cutoff 2026-09-30. No occurrence or ground row was added or removed; the newest retained observation year is still 2024, not the query-cutoff year, and no official NEON release was selected, so `neonRelease=NA`. Most `site_index` values move anyway (43 of 46 rows), because this is the first full refresh built under the `plant-snapshot-v2` contract (SRER 161 to 203 species at 33 plots). Production is master `280539c8713c16b6b13d47d5916e0f50a10edd24`, which serves the plant-snapshot-v2 code over the 2026-08-03 receipt and a pre-v2 site index, until this candidate passes exact-head CI, merge, Connect, Pages, export, responsive, and semantic-health verification. See [Build-Test Handoff](docs/BUILD-TEST-HANDOFF.md).
 
 This is an independent, unofficial R/Shiny explorer for NEON **Plant presence and percent cover** (`DP1.10058.001`). It is the **composition and invasion context** app in the NEON Explorer Suite. It does not treat richness as productivity, turn per-site short records into causal climate edges, or make management prescriptions.
 
-## Start with the honest question
+## What the app describes
 
 The app is strongest at describing:
 
@@ -27,7 +27,7 @@ It does **not** establish:
 - temporal spread from a cross-scale occurrence gap;
 - equal-effort national rankings from raw site richness;
 - a site-wide expected flora from one NRCS reference coordinate;
-- a Driver Cascade edge from a handful of within-site annual points.
+- a NEON Cross-Product Response Atlas edge from a handful of within-site annual points.
 
 ## Product structure
 
@@ -79,17 +79,20 @@ The app also ships 46 versioned-static environmental context bundles, a network 
 
 The whole-site ZIP preserves:
 
-- `occurrences_all.csv` — every bundled taxon record, including coarse IDs;
-- `analysis_snapshot.csv` — the exact current-state plot snapshots;
-- `plots_snapshot.csv` — plot-level richness, nativity, cover, coordinates, and support;
-- `ground_cover_all.csv` — bundled ground-cover history;
-- `environment_context.csv` — co-located context when available;
-- `expected_vs_observed.csv` and `reference_provenance.csv` when a reference is available;
-- `provenance.csv` — bundle checksum, source-receipt fields (including explicit unknowns), product, license, and estimator contract;
-- `plant_raw_source_SHA256SUMS.txt` after a receipt-complete refresh — the durable per-file raw-source inventory bound by `sourceDigest`;
-- `data_dictionary.csv` — strict meanings, types, units, NA semantics, and estimands for every exported column.
+- `occurrences_all.csv`: every bundled taxon record, including coarse IDs;
+- `analysis_snapshot.csv`: the records of the full-grain site event behind richness and species-area;
+- `cover_snapshot.csv`: the records of the 1 m² cover event behind cover, Hill numbers, Chao2 and the watchlist;
+- `plots_snapshot.csv`: plot-level richness, nativity, cover, coordinates, and support;
+- `ground_cover_all.csv`: bundled ground-cover history;
+- `environment_context.csv`: co-located context when available;
+- `expected_vs_observed.csv`, `reference_provenance.csv` and `qc_flags.csv` when a reference is available;
+- `provenance.csv`: bundle checksum, source-receipt fields (including explicit unknowns), NEON release and DOI, product, license, and estimator contract;
+- `plant_raw_source_SHA256SUMS.txt` after a receipt-complete refresh: the durable per-file raw-source inventory bound by `sourceDigest`;
+- `data_dictionary.csv`: strict meanings, types, units, NA semantics, and estimands for every exported column. The same dictionary opens in the app's About panel and downloads on its own.
 
-NEON data are licensed CC BY 4.0. NRCS reference sources are U.S. federal public-domain data. Source details and limitations travel with the export.
+NEON data are licensed CC BY 4.0. Cite them as: NEON (National Ecological Observatory Network). Plant presence and percent cover (DP1.10058.001), RELEASE-2026. https://doi.org/10.48443/9g4s-hq52. Dataset accessed from https://data.neonscience.org. NRCS reference sources are U.S. federal public-domain data. Source details and limitations travel with the export.
+
+NEON publishes this product at 47 terrestrial sites. Pu'u Maka'ala (PUUM, Hawai'i) is not yet bundled here: its USDA nativity authority entries, NRCS reference lookup and environment overlay need their own build before the 46-site checks can move to 47. NEON suspended field sampling for this product in 2026 (change log 110012), and field operations at Dead Lake (DELA) ended on 2025-12-31 (change log 110614); the app shows both as NEON notices.
 
 ## Run locally
 
@@ -120,14 +123,14 @@ Read [Build–Test Handoff](docs/BUILD-TEST-HANDOFF.md) and [Deploy](DEPLOY.md) 
 
 A refresh is a candidate, not an automatic publication. Any refresh that fetches replacement plant bytes must replace the legacy-partial receipt with one complete matching receipt across all 46 plant bundles and `data/site_index.rds`:
 
-1. fetch an explicit query cutoff and immutable query/snapshot ID into isolated staging; record an official NEON release only if that release was actually selected;
+1. fetch the pinned NEON release (`R/plant_release.R`) up to an explicit query cutoff and immutable query/snapshot ID into isolated staging, rejecting any row from another release, and save NEON's change log for the product;
 2. fail if any of the 46 expected sites is missing or failed, or if a consumed raw row has a foreign site identity or an unparseable/out-of-window `endDate`;
 3. build all plant, completeness, demo, and search artifacts atomically; preserve the actual build date separately from the query cutoff, the durable per-file raw SHA-256 inventory and aggregate source digest, plus the builder commit; carry the separately versioned environment context forward byte-for-byte and revalidate its site/schema/runtime receipt;
 4. prove schema, cross-index, scientific-fixture, manifest, offline-boot, and two-build determinism gates;
-5. open a review branch/PR with the data and deletion diff;
+5. publish a review branch only when the content changed (receipt or checksum churn alone publishes nothing), and open or update one tracking issue; a person opens the PR;
 6. publish only the reviewed commit and verify the public semantic readiness marker.
 
-The automation opens a draft PR. CI compares the plant source family with the PR base and stays red until a human has reviewed and changed every provenance/current-status document, the Data Takeaways and Expert Review verdicts, Driver and suite handoffs, empirical cover facts, social/OG artwork, image-provenance checksums, cover receipt, and build handoff. Missing or deleted review surfaces also fail. Once any human review path exists on that branch, later scheduled runs preserve it and only post a newer-candidate notice. This prevents a technically valid query-snapshot refresh from silently leaving public legacy-family claims behind or overwriting review work.
+A person opens the review PR as a draft. CI compares the plant source family with the PR base and stays red until a human has reviewed and changed every provenance/current-status document, the Data Takeaways and Expert Review verdicts, Driver and suite handoffs, empirical cover facts, social/OG artwork, image-provenance checksums, cover receipt, and build handoff. Missing or deleted review surfaces also fail. Once any human review path exists on that branch, later scheduled runs preserve it and only post a newer-candidate notice. This prevents a technically valid query-snapshot refresh from silently leaving public legacy-family claims behind or overwriting review work.
 
 The refresh workflow must never mix new partial raw data with old site bundles or push directly to `master`. `skip_download=true` revalidates the committed receipt and bytes; it does not stamp a new build date, release, cutoff, or source vintage.
 

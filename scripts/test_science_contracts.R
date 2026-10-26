@@ -3,6 +3,7 @@
 # Executable science-contract fixtures. Metric tests use synthetic records;
 # release-receipt tests inspect only committed local bytes. Nothing uses network.
 suppressPackageStartupMessages(library(dplyr))
+source("R/plant_release.R")
 source("R/plant_helpers.R")
 source("R/site_metadata.R")
 source("R/source_receipt.R")
@@ -526,7 +527,7 @@ assert(identical(crop_app$applies, FALSE) &&
 # 7. The PDF must use the app's labelled events: Chao2 on the cover table (Q),
 # species-area on the grain table (F), both from site_snapshot().
 pdf_body <- paste(deparse(body(build_diversity_report)), collapse = "\n")
-assert(grepl("site_snapshot(occ)", pdf_body, fixed = TRUE) &&
+assert(grepl("site_snapshot(occ", pdf_body, fixed = TRUE) &&
        grepl("chao2(cover_tbl)", pdf_body, fixed = TRUE) &&
        grepl("species_area_site(grain_tbl)", pdf_body, fixed = TRUE) &&
        !grepl("latest_snapshot(", pdf_body, fixed = TRUE),
@@ -576,5 +577,159 @@ unknown_failed <- tryCatch({
 assert(unknown_failed, "codebook accepted an undocumented exported column")
 assert(is.null(plant_codebook(list("empty.csv" = data.frame()))),
        "zero-column empty export crashed the codebook")
+
+# ---- PD-39: observed_species() reads the RAW nativity for neon_status --------
+assert(identical(obs$neon_status, "I|N"),
+       "observed_species() neon_status read the already-resolved nativity (summarise gotcha)")
+
+# ---- PD-14: the cover denominator is the event's sampled 1 m^2 units --------
+den_occ <- rbind(
+  full_plot("SRER_001", 2023, 1, "X", cover = 30))
+den_ground <- data.frame(
+  plotID = "SRER_001", subplotID = c("31_1_1", "32_1_2", "40_1_1", "41_1_4"),
+  year = c(2023L, 2023L, 2023L, 2022L), bout = 1L,
+  otherVariables = c("litter", "soil", "overstory", "litter"),
+  percentCover = c(30, 60, 15, 99), stringsAsFactors = FALSE)
+q_plain <- site_snapshot(den_occ, min_plots = 1L)$cover
+q_ground <- site_snapshot(den_occ, ground = den_ground, min_plots = 1L)$cover
+assert(nrow(attr(q_plain, "sampled_units")) == 1L && nrow(attr(q_ground, "sampled_units")) == 3L,
+       "sampled_units() did not add the event's ground-cover quadrats (or took another year's)")
+psc_plain <- plot_species_cover(q_plain); psc_ground <- plot_species_cover(q_ground)
+assert(near(psc_plain$mean_cover, 30) && near(psc_ground$mean_cover, 10) &&
+       near(psc_plain$mean_cover / psc_ground$mean_cover, 3),
+       "ground-cover quadrats did not lower mean cover by the expected factor (3)")
+sp_ground <- species_summary(site_snapshot(den_occ, ground = den_ground, min_plots = 1L)$grain, q_ground)
+assert(near(sp_ground$mean_cover, 10), "species_summary() ignored the sampled-unit denominator")
+# a quadrat holding only a coarse (genus) ID is a sampled unit
+coarse_occ <- rbind(den_occ, transform(occ_row("SRER_001", "32_1_2", 2023, 1, "GEN", "Genus sp.", cover = 5),
+                                       taxonRank = "genus", is_species = FALSE))
+q_coarse <- site_snapshot(coarse_occ, min_plots = 1L)$cover
+assert(near(plot_species_cover(q_coarse)$mean_cover, 15),
+       "a coarse-only quadrat did not count as a sampled 1 m^2 unit")
+# no per-plot rounding: 10 over 3 units stays 3.333..., not 3.33
+round_occ <- full_plot("SRER_001", 2023, 1, "X", cover = 10)
+q_round <- site_snapshot(round_occ, ground = den_ground, min_plots = 1L)$cover
+assert(near(plot_species_cover(q_round)$mean_cover, 10 / 3),
+       "plot_species_cover() still rounds per-plot means")
+# units travel through the watchlist and a present invader is never exported as 0
+wl_occ <- rbind(full_plot("SRER_001", 2023, 1, "N", cover = 50),
+                occ_row("SRER_001", "32_1_2", 2023, 1, "INV", "Tiny invader", "Introduced", "I", cover = 0.01))
+wl_ground <- data.frame(plotID = "SRER_001", subplotID = sprintf("%d_1_%d", rep(c(31, 32, 40, 41), each = 2), rep(1:2, 4)),
+                        year = 2023L, bout = 1L, otherVariables = "soil", percentCover = 50, stringsAsFactors = FALSE)
+wl_q <- site_snapshot(wl_occ, ground = wl_ground, min_plots = 1L)$cover
+wl <- invasive_watchlist(wl_q)
+assert(nrow(wl) == 1L && wl$mean_cover > 0 && near(wl$mean_cover, 0.01 / 8) && wl$n_supported_plots == 1L,
+       "the watchlist exported 0 (or the wrong denominator) for a present invader")
+# annual series: the selected bout's ground quadrats join the denominator
+ann_occ <- rbind(one_m_plot("SRER_001", 2022, 1, "X", cover = 30), one_m_plot("SRER_001", 2023, 1, "X", cover = 30))
+ann_g <- den_ground[den_ground$year == 2023, ]
+ann <- annual_plant_metrics(ann_occ, ground = ann_g)
+assert(near(ann$total_cover[ann$year == 2023], 10) && near(ann$total_cover[ann$year == 2022], 30) &&
+       ann$n_sampling_units[ann$year == 2023] == 3L,
+       "annual cover did not use the plot-year's sampled units")
+
+# ---- PD-15: ground cover on the cover event, structural zero, canopy layer --
+gs <- ground_summary(den_ground, q_ground)
+assert(identical(gs$otherVariables, c("soil", "litter", "overstory")) &&
+       near(gs$mean_cover, c(20, 10, 5)) && all(gs$n_units == 3L) &&
+       near(gs$pct_quadrats_recorded, rep(100 / 3, 3)) &&
+       identical(gs$layer, c("ground", "ground", "canopy")),
+       "ground_summary() is not the event's structural-zero mean with overstory as a canopy layer")
+assert(!is.null(ground_summary(den_ground)) && "pct_quadrats_recorded" %in% names(ground_summary(den_ground)),
+       "the legacy ground_summary(ground) call broke")
+
+# ---- PD-18 / PD-23: duplicate flag and the typed QC flag table --------------
+dup_occ <- rbind(full_plot("SRER_001", 2023, 1, "X", cover = 18),
+                 occ_row("SRER_001", "31_1_1", 2023, 1, "X", "X species", cover = 12))
+dr <- flag_duplicate_records(dup_occ)
+assert(dr$n == 1L && dr$rows$n_records == 2L && identical(dr$rows$covers, "18; 12"),
+       "flag_duplicate_records() missed a same-key record pair")
+qc_cols <- c("site", "flag", "level", "plotID", "subplotID", "year", "bout", "symbol",
+             "scientificName", "family", "nativity", "usda_nativity", "n_plots",
+             "observed_cover", "quadrat_cover_sum_pct", "n_records")
+qc_clean <- qc_flags_table(den_occ, NULL, "SRER")
+assert(identical(names(qc_clean), qc_cols) && nrow(qc_clean) == 0L &&
+       is.integer(qc_clean$year) && is.numeric(qc_clean$observed_cover) && is.integer(qc_clean$n_records),
+       "qc_flags_table() is not a typed zero-row frame on a clean site")
+mm_occ <- rbind(full_plot("SRER_001", 2023, 1, "X", cover = 18),
+                full_plot("SRER_002", 2023, 1, "X", cover = 18), full_plot("SRER_003", 2023, 1, "X", cover = 18),
+                occ_row("SRER_001", "31_1_1", 2023, 1, "X", "X species", cover = 12),
+                occ_row("SRER_002", "31_1_2", 2023, 1, "X", "X species", cover = 200),
+                occ_row("SRER_002", "31_1_2", 2023, 1, "Y", "Y species", cover = 100))
+mm_auth <- list(authority = data.frame(accepted_symbol = "X", nativity_usda = "Introduced",
+                                       stringsAsFactors = FALSE), synonyms = character())
+qc <- plant_qc(mm_occ, mm_auth, "SRER")
+assert(identical(names(qc), qc_cols) &&
+       setequal(qc$flag, c("nativity_mismatch", "cover_sum_gt_250", "duplicate_record")) &&
+       identical(qc$level[qc$flag == "duplicate_record"], "info") &&
+       qc$quadrat_cover_sum_pct[qc$flag == "cover_sum_gt_250"] == 300 &&
+       identical(qc$usda_nativity[qc$flag == "nativity_mismatch"], "Introduced"),
+       "qc_flags_table() did not stack the three typed flags")
+qc_cb <- plant_codebook(list("qc_flags.csv" = qc, "qc_flags_empty.csv" = qc_clean,
+                             "ground.csv" = gs, "watchlist.csv" = as.data.frame(wl)))
+assert(nrow(qc_cb) == 2L * length(qc_cols) + ncol(gs) + ncol(wl),
+       "plant_codebook() does not document the QC / ground / watchlist exports")
+flag_cs <- flag_cover_sum(transform(mm_occ, bout = NA))
+assert(all(flag_cs$rows$bout == "n/a"), "the missing-bout placeholder is not n/a")
+
+# ---- release pin, DOI, citation, raw-row release gate ------------------------
+assert(identical(PLANT_NEON_RELEASE, "RELEASE-2026") &&
+       identical(plant_release_doi(), "https://doi.org/10.48443/9g4s-hq52") &&
+       identical(plant_release_doi("RELEASE-2021"), "https://doi.org/10.48443/abge-r811") &&
+       is.na(plant_release_doi("RELEASE-1999")) && is.na(plant_release_doi(NA)),
+       "release DOI table is wrong")
+assert(identical(plant_release_citation(), paste0(
+  "NEON (National Ecological Observatory Network). Plant presence and percent cover ",
+  "(DP1.10058.001), RELEASE-2026. https://doi.org/10.48443/9g4s-hq52. Dataset accessed ",
+  "from https://data.neonscience.org. CC BY 4.0.")) &&
+  !grepl("RELEASE|doi", plant_release_citation(NA)),
+  "release citation is wrong (or invents a release for NA)")
+rel_fx <- data.frame(release = c("RELEASE-2026", "PROVISIONAL", "RELEASE-2026"))
+assert(length(plant_release_row_problems(rel_fx[c(1, 3), , drop = FALSE], "RELEASE-2026", "t")) == 0L &&
+       length(plant_release_row_problems(rel_fx, "RELEASE-2026", "t")) == 1L &&
+       length(plant_release_row_problems(rel_fx, "RELEASE-2026", "t", consumed = c(TRUE, FALSE, TRUE))) == 0L &&
+       length(plant_release_row_problems(data.frame(x = 1), "RELEASE-2026", "t")) == 1L,
+       "plant_release_row_problems() does not fail closed")
+assert(identical(plant_data_through(list(list(years = 2016:2024), list(years = 2013:2020))), 2024L),
+       "plant_data_through() is not the latest observation year")
+
+# ---- NEON change log loader and per-site notices -----------------------------
+cl_path <- tempfile(fileext = ".json")
+writeLines('{"changeLogs":[
+ {"dateRangeEnd":null,"dateRangeStart":"2025-12-31T00:00:00Z","id":110614,"issue":"DELA operations ended. Data collection stops.","issueDate":"2025-11-01T00:00:00Z","locationAffected":"DELA","resolution":null,"resolvedDate":null},
+ {"dateRangeEnd":"2026-12-31T00:00:00Z","dateRangeStart":"2026-01-01T00:00:00Z","id":110012,"issue":"Data collection for plant diversity is temporarily suspended for calendar year 2026. Sampling resumes later.","issueDate":"2025-10-01T00:00:00Z","locationAffected":"All terrestrial sites","resolution":null,"resolvedDate":null},
+ {"dateRangeEnd":"2019-12-31T00:00:00Z","dateRangeStart":"2019-01-01T00:00:00Z","id":16207,"issue":"Subplot design change.","issueDate":"2019-01-01T00:00:00Z","locationAffected":"All","resolution":"done","resolvedDate":"2019-02-01T00:00:00Z"}],
+ "product":"DP1.10058.001","source":"https://data.neonscience.org/api/v0/products/DP1.10058.001"}', cl_path)
+cl <- load_neon_change_log(cl_path)
+assert(is.data.frame(cl) && identical(cl$id, c(16207L, 110012L, 110614L)) &&
+       identical(attr(cl, "product"), "DP1.10058.001"),
+       "load_neon_change_log() did not read and sort the changeLogs")
+bad_json <- tempfile(fileext = ".json"); writeLines("{not json", bad_json)
+assert(is.null(load_neon_change_log(bad_json)) && is.null(load_neon_change_log(tempfile())),
+       "load_neon_change_log() errored on an absent or unparsable file")
+n_dela <- plant_site_notices(cl, "DELA", as.Date("2024-12-31"))
+n_srer <- plant_site_notices(cl, "SRER", as.Date("2024-12-31"))
+assert(identical(n_dela$id, c(110012L, 110614L)) && identical(n_srer$id, 110012L) &&
+       identical(n_srer$text, "Data collection for plant diversity is temporarily suspended for calendar year 2026.") &&
+       identical(n_srer$date, "2025-10-01") &&
+       nrow(plant_site_notices(cl, "SRER", as.Date("2026-06-01"))) == 0L &&
+       nrow(plant_site_notices(NULL, "SRER", as.Date("2024-12-31"))) == 0L,
+       "plant_site_notices() did not select site/All notices that start after the records")
+
+# ---- PD-34: site allowlists before any readRDS path --------------------------
+assert(is.null(load_env("../x")) && is.null(load_expected("../x")) &&
+       is.null(load_env("srer")) && is.null(load_expected(c("SRER", "JORN"))),
+       "load_env()/load_expected() accepted a non-site path component")
+
+# ---- the independent oracle equals the app helpers on the SRER bundle --------
+source("scripts/plant_oracle.R")
+srer <- readRDS("data/sites/SRER.rds")
+o <- oracle_site_metrics(srer$occ, srer$ground)
+h <- snapshot_headlines(site_snapshot(srer$occ, ground = srer$ground))
+assert(o$richness == h$species && o$n_plots == h$n_plots &&
+       near(o$pct_introduced, h$pct_introduced) && o$n_introduced_species == h$n_introduced_species &&
+       near(unname(o$species_area), unname(h$species_area)) && near(o$chao2, h$chao2) &&
+       o$S_obs == h$S_obs,
+       "the independent oracle disagrees with the app helpers on SRER")
 
 cat("science-contract fixtures: PASS\n")

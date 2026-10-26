@@ -1,5 +1,5 @@
 # ===========================================================================
-# NEON Plant Diversity Explorer — global.R
+# NEON Plant Diversity Explorer · global.R
 # A sibling of the NEON Small Mammal Tracker (Desert Data Labs), NEONized for
 # the Plant presence & percent cover product (DP1.10058.001). Chrome, theme, and
 # bundling spine ported from the mammal flagship; the analysis layer is plant-
@@ -23,7 +23,7 @@ suppressPackageStartupMessages({
 # carry it (the bundled CartoDB template has no {apikey} slot), hence addTiles().
 # Accepts either a leaflet provider name or a CARTO variant, so ui.R basemap
 # choices stay exactly as they are and any non-CARTO provider passes straight
-# through. Without the key it falls back to Esri's keyless grey canvas — clean,
+# through. Without the key it falls back to Esri's keyless grey canvas, clean,
 # but content-free past z16 at rural sites, so the cap keeps the zoom honest.
 add_suite_basemap <- function(map, basemap = "light_all", noWrap = FALSE) {
   variant <- switch(basemap,
@@ -49,18 +49,20 @@ add_suite_basemap <- function(map, basemap = "light_all", noWrap = FALSE) {
       urlTemplate = sprintf(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_%s_Gray_Base/MapServer/tile/{z}/{y}/{x}",
         if (identical(variant, "dark_all")) "Dark" else "Light"),
-      attribution = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
+      attribution = 'Tiles &copy; Esri &middot; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
       options = leaflet::tileOptions(maxNativeZoom = 16, maxZoom = 19, noWrap = noWrap))
   }
 }
 
 source("R/site_metadata.R", local = FALSE)
 source("R/source_receipt.R", local = FALSE)
+source("R/plant_release.R", local = FALSE)   # release pin, DOI, citation, NEON change-log notices
 source("R/plant_helpers.R", local = FALSE)
 source("R/env_helpers.R",   local = FALSE)   # environment overlays + climate correlation
 source("R/map_picker.R",    local = FALSE)   # reusable national site-picker map
 source("R/expected_qc.R",   local = FALSE)   # expected-vs-observed plant QC (the EcoPlot recipe)
 source("R/report_pdf.R",    local = FALSE)   # one-page site report PDF (base graphics)
+source("R/ui_helpers.R",    local = FALSE)   # pure markup helpers (hero labels, receipt, tips, chips)
 
 # USDA PLANTS nativity + NEON synonym authority (built by scripts/build_plant_authority.R).
 # Optional: the nativity-mismatch flag degrades to "needs authority" when absent, but
@@ -80,21 +82,28 @@ SITE_DIR  <- "data/sites"
 DEMO_PATH <- "data-sample/demo.rds"
 DEMO_META <- list(site = "SRER", label = "SRER · Santa Rita Experimental Range · demo")
 
-# Defensive bundle read: a list(occ, ground, meta) or NULL — never crash boot.
+# Defensive bundle read: a list(occ, ground, meta) or NULL, never crash boot.
 read_bundle <- function(f) {
   if (!file.exists(f)) return(NULL)
   out <- tryCatch(readRDS(f), error = function(e) {
     warning(sprintf("read_bundle('%s') failed: %s", f, conditionMessage(e))); NULL })
   if (is.null(out) || is.null(out$occ) || !nrow(out$occ)) NULL else out
 }
-load_site_bundle <- function(site) read_bundle(file.path(SITE_DIR, paste0(site, ".rds")))
+# Allowlist: only a single site code from the canonical bundled inventory reaches
+# readRDS, so a client-sent value can never walk out of data/sites (PD-34).
+# BUNDLED is defined below and resolves at call time.
+load_site_bundle <- function(site) {
+  if (!is.character(site) || length(site) != 1L || is.na(site) ||
+      !exists("BUNDLED") || !site %in% BUNDLED) return(NULL)
+  read_bundle(file.path(SITE_DIR, paste0(site, ".rds")))
+}
 load_demo <- function() { b <- load_site_bundle(DEMO_META$site); if (!is.null(b)) b else read_bundle(DEMO_PATH) }
 
-# national site index (the picker) — one row per bundled site
+# national site index (the picker), one row per bundled site
 SITE_INDEX <- read_bundle("data/site_index.rds")
 if (is.null(SITE_INDEX)) SITE_INDEX <- tryCatch(readRDS("data/site_index.rds"), error = function(e) NULL)
 
-# "Search the network" index — one small precomputed file loaded ONCE at boot
+# "Search the network" index, one small precomputed file loaded ONCE at boot
 # (built by scripts/build_search_index.R). list(taxa=, sites=). Searches filter
 # it in memory, so the network-wide search is instant with no live fetch. NULL-safe.
 SEARCH_INDEX <- tryCatch(readRDS("data/search_index.rds"), error = function(e) NULL)
@@ -106,8 +115,8 @@ SEARCH_TAXON_CHOICES <- if (!is.null(SEARCH_TAXA))
 SEARCH_INVADER_CHOICES <- if (!is.null(SEARCH_TAXA))
   sort(unique(SEARCH_TAXA$scientificName[SEARCH_TAXA$nativity == "Introduced"])) else character(0)
 
-# Bundled sites only (the deploy ships all 46). The canonical metadata—not the
-# derived index—defines the required inventory so a duplicated/missing index row
+# Bundled sites only (the deploy ships all 46). The canonical metadata, not the
+# derived index, defines the required inventory so a duplicated/missing index row
 # cannot redefine the receipt boundary.
 EXPECTED_PLANT_SITES <- sort(as.character(neon_sites$site))
 if (!is.data.frame(SITE_INDEX) || nrow(SITE_INDEX) != length(EXPECTED_PLANT_SITES) ||
@@ -124,7 +133,15 @@ PLANT_SOURCE_STATUS <- resolve_plant_source_set(
   SITE_DIR, SITE_INDEX, EXPECTED_PLANT_SITES, SOURCE_BUNDLE_METAS,
   require_bundle_metas = TRUE
 )
+# Newest observation year across the bundled family (the landing "data through"
+# line), the release DOI, the citation, and the NEON change-log copy, all read
+# once at boot from committed files.
+PLANT_DATA_THROUGH <- plant_data_through(SOURCE_BUNDLE_METAS)
+PLANT_SITE_YEARS <- lapply(SOURCE_BUNDLE_METAS, function(m) suppressWarnings(as.integer(m$years)))
 rm(SOURCE_BUNDLE_METAS)
+PLANT_RELEASE_DOI <- plant_release_doi(PLANT_SOURCE_STATUS$neon_release)
+PLANT_RELEASE_CITATION <- plant_release_citation(PLANT_SOURCE_STATUS$neon_release)
+NEON_CHANGE_LOG <- load_neon_change_log()
 verify_plant_durable_source_inventory(PLANT_SOURCE_STATUS, EXPECTED_PLANT_SITES)
 verify_plant_search_receipt(SEARCH_INDEX, PLANT_SOURCE_STATUS)
 site_table <- if (length(BUNDLED)) {
@@ -133,7 +150,7 @@ site_table <- if (length(BUNDLED)) {
 } else neon_sites[0, ]
 
 # completeness scalar (% of the NRCS reference flora detected) for the splash
-# picker's "colour by" toggle — precomputed by scripts/build_completeness_index.R
+# picker's "colour by" toggle, precomputed by scripts/build_completeness_index.R
 # so boot never reads 46 bundles. NA for sites with no bundled reference list.
 COMPLETENESS <- tryCatch(readRDS("data/expected/completeness_index.rds"), error = function(e) NULL)
 if (nrow(site_table) && !is.null(COMPLETENESS) && nrow(COMPLETENESS))
@@ -159,10 +176,10 @@ plant_sites_in_state <- function(stt) {
   setNames(rows$site, sprintf("%s · %s", rows$site, rows$name))
 }
 
-# ---- theme (Herbarium — the plant-forward Desert Data Labs identity) ---------
+# ---- theme (Herbarium, the plant-forward Desert Data Labs identity) ----------
 # Deliberately distinct from the navy/cardinal/gold Small Mammal Tracker: a deep
 # leaf-green primary, a clay/terracotta accent, an ochre highlight, on cream paper.
-# The token KEYS are kept (navy/cardinal/gold) so server.R needs no churn — only
+# The token KEYS are kept (navy/cardinal/gold) so server.R needs no churn, only
 # the VALUES change, so the whole cascade re-skins from here. Nativity colours come
 # from the single source NATIVITY_COLS (sourced above via plant_helpers.R) so the
 # chart palette, the CSS --native/--introduced tokens, and DDL can never drift.
@@ -178,7 +195,7 @@ DDL <- list(
   introduced = unname(NATIVITY_COLS["Introduced"]),
   unknown = unname(NATIVITY_COLS["Unknown"]))
 
-# The app mascot — a flat (no-gradient, no-id so it's safely reusable) cute
+# The app mascot, a flat (no-gradient, no-id so it's safely reusable) cute
 # seedling-sprout in the desert-green accent. Used as the loading spinner, the
 # splash guide, and the celebration hop. Parts are classed so the CSS can wiggle
 # leaves (mascot-ear-l/r) / blink eyes (mascot-eyes).
@@ -222,7 +239,8 @@ spin <- function(x, img = "leaf.gif")
   shinycssloaders::withSpinner(x, color = DDL$green, color.background = "#ffffff", type = 6)
 
 info_pop <- function(title, ..., placement = "auto")
-  bslib::popover(tags$span(class = "info-dot", bsicons::bs_icon("info-circle")),
+  bslib::popover(tags$span(class = "info-dot", `aria-label` = paste("About:", title),
+                           bsicons::bs_icon("info-circle")),
                  ..., title = title, placement = placement)
 
 insight_banner <- function(icon, ..., tone = "navy")
@@ -250,11 +268,11 @@ fmt_range <- function(a, b) if (is.null(a) || is.null(b) || is.na(a) || is.na(b)
   sprintf("%s–%s", a, b)
 
 # ---- the NEON-series sibling registry (in-app cross-promo) ------------------
-# Mirrors the constellation in docs/index.html so the About panel can link the
-# WHOLE suite. Landing covers (github.io) front each live app; kept here as a
-# plain list so the block can't drift from the chrome.
+# Mirrors the suite registry; the Pages cover carries only the Atlas route.
+# Landing covers (github.io) front each live app; kept here as a plain list so
+# the About panel can link the whole suite.
 .SIBLINGS <- list(
-  list(name = "Driver Cascade",   prod = "cross-product synthesis", url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
+  list(name = "NEON Cross-Product Response Atlas", prod = "cross-product synthesis", url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
   list(name = "Small Mammals",    prod = "DP1.10072.001",           url = "https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/"),
   list(name = "Breeding Birds",   prod = "DP1.10003.001",           url = "https://tgilbert14.github.io/NEON-Breeding-Birds/"),
   list(name = "Ground Beetles",   prod = "DP1.10022.001",           url = "https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/"),

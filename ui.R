@@ -1,8 +1,8 @@
 # ===========================================================================
-# NEON Plant Diversity Explorer — ui.R
+# NEON Plant Diversity Explorer · ui.R
 # ===========================================================================
 
-# rarity-style tier badge for plots (richness-based) — reused look from the flagship
+# rarity-style tier badge for plots (richness-based), reused look from the flagship
 tier_badge <- function(label, color) tags$span(class = "tag-badge",
   style = sprintf("background:%s;border-color:%s;color:#fff", color, color), label)
 
@@ -17,7 +17,7 @@ plant_diversity_poster <- function() {
           tags$a(class = "pde-poster-suite-link",
             href = "https://tgilbert14.github.io/NEON-Driver-Cascade/",
             target = "_blank", rel = "noopener",
-            "Whole suite: ", tags$strong("Driver Cascade"), tags$span("↗")))),
+            "Whole suite: ", tags$strong("Cross-Product Response Atlas"), tags$span("↗")))),
       div(class = "pde-poster-app", "NEON Plant Diversity Explorer · unofficial"),
       h1(id = "pde-poster-title", `aria-label` = "How much can one square hold?",
         tags$span("How much can"), tags$em("one square hold?")),
@@ -26,7 +26,8 @@ plant_diversity_poster <- function() {
         onclick = "window.setTimeout(function(){var target=document.getElementById('site-picker-start');if(target){target.focus({preventScroll:true});}},0)",
         "Pick a place ", bs_icon("arrow-down")),
       p(class = "pde-poster-note",
-        "Public NEON DP1.10058.001 · recorded composition across nested grains—not productivity, health, impact, or a management verdict.")),
+        "Public NEON DP1.10058.001 · recorded composition across nested grains, not productivity, health, impact, or a management verdict."),
+      data_through_line(PLANT_DATA_THROUGH, PLANT_SOURCE_STATUS$neon_release, PLANT_RELEASE_DOI)),
     tags$figure(class = "pde-poster-art",
       tags$picture(
         tags$source(media = "(max-width: 700px)",
@@ -39,7 +40,8 @@ plant_diversity_poster <- function() {
 
 ui <- bslib::page_fillable(
   theme = app_theme,
-  window_title = "NEON Plant Diversity Explorer", fillable = FALSE,
+  title = "NEON Plant Diversity Explorer",
+  lang = "en",
 
   tags$head(
     tags$meta(name = "description", content = "Explore nested-quadrat plant diversity, composition, introduced cover, and data quality across 46 bundled NEON terrestrial sites."),
@@ -57,7 +59,7 @@ ui <- bslib::page_fillable(
   # ---- persistent top control bar (theme + help) -------------------------
   # v2 flow: the sidebar is gone. The picker map IS the way to select a site
   # (its select panel lives on the landing/splash). The two controls that must
-  # stay reachable everywhere — the theme toggle and the help dialog — sit in
+  # stay reachable everywhere (the theme toggle and the help dialog) sit in
   # this slim top-right bar above the hero. Same ids (help, colorMode) so the
   # server is untouched.
   div(class = "top-bar",
@@ -75,7 +77,7 @@ ui <- bslib::page_fillable(
         input_dark_mode(id = "colorMode", mode = "light")))
   ),
 
-  # "Open a plot's profile" picker — was in the sidebar, now a hidden body block
+  # "Open a plot's profile" picker: was in the sidebar, now a hidden body block
   # revealed on site load (server: shinyjs::show("plotPickerWrap")). Same ids
   # (plotSel, surpriseBtn) so the server logic is untouched.
   hidden(div(id = "plotPickerWrap", class = "plot-picker-wrap",
@@ -109,7 +111,7 @@ ui <- bslib::page_fillable(
       div(class = "picker-start-head",
         div(class = "picker-start-kicker", "START HERE"),
         h2("Pick a place"),
-        p("Tap a site on the map. Dot size shows sampled plots—not raw richness—so unequal effort does not become a biodiversity ranking. You can also choose by name or browse all 46 places.")),
+        p("Dot size shows sampled plots, so unequal effort does not read as a richness ranking.")),
       div(class = "splash-colorby",
         radioButtons("splashColorBy", label = NULL, inline = TRUE,
           choices = c("Colour: invasion" = "invasion", "Colour: completeness" = "completeness"),
@@ -121,7 +123,7 @@ ui <- bslib::page_fillable(
       # Same input ids the server's cascade + load path depend on (stateSel,
       # site, loadBtn). Tapping a dot is the primary path; this panel is the
       # by-name fallback. Same ids, so server.R is untouched. (This app loads
-      # each site's full annual span from its bundle — no date window control.)
+      # each site's full annual span from its bundle; no date window control.)
       div(class = "select-panel",
         div(class = "sp-head", bs_icon("sliders"),
             " Or pick a site by name"),
@@ -141,7 +143,7 @@ ui <- bslib::page_fillable(
       # WIDTH GOTCHA: this grid used to be always-visible and was what gave the
       # splash column intrinsic width (the width-less leaflet alone collapses to
       # 0). With the list collapsed there's no intrinsic-width content, so the
-      # width floor now lives in CSS — `.splash { width:100% }` +
+      # width floor now lives in CSS: `.splash { width:100% }` +
       # `.map-picker-wrap { min-width }` keep the picker map full-width when closed.
       tags$details(class = "site-browse",
         tags$summary(class = "site-browse-summary",
@@ -154,6 +156,7 @@ ui <- bslib::page_fillable(
     navset_card_tab(id = "tabs",
 
       nav_panel(title = tagList(bs_icon("compass"), " Overview"), value = "overview",
+        div(class = "tab-scope", uiOutput("scopeOverview", inline = TRUE)),
         div(class = "home-nav",
           actionButton("goDiversity", tagList(bs_icon("diagram-3-fill"), div("Diversity"), tags$small("richness & species-area")), class = "home-btn"),
           actionButton("goInvasive", tagList(bs_icon("shield-exclamation"), div("Native vs Invasive"), tags$small("the invasion lens")), class = "home-btn home-btn-star"),
@@ -163,7 +166,7 @@ ui <- bslib::page_fillable(
           actionButton("goMap", tagList(bs_icon("map-fill"), div("Map"), tags$small("plots across the site")), class = "home-btn")),
         div(class = "tools-strip",
           actionButton("compareBtn", tagList(bs_icon("layout-split"), " Compare two sites"), class = "btn-outline-dark btn-sm"),
-          downloadButton("allDataZip", "Download all data (CSV)", class = "btn-outline-dark btn-sm")),
+          downloadButton("allDataZip", "Download all data (ZIP of CSVs + dictionary)", class = "btn-outline-dark btn-sm")),
         card(full_screen = TRUE,
           card_head("bar-chart-steps", "What covers the ground: most abundant plants",
             info_pop("Cover composition",
@@ -172,7 +175,7 @@ ui <- bslib::page_fillable(
           uiOutput("overviewInsight"),
           spin(plotlyOutput("coverBar", height = "440px"))),
         card(card_head("stars", "The story so far",
-            info_pop("Story", p("Written from this site's live data, the same numbers the rest of the app uses."))),
+            info_pop("Story", p("Written from this site's bundled NEON records, the same numbers the rest of the app uses."))),
           uiOutput("siteInsights")),
         h4(class = "section-title", bs_icon("flower2"), " Ground cover here"),
         spin(plotlyOutput("groundBar", height = "260px"))),
@@ -180,11 +183,12 @@ ui <- bslib::page_fillable(
       nav_menu(title = tagList(bs_icon("compass"), " Explore"),
       nav_panel(title = tagList(bs_icon("diagram-3-fill"), " Diversity"), value = "diversity",
         div(class = "tab-head", div(class = "tab-head-text",
+          uiOutput("scopeDiversity", inline = TRUE),
           h4("How diverse is this site?",
              info_pop("What richness is, and isn't",
                p("Richness counts ", tags$b("how many species"), " are present. It is composition, ", tags$b("not"), " productivity or ecosystem health."),
                p("Richness can rise through native additions, introduced additions, or both. Inspect composition and cover before assigning ecological meaning; more species ≠ more biomass or a healthier system."),
-               p("For a standing-stock (productivity) signal, veg-structure basal area is the honest measure; this tab's richness reads composition."))),
+               p("For productivity, veg-structure basal area is the better measure of standing stock; this tab's richness reads composition."))),
           p("Richness across NEON's nested quadrat scales from the latest full-grain survey (the 10 m² point is the mean over 10 m² subplots including their nested 1 m² quadrat), the diversity profile, and a bias-corrected incidence lower-bound estimate from the latest 1 m² bout."))),
         layout_columns(col_widths = c(7, 5),
           card(full_screen = TRUE,
@@ -216,8 +220,9 @@ ui <- bslib::page_fillable(
 
       nav_panel(title = tagList(bs_icon("shield-exclamation"), " Native vs Invasive"), value = "invasive",
         div(class = "tab-head", div(class = "tab-head-text",
+          uiOutput("scopeInvasive", inline = TRUE),
           h4("Where does introduced cover warrant a closer look?"),
-          p("Review introduced-cover composition, the species involved, and how their detections change across NEON's nested survey grains. These are monitoring leads—not proof of spread, impact, or management priority."))),
+          p("Review introduced-cover composition, the species involved, and how their detections change across NEON's nested survey grains. These are monitoring leads, not proof of spread, impact, or management priority."))),
         card(full_screen = TRUE,
           card_head("graph-up-arrow", "Introduced cover across registered survey years",
             info_pop("Invaded cover",
@@ -235,7 +240,7 @@ ui <- bslib::page_fillable(
           card(full_screen = TRUE,
             card_head("zoom-in", "Cross-scale occurrence: fine grain vs whole plot",
               info_pop("Cross-scale occurrence",
-                p("Each dot is one introduced species—not one plot. The x-axis counts plots where the species was detected in sampled 1 m² quadrats; the y-axis counts plots where it appeared anywhere in the nested 400 m² plot."),
+                p("Each dot is one introduced species, not one plot. The x-axis counts plots where the species was detected in sampled 1 m² quadrats; the y-axis counts plots where it appeared anywhere in the nested 400 m² plot."),
                 p("A point above the 1:1 line is detected in more plots at broader survey grain than at 1 m². That can reflect detectability, spatial patchiness, or sampling support. It is not a temporal spread estimate."),
                 p("Use the gap as a review-first index. Open a pinned card to see the exact plot lists before interpreting a species."))),
             div(class = "sizelab-toolbar",
@@ -251,28 +256,31 @@ ui <- bslib::page_fillable(
       nav_menu(title = tagList(bs_icon("clipboard-check"), " Network & QC"),
       nav_panel(title = tagList(bs_icon("clipboard-check"), " Expected vs Observed"), value = "expected",
         div(class = "tab-head", div(class = "tab-head-text",
+          uiOutput("scopeExpected", inline = TRUE),
           h4("What should grow here, and what did NEON find?",
             info_pop("Expected vs Observed",
               p(tags$b("Expected"), " = a reference plant-community list resolved from one soil unit near the site's reference point. It is context for the sampled plots, not a complete site-wide flora."),
               p("NEON samples a small plot area (~400 m² per plot) at peak greenness, so a species ", tags$b("expected but not found"), " usually means it just wasn't in the sampled patch, ", tags$b("not"), " that anything is wrong."),
-              p("The ", tags$b("review"), " list is where a second look pays off: a plant NEON recorded that the reference community doesn't list (a new invader, a range edge, or a possible mis-ID)."))),
+              p("The ", tags$b("review"), " list is where a second look pays off: a plant NEON recorded that the reference community doesn't list (a new invader, a range edge, or a possible mis-ID)."),
+              p("On cultivated-crop sites no native reference list applies, so no detected share is reported there."))),
           p(HTML("<b>Reference context</b> comes from one NRCS ecological-site lookup near the site centre. It helps assess list completeness; it does not define every plot or declare observations wrong.")))),
 
         uiOutput("evoHeader"),
         uiOutput("evoHeadline"),
         uiOutput("evoCoarse"),
 
-        # A — confirmation (green)
+        # A: confirmation (green)
         card(full_screen = TRUE, class = "evo-bucket evo-card evo-a",
           card_head("check2-circle", "Reference flora detected here",
             info_pop("Bucket A · expected & observed",
               p("Species the NEON crews recorded that are also on the NRCS reference list for this ecological site, the overlap that confirms the site is what the soil survey says it is."),
-              p("Sorted by the reference community's expected production (the species you'd most expect to dominate float to the top)."))),
+              p("Sorted by the reference community's expected production (the species you'd most expect to dominate float to the top)."),
+              p("On cultivated-crop sites no native reference list applies, so this overlap is listed for context only."))),
           div(class = "evo-dl-row",
             downloadButton("evoCsvA", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableA", width = "100%"))),
 
-        # C — the review lane (clay)
+        # C: the review lane (clay)
         card(full_screen = TRUE, class = "evo-bucket evo-card evo-c",
           card_head("search", "Observed here, not in the reference list, worth a look",
             info_pop("Bucket C · observed, not expected",
@@ -288,36 +296,40 @@ ui <- bslib::page_fillable(
             downloadButton("evoCsvC", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableC", width = "100%"))),
 
-        # B — completeness (neutral, never red)
+        # B: completeness (neutral, never red)
         card(full_screen = TRUE, class = "evo-bucket evo-card evo-b",
           card_head("clipboard-data", "Expected but not detected: a completeness view",
             info_pop("Bucket B · expected but absent",
               p("Reference species NEON did ", tags$b("not"), " detect in its plots. This is overwhelmingly ", tags$b("non-detection"), ": NEON samples ~400 m² per plot, while an ecological site lists the whole site's potential vegetation under reference conditions."),
               p("It can also be a legitimate ", tags$b("state transition"), " (e.g. a shrub-encroached desert grassland). Read it as completeness or as an ecological pattern, ", tags$b("never as missing data or error.")),
-              p("Sorted by expected production; the ", tags$b("reference dominants"), " not detected are shown in bold, the most informative gaps."))),
+              p("Sorted by expected production; the ", tags$b("reference dominants"), " not detected are shown in bold, the most informative gaps."),
+              p("On cultivated-crop sites no native reference list applies, so nothing here counts against completeness."))),
           div(class = "evo-subhead", bs_icon("info-circle"),
             "Not a problem list. NEON samples ~400 m² per plot, so these are mostly species just outside the sampled patch."),
           div(class = "evo-dl-row",
             downloadButton("evoCsvB", "Download (CSV + codebook ZIP)", class = "smt-clear-btn")),
           div(class = "evo-tbl-wrap", DT::DTOutput("evoTableB", width = "100%"))),
 
-        # data-quality cross-checks (the true-QC lane) — needs only occ, so it stays
+        # data-quality cross-checks (the true-QC lane): needs only occ, so it stays
         # visible even when no reference list is bundled for the site
         card(class = "evo-card",
           card_head("clipboard-pulse", "Data-quality cross-checks",
             info_pop("True QC",
-              p("Two genuine data-quality signals, kept separate from the completeness view above (these don't need a reference list):"),
+              p("Three data-quality checks, kept separate from the completeness view above (these don't need a reference list). Each is a reason to verify a record, not a finding that it is wrong:"),
               tags$ul(
-                tags$li(HTML("<b>Nativity review</b>, including contradictory NEON statuses and—within its valid geographic scope—disagreement with USDA PLANTS.")),
-                tags$li(HTML("<b>Implausible cover</b>, total cover in one 1 m² quadrat far exceeding what overlapping canopy layers explain (an entry-error backstop)."))))),
+                tags$li(HTML("<b>Nativity review</b>, including contradictory NEON statuses and, within its valid geographic scope, disagreement with USDA PLANTS.")),
+                tags$li(HTML("<b>Implausible cover</b>, total cover in one 1 m² quadrat far exceeding what overlapping canopy layers explain (an entry-error backstop).")),
+                tags$li(HTML("<b>Repeated records</b>, the same species recorded more than once in one subplot visit with different cover values."))),
+              p("Open a flag to see every row behind it and download them; every flag row is also in qc_flags.csv inside the completeness report ZIP."))),
           div(class = "evo-dl-row",
             downloadButton("evoReport", tagList(bs_icon("download"), " Full report (CSV + codebook ZIP)"), class = "smt-snap-btn")),
           uiOutput("evoFlags"))),
 
       nav_panel(title = tagList(bs_icon("cloud-sun"), " Short-record context"), value = "environment",
         div(class = "tab-head", div(class = "tab-head-text",
+          uiOutput("scopeEnvironment", inline = TRUE),
           h4("How do the short annual records move together?"),
-          p("Place each registered annual plant estimate beside complete co-located climate or phenology years. This is descriptive short-record context—not a fitted ecological driver and not an input to Driver Cascade."))),
+          p("Place each registered annual plant estimate beside complete co-located climate or phenology years. This is descriptive short-record context, not a fitted ecological driver and not an input to the NEON Cross-Product Response Atlas."))),
         div(class = "env-pop-bar",
           div(class = "env-pop-row",
             div(class = "env-pop-sel",
@@ -342,7 +354,7 @@ ui <- bslib::page_fillable(
           card(full_screen = TRUE,
             card_head("bar-chart-steps", "Screened associations",
               info_pop("Association scan",
-                p("Spearman |r| for each context series at its screened lag (0–2 yr). With “Largest screened association” selected, the circular-shift p corrects the full series × lag screen; with one series selected, it corrects that series's lag screen only. The bars are ", tags$b("not independent evidence"), ", and on a short record none may be distinguishable from chance."))),
+                p("Spearman |r| for each context series at its screened lag (0 to 2 yr). With “Largest screened association” selected, the circular-shift p corrects the full series × lag screen; with one series selected, it corrects that series's lag screen only. The bars are ", tags$b("not independent evidence"), ", and on a short record none may be distinguishable from chance."))),
             spin(plotlyOutput("envDriverRank", height = "360px")))),
         card(card_head("calendar3", "Raw annual histories",
             info_pop("Context",
@@ -356,12 +368,13 @@ ui <- bslib::page_fillable(
 
       # ---- Search the network -------------------------------------------------
       # Queries a small precomputed index (data/search_index.rds) loaded once at
-      # boot — no live fetch, instant. Two modes: find a species across sites, or
+      # boot, no live fetch. Two modes: find a species across sites, or
       # filter sites by introduced-cover threshold. Both jump to a site's Overview.
       nav_panel(title = tagList(bs_icon("search"), " Search"), value = "search",
         div(class = "tab-head", div(class = "tab-head-text",
+          scope_chip(sprintf("All %d sites", length(BUNDLED))),
           h4("Search the network"),
-          p("Look across every bundled NEON site at once. Find which sites a plant turns up at, or pull the sites by how invaded they are. This reads a small index built into the app, so it answers instantly without fetching anything."))),
+          p("Look across every bundled NEON site at once. Find which sites a plant turns up at, or pull the sites by how invaded they are."))),
         div(class = "search-modebar",
           radioButtons("searchMode", NULL, inline = TRUE,
                        choices = c("Find a species" = "taxon",
@@ -413,7 +426,8 @@ ui <- bslib::page_fillable(
       nav_panel(title = tagList(bs_icon("bullseye"), " Diversity Lab"), value = "lab",
         div(class = "tab-head",
           div(class = "tab-head-text",
-            h4("Every plot on one map",
+            uiOutput("scopeLab", inline = TRUE),
+            h4("Every plot, richness against introduced cover",
                info_pop("Diversity Lab",
                  p("Each dot is a ", tags$b("plot"), ", placed by its ", tags$b("species richness"), " (x) and the ", tags$b("share of its cover that's introduced"), " (y). Median crosshairs split it into four corners."),
                  p(tags$b("Tap a dot"), " to pin its card; drag it, resize it, and ", tags$b("download the chart with the cards on it"), ". Tap “Open plot profile” for the full drill-down."))),
@@ -428,14 +442,13 @@ ui <- bslib::page_fillable(
               p("Left = fewer species; right = more species; top = more introduced cover; bottom = native-dominated cover. The ", tags$span(style="color:#c9a300;font-weight:700","gold diamond"), " is the plot you're viewing."),
               p("More species (right) is ", tags$b("not"), " automatically better: richness is composition, not condition. Read the x-axis together with native, introduced, and unknown-status cover."),
               p(tags$b("What a pattern means."), " Each dot is one plot. A downward, flat, or upward cloud describes how 400 m² richness in the latest full-grain survey and the relative introduced-cover index in the latest 1 m² bout co-vary (both events are named above the chart and in the hero band). Plots without a 1 m² cover record in that bout are not drawn. Plausible explanations include habitat differences, observation support, disturbance history, and composition change; this chart does not choose among them."),
-              p(tags$b("The honest caveats."), " This is a cross-sectional review lead, not a causal slope. The y-axis comes from overlapping ocular estimates in represented 1 m² quadrats, not a fraction of bare ground. A plot at 30% introduced cover has not necessarily lost 30% of its ground to introduced plants."))),
+              p(tags$b("Caveats."), " This is a cross-sectional review lead, not a causal slope. The y-axis comes from overlapping ocular estimates in represented 1 m² quadrats, not a fraction of bare ground. A plot at 30% introduced cover has not necessarily lost 30% of its ground to introduced plants."))),
           div(class = "sizelab-toolbar",
             tags$button(class = "smt-snap-btn", type = "button",
                         onclick = "smtSave('labScatterBox','neon-plantdiv-diversity-lab-<site>_<date>.png')",
                         bsicons::bs_icon("camera-fill"), " Download (with pinned cards)"),
             tags$button(class = "smt-clear-btn", type = "button", onclick = "smtClearPins('labScatterBox')",
-                        bsicons::bs_icon("eraser-fill"), " Clear pins"),
-            tags$span(class = "sizelab-hint", bs_icon("hand-index-thumb"), " interactive · tap a dot to pin its card")),
+                        bsicons::bs_icon("eraser-fill"), " Clear pins")),
           uiOutput("labInsight"),
           div(class = "smt-pinnable", id = "labScatterBox", spin(plotlyOutput("labScatter", height = "540px")))),
         tags$details(class = "lab-table-details",
@@ -445,11 +458,13 @@ ui <- bslib::page_fillable(
         uiOutput("plotCardSlot")),
 
       nav_panel(title = tagList(bs_icon("flower1"), " Plot Profile"), value = "plot",
+        div(class = "tab-scope", uiOutput("scopePlot", inline = TRUE)),
         uiOutput("plotProfile")),
 
       nav_panel(title = tagList(bs_icon("map-fill"), " Map"), value = "map",
         div(class = "tab-head",
           div(class = "tab-head-text",
+            uiOutput("scopeMap", inline = TRUE),
             h4("Plots across the site"),
             p("Each marker is a NEON plot, sized by richness and coloured by how invaded it is. The selected plot glows gold.")),
           div(class = "map-controls",
@@ -470,8 +485,7 @@ ui <- bslib::page_fillable(
       href = "mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer",
       span(class = "hand", "\U0001F44B"), "Questions or feedback? Get in touch with Desert Data Labs.")),
     p(style = "margin-top:12px",
-      HTML("Built by <strong>Desert Data Labs</strong> · Tucson, AZ · get in touch →"),
-      tags$a(href = "mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Diversity%20Explorer", "desertdatalabs@gmail.com")),
+      HTML("Built by <strong>Desert Data Labs</strong> · Tucson, AZ")),
     p(style = "font-size:12px;opacity:.85",
       "Data: NEON Plant Presence & Percent Cover (DP1.10058.001). Not affiliated with NEON, Battelle, or the NSF. An educational data-exploration tool."))
 )

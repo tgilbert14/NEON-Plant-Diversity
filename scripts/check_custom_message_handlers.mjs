@@ -3,22 +3,34 @@
 import { readFileSync } from "node:fs";
 
 const files = ["www/app.js", "www/pincards.js"];
-const handlerPattern = /Shiny\.addCustomMessageHandler\(\s*["'][^"']+["']\s*,\s*function\s*\(([^)]*)\)/g;
+// Inline JavaScript inside R strings (tags$script(HTML("..."))) can register a
+// handler too, so the R entry points are scanned with an escape-tolerant pattern.
+const inlineFiles = ["ui.R", "server.R", "global.R"];
+const handlerPattern = /Shiny\.addCustomMessageHandler\(\s*\\?["'][^"'\\]+\\?["']\s*,\s*(?:function\s*\(([^)]*)\)|\(([^)]*)\)\s*=>|([A-Za-z_$][\w$]*)\s*=>)/g;
+const anyRegistration = /Shiny\.addCustomMessageHandler\s*\(/g;
 const invalid = [];
 let seen = 0;
 
-for (const file of files) {
+for (const file of [...files, ...inlineFiles]) {
   const source = readFileSync(file, "utf8");
+  let matched = 0;
   for (const match of source.matchAll(handlerPattern)) {
     seen += 1;
-    const parameters = match[1]
+    matched += 1;
+    const parameters = (match[1] ?? match[2] ?? match[3] ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
     if (parameters.length !== 1) invalid.push(`${file}: ${match[0]}`);
   }
+  const registrations = (source.match(anyRegistration) || []).length;
+  if (registrations !== matched) {
+    invalid.push(`${file}: ${registrations - matched} handler registration(s) without an inline one-argument function literal`);
+  }
 }
 
+// 6 = the four www/app.js and two www/pincards.js handlers; ui.R, server.R and
+// global.R register none inline today, so any new inline handler changes this.
 if (seen !== 6) {
   throw new Error(`expected exactly 6 Shiny custom message handlers, found ${seen}`);
 }

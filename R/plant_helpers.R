@@ -289,28 +289,63 @@ grain_snapshot <- function(occ, events = NULL) {
   out
 }
 
+# ---------------------------------------------------------------------------
+# sampled_units(): the 1 m^2 sampling units of one cover event (PD-14, lead
+# decision 3).  A plot's units are the union of the event's 1 m^2 subplotIDs
+# over EVERY occurrence row (any taxon rank, so a quadrat holding only a coarse
+# ID still counts) and the event's ground-cover rows (a quadrat with no plant
+# record but a ground-cover record was sampled; it contributes zero plant
+# cover).  Returns data.frame(plotID, subplotID), one row per unit, sorted.
+# Nothing is invented: a quadrat with neither record type stays unknown.
+# ---------------------------------------------------------------------------
+sampled_units <- function(occ_event, ground_event = NULL) {
+  pick <- function(d, scale_one) {
+    if (is.null(d) || !nrow(d) || !all(c("plotID", "subplotID") %in% names(d)))
+      return(data.frame(plotID = character(), subplotID = character(), stringsAsFactors = FALSE))
+    keep <- !is.na(d$plotID) & !is.na(d$subplotID)
+    if (scale_one && "scale" %in% names(d)) keep <- keep & .scale_num(d$scale) %in% 1
+    data.frame(plotID = as.character(d$plotID[keep]),
+               subplotID = as.character(d$subplotID[keep]), stringsAsFactors = FALSE)
+  }
+  u <- rbind(pick(occ_event, TRUE), pick(ground_event, FALSE))
+  u <- u[!duplicated(u), , drop = FALSE]
+  u <- u[order(u$plotID, u$subplotID, method = "radix"), , drop = FALSE]
+  rownames(u) <- NULL
+  u
+}
+
 # cover_snapshot() = Q.  Every cover-weighted figure (cover, Hill, Chao2,
 # watchlist, % introduced) uses Q: scale-1 rows of the newest site event with
-# enough 1 m^2 plots (see select_cover_event()).  attr "event" as for F.
-cover_snapshot <- function(occ, grain = NULL, events = NULL, min_share = 0.5, min_plots = 3L) {
+# enough 1 m^2 plots (see select_cover_event()).  attr "event" as for F, and
+# attr "sampled_units" = sampled_units(Q rows, the event's ground rows): the
+# structural-zero cover denominator every cover helper reads.  `ground` is the
+# bundle's ground-cover table (optional; without it units come from occurrence
+# rows of any rank only).
+cover_snapshot <- function(occ, grain = NULL, events = NULL, min_share = 0.5, min_plots = 3L,
+                           ground = NULL) {
   if (is.null(occ)) return(occ)
   ev_tab <- events %||% site_events(occ)
   ev <- select_cover_event(occ, grain = grain, min_share = min_share,
                            min_plots = min_plots, events = ev_tab)
   out <- snapshot_event(occ, ev, scales = 1)
+  ground_event <- if (!is.null(ev) && !is.null(ground) && nrow(ground) &&
+                      all(c("plotID", "subplotID", "year") %in% names(ground)))
+    snapshot_event(ground, ev) else NULL
   attr(out, "event") <- ev
   attr(out, "snapshot_label") <- event_label(ev, "cover")
   attr(out, "snapshot_support") <- if (nrow(occ)) .event_support(occ, ev, "cover", ev_tab) else NULL
+  attr(out, "sampled_units") <- sampled_units(out, ground_event)
   out
 }
 
 # Both labelled events of a site in one call.
-# min_share / min_plots pass through to select_cover_event() (defaults = contract).
-site_snapshot <- function(occ, min_share = 0.5, min_plots = 3L) {
+# min_share / min_plots pass through to select_cover_event() (defaults = contract);
+# `ground` (the bundle's ground table) completes the cover event's sampled units.
+site_snapshot <- function(occ, ground = NULL, min_share = 0.5, min_plots = 3L) {
   ev_tab <- if (is.null(occ)) NULL else site_events(occ)
   grain <- grain_snapshot(occ, events = ev_tab)
   cover <- cover_snapshot(occ, grain = attr(grain, "event", exact = TRUE), events = ev_tab,
-                          min_share = min_share, min_plots = min_plots)
+                          min_share = min_share, min_plots = min_plots, ground = ground)
   row <- function(kind, ev) data.frame(
     kind = kind,
     year = if (is.null(ev)) NA_real_ else ev$year,
@@ -419,8 +454,8 @@ legacy_plot_latest_snapshot <- function(occ) {
 # site-level introduced-cover share — the ONE definition used by the hero, the
 # picker/site_index, and the map, so they can never disagree. Built on the same
 # structural-zero plot_species_cover() recipe the rest of the app uses.
-site_invasion <- function(occ) {
-  psc <- plot_species_cover(occ); if (is.null(psc)) return(NA_real_)
+site_invasion <- function(occ, units = attr(occ, "sampled_units", exact = TRUE)) {
+  psc <- plot_species_cover(occ, units = units); if (is.null(psc)) return(NA_real_)
   tot <- sum(psc$mean_cover, na.rm = TRUE)
   intro <- sum(psc$mean_cover[psc$nativity == "Introduced"], na.rm = TRUE)
   if (tot > 0) round(100 * intro / tot, 1) else NA_real_
@@ -429,36 +464,63 @@ site_invasion <- function(occ) {
 # site-level UNKNOWN cover share — the cover-unit companion to unknown_rate()
 # (which is a species-count figure). Surfaced next to the % introduced hero so the
 # honesty number is measured on the same unit (cover) as the metric it qualifies.
-unknown_cover_share <- function(occ) {
-  psc <- plot_species_cover(occ); if (is.null(psc)) return(NA_real_)
+unknown_cover_share <- function(occ, units = attr(occ, "sampled_units", exact = TRUE)) {
+  psc <- plot_species_cover(occ, units = units); if (is.null(psc)) return(NA_real_)
   tot <- sum(psc$mean_cover, na.rm = TRUE)
   unk <- sum(psc$mean_cover[psc$nativity == "Unknown"], na.rm = TRUE)
   if (tot > 0) round(100 * unk / tot, 1) else NA_real_
 }
 
 # ---------------------------------------------------------------------------
-# Per-species mean % cover within a plot, de-pseudoreplicated across distinct
-# 1 m^2 subplots represented by at least one eligible occurrence record. Species
-# absence within those represented subplots contributes zero. Truly sampled but
-# vegetation-empty quadrats cannot enter until a separate survey-opportunity
-# table is bundled, so n_sub is published with the result rather than hidden.
+# The structural-zero denominator for a cover table: per plot, its distinct
+# 1 m^2 sampling units.  Units = `units` (normally attr(Q, "sampled_units"):
+# occurrence rows of any rank plus the event's ground-cover rows) united with
+# every scale-1 row of `occ` of any rank, so a quadrat holding only a coarse ID
+# or only ground cover still counts.  Supported plots = the plots in the table.
+# Returns data.frame(plotID, n_sub).
 # ---------------------------------------------------------------------------
-plot_species_cover <- function(occ, year = NULL) {
+cover_units_by_plot <- function(occ, units = NULL, year = NULL) {
+  d <- occ
+  if (!is.null(d) && !is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
+  s1 <- sampled_units(d, NULL)
+  u <- if (!is.null(units) && is.data.frame(units) && nrow(units)) {
+    uu <- data.frame(plotID = as.character(units$plotID),
+                     subplotID = as.character(units$subplotID), stringsAsFactors = FALSE)
+    rbind(uu, s1)
+  } else s1
+  u <- u[!is.na(u$plotID) & !is.na(u$subplotID) & !duplicated(u), , drop = FALSE]
+  if (!nrow(u)) return(data.frame(plotID = character(), n_sub = integer(), stringsAsFactors = FALSE))
+  n <- tapply(u$subplotID, u$plotID, length)
+  out <- data.frame(plotID = names(n), n_sub = as.integer(n), stringsAsFactors = FALSE)
+  out[order(out$plotID, method = "radix"), , drop = FALSE]
+}
+
+# ---------------------------------------------------------------------------
+# Per-species mean % cover within a plot: the species' summed 1 m^2 cover over
+# the plot's sampled 1 m^2 units (cover_units_by_plot()), so absence from a
+# sampled quadrat contributes zero.  `units` defaults to attr(occ,
+# "sampled_units") (attached by cover_snapshot()); pass it explicitly when
+# `occ` is a subset that lost the attribute.  No rounding here: values are
+# rounded only where they are printed.  Rows that share a sampling key with
+# different cover are summed (aggregation is a sum; they are flagged by
+# flag_duplicate_records()).  attrs: n_supported_plots, units_per_plot.
+# ---------------------------------------------------------------------------
+plot_species_cover <- function(occ, year = NULL, units = attr(occ, "sampled_units", exact = TRUE)) {
+  if (is.null(occ) || !nrow(occ)) return(NULL)
+  units <- units
+  nsub <- cover_units_by_plot(occ, units = units, year = year)
   d1 <- resolve_nativity_records(species_level_only(occ))
-  d1 <- d1[d1$scale == 1, , drop = FALSE]
+  d1 <- d1[.scale_num(d1$scale) %in% 1, , drop = FALSE]
   if (!is.null(year)) d1 <- d1[d1$year %in% year, , drop = FALSE]
-  if (!nrow(d1)) return(NULL)
-  # subplots sampled per plot = the structural-zero denominator (a species absent
-  # from a subplot contributes 0 cover there, so cover SHARE must divide by all
-  # sampled subplots, not only the ones where the species was present)
-  nsub <- d1 %>% dplyr::group_by(.data$plotID) %>%
-    dplyr::summarise(n_sub = dplyr::n_distinct(.data$subplotID), .groups = "drop")
+  if (!nrow(d1) || !nrow(nsub)) return(NULL)
   cov <- d1[is.finite(d1$percentCover) & d1$percentCover > 0, , drop = FALSE]
   if (!nrow(cov)) return(NULL)
   agg <- cov %>% dplyr::group_by(.data$plotID, .data$scientificName, .data$family, .data$nativity) %>%
     dplyr::summarise(sum_cover = sum(.data$percentCover), n_present = dplyr::n(), .groups = "drop") %>%
     dplyr::left_join(nsub, by = "plotID")
-  agg$mean_cover <- round(agg$sum_cover / agg$n_sub, 2)   # mean cover over ALL sampled subplots
+  agg$mean_cover <- agg$sum_cover / agg$n_sub   # mean cover over ALL sampled 1 m^2 units, unrounded
+  attr(agg, "n_supported_plots") <- nrow(nsub)
+  attr(agg, "units_per_plot") <- nsub
   agg
 }
 
@@ -499,15 +561,18 @@ plot_summary <- function(grain, cover = NULL, year = NULL) {
       lat = stats::median(.data$lat, na.rm = TRUE), lng = stats::median(.data$lng, na.rm = TRUE),
       .groups = "drop")
   cv <- if (is.null(cover)) grain else cover
+  cv_units <- attr(cv, "sampled_units", exact = TRUE)
   if (!is.null(year) && !is.null(cv) && nrow(cv)) cv <- cv[cv$year %in% year, , drop = FALSE]
-  psc <- if (is.null(cv) || !nrow(cv)) NULL else plot_species_cover(cv)
+  psc <- if (is.null(cv) || !nrow(cv)) NULL else plot_species_cover(cv, units = cv_units)
+  # sums are unrounded; the 1-dp rounding is display precision applied last, and
+  # pct_introduced is computed from the unrounded sums (no double rounding)
   covagg <- if (is.null(psc)) NULL else psc %>% dplyr::group_by(.data$plotID) %>%
     dplyr::summarise(
-      total_cover  = round(sum(.data$mean_cover), 1),
-      intro_cover  = round(sum(.data$mean_cover[.data$nativity == "Introduced"]), 1),
-      native_cover = round(sum(.data$mean_cover[.data$nativity == "Native"]), 1),
+      total_cover  = sum(.data$mean_cover),
+      intro_cover  = sum(.data$mean_cover[.data$nativity == "Introduced"]),
+      native_cover = sum(.data$mean_cover[.data$nativity == "Native"]),
       dominant     = .data$scientificName[which.max(.data$mean_cover)],
-      dominant_cover = round(max(.data$mean_cover), 1),
+      dominant_cover = max(.data$mean_cover),
       .groups = "drop")
   out <- if (is.null(covagg)) rich else dplyr::left_join(rich, covagg, by = "plotID")
   for (nm in c("total_cover", "intro_cover", "native_cover", "dominant_cover"))
@@ -515,6 +580,8 @@ plot_summary <- function(grain, cover = NULL, year = NULL) {
   if (!("dominant" %in% names(out))) out$dominant <- NA_character_
   out$pct_introduced <- ifelse(is.finite(out$total_cover) & out$total_cover > 0,
                                round(100 * out$intro_cover / out$total_cover, 1), NA_real_)
+  for (nm in c("total_cover", "intro_cover", "native_cover", "dominant_cover"))
+    out[[nm]] <- round(out[[nm]], 1)
   out <- out %>% dplyr::arrange(dplyr::desc(.data$richness))
   attr(out, "grain_event") <- labels$grain
   attr(out, "cover_event") <- labels$cover
@@ -527,8 +594,41 @@ plot_summary <- function(grain, cover = NULL, year = NULL) {
 # plots in every year for the requested response.  This prevents changing plot
 # effort from masquerading as a temporal or environmental signal.
 # ---------------------------------------------------------------------------
-annual_plant_metrics <- function(occ) {
-  d <- resolve_nativity_records(species_level_only(snapshot_by_plot_year(occ)))
+# Sampled 1 m^2 units of each plot-year's selected bout: scale-1 rows of any
+# rank in `py` (a snapshot_by_plot_year() result) plus the ground-cover rows of
+# the same plot, year and selected bout.  data.frame(plotID, year, subplotID).
+.plot_year_units <- function(py, ground = NULL) {
+  occ_u <- py[.scale_num(py$scale) %in% 1 & !is.na(py$plotID) & !is.na(py$subplotID),
+              c("plotID", "year", "subplotID"), drop = FALSE]
+  occ_u <- data.frame(plotID = as.character(occ_u$plotID), year = occ_u$year,
+                      subplotID = as.character(occ_u$subplotID), stringsAsFactors = FALSE)
+  sup <- attr(py, "snapshot_support")
+  g_u <- NULL
+  if (!is.null(ground) && nrow(ground) && !is.null(sup) && nrow(sup) &&
+      all(c("plotID", "subplotID", "year") %in% names(ground))) {
+    g <- ground[!is.na(ground$plotID) & !is.na(ground$subplotID), , drop = FALSE]
+    key <- paste(as.character(g$plotID), g$year, sep = "\r")
+    skey <- paste(as.character(sup$plotID), sup$year, sep = "\r")
+    sel <- sup$selected_bout[match(key, skey)]
+    gb <- if ("bout" %in% names(g)) trimws(as.character(g$bout)) else rep(NA_character_, nrow(g))
+    same <- ifelse(is.na(sel), TRUE,
+                   !is.na(gb) & (gb == sel |
+                     (is.finite(suppressWarnings(as.numeric(gb))) &
+                        suppressWarnings(as.numeric(gb)) == suppressWarnings(as.numeric(sel)))))
+    keep <- key %in% skey & same %in% TRUE
+    g <- g[keep, , drop = FALSE]
+    if (nrow(g)) g_u <- data.frame(plotID = as.character(g$plotID), year = g$year,
+                                   subplotID = as.character(g$subplotID), stringsAsFactors = FALSE)
+  }
+  u <- rbind(occ_u, g_u)
+  u[!duplicated(u), , drop = FALSE]
+}
+
+annual_plant_metrics <- function(occ, ground = NULL) {
+  py <- snapshot_by_plot_year(occ)
+  if (is.null(py) || !nrow(py)) return(NULL)
+  units_all <- .plot_year_units(py, ground)
+  d <- resolve_nativity_records(species_level_only(py))
   if (is.null(d) || !nrow(d)) return(NULL)
   yrs <- sort(unique(d$year[!is.na(d$year)]))
   if (!length(yrs)) return(NULL)
@@ -552,7 +652,8 @@ annual_plant_metrics <- function(occ) {
       dplyr::summarise(richness = mean(.data$r), n_native = mean(.data$rn),
                        n_introduced = mean(.data$ri), .groups = "drop")
 
-    psc <- plot_species_cover(dy)
+    uy <- units_all[units_all$year %in% y, c("plotID", "subplotID"), drop = FALSE]
+    psc <- plot_species_cover(dy, units = uy)
     cov <- if (is.null(psc)) NULL else psc %>%
       dplyr::group_by(.data$plotID) %>%
       dplyr::summarise(
@@ -565,10 +666,12 @@ annual_plant_metrics <- function(occ) {
     out$pct_introduced <- ifelse(is.finite(out$total_cover) & out$total_cover > 0,
                                   100 * out$intro_cover / out$total_cover, NA_real_)
 
-    scale_num <- suppressWarnings(as.numeric(as.character(dy$scale)))
-    scale1 <- dy[is.finite(scale_num) & scale_num == 1, , drop = FALSE]
-    nunit <- if (nrow(scale1)) scale1 %>% dplyr::group_by(.data$plotID) %>%
-      dplyr::summarise(n_sampling_units = dplyr::n_distinct(.data$subplotID), .groups = "drop") else NULL
+    # sampled 1 m^2 units of the selected bout (any rank + ground cover): the
+    # cover denominator and the support label of every annual response
+    nunit <- if (nrow(uy)) {
+      tt <- tapply(uy$subplotID, uy$plotID, length)
+      data.frame(plotID = names(tt), n_sampling_units = as.integer(tt), stringsAsFactors = FALSE)
+    } else NULL
     if (!is.null(nunit)) out <- dplyr::left_join(out, nunit, by = "plotID")
     if (!("n_sampling_units" %in% names(out))) out$n_sampling_units <- 0L
     out$n_sampling_units[is.na(out$n_sampling_units)] <- 0L
@@ -591,7 +694,8 @@ annual_plant_metrics <- function(occ) {
   attr(out, "estimand") <- paste(
     "plot-year response after one deterministic bout per plot-year;",
     "richness, n_native and n_introduced are mean 1 m^2 subplot richness per plot",
-    "(the annually surveyed grain), cover is the 1 m^2 relative cover index")
+    "(the annually surveyed grain), cover is the 1 m^2 relative cover index over the",
+    "selected bout's sampled 1 m^2 units (occurrence rows of any rank plus ground cover)")
   out
 }
 
@@ -636,8 +740,8 @@ design_segment <- function(years, at = 2019) {
   ifelse(is.finite(y) & y >= at, paste0(at, " onward"), paste0("before ", at))
 }
 
-balanced_plant_metric_series <- function(occ, metric = "richness") {
-  pm <- annual_plant_metrics(occ)
+balanced_plant_metric_series <- function(occ, metric = "richness", ground = NULL) {
+  pm <- annual_plant_metrics(occ, ground = ground)
   if (is.null(pm) || !nrow(pm) || !(metric %in% names(pm))) return(NULL)
   yrs <- sort(unique(pm$year[!is.na(pm$year)]))
   if (!length(yrs)) return(NULL)
@@ -795,11 +899,11 @@ chao2 <- function(occ, year = NULL) {
 # Native vs Invasive — the first-class plant lens.
 # ---------------------------------------------------------------------------
 # site-level: introduced cover share, introduced richness, unknown rate, by year
-native_trend <- function(occ) {
-  pct <- balanced_plant_metric_series(occ, "pct_introduced")
+native_trend <- function(occ, ground = NULL) {
+  pct <- balanced_plant_metric_series(occ, "pct_introduced", ground = ground)
   if (is.null(pct)) return(NULL)
   panel <- attr(pct, "panel_plotIDs")
-  metrics <- annual_plant_metrics(occ)
+  metrics <- annual_plant_metrics(occ, ground = ground)
   metrics <- metrics[
     metrics$plotID %in% panel & metrics$year %in% pct$year &
       is.finite(metrics$pct_introduced), , drop = FALSE]
@@ -819,21 +923,20 @@ native_trend <- function(occ) {
 }
 
 # the invasive watchlist: introduced species ranked by mean 1 m^2 cover + ubiquity
-invasive_watchlist <- function(occ, year = NULL) {
-  psc <- plot_species_cover(occ, year = year)
+# mean_cover is UNROUNDED (a present invader is never exported as 0); round or
+# signif() only where printed.  n_supported_plots = plots with sampled units.
+invasive_watchlist <- function(occ, year = NULL, units = attr(occ, "sampled_units", exact = TRUE)) {
+  psc <- plot_species_cover(occ, year = year, units = units)
   if (is.null(psc)) return(NULL)
   inv <- psc[psc$nativity == "Introduced", , drop = FALSE]
   if (!nrow(inv)) return(NULL)
-  d <- species_level_only(occ)
-  if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
-  supported_plots <- unique(d$plotID[d$scale == 1 & !is.na(d$plotID)])
-  n_supported <- length(supported_plots)
+  n_supported <- attr(psc, "n_supported_plots", exact = TRUE) %||% 0L
   if (!n_supported) return(NULL)
   inv %>% dplyr::group_by(.data$scientificName, .data$family) %>%
     dplyr::summarise(
       # Species absent from a supported plot contributes zero here; this is not
       # a mean over only the plots where the introduced species was present.
-      mean_cover = round(sum(.data$mean_cover, na.rm = TRUE) / n_supported, 1),
+      mean_cover = sum(.data$mean_cover, na.rm = TRUE) / n_supported,
       n_plots = dplyr::n_distinct(.data$plotID),
       n_supported_plots = n_supported, .groups = "drop") %>%
     dplyr::arrange(dplyr::desc(.data$mean_cover), dplyr::desc(.data$n_plots))
@@ -890,7 +993,8 @@ species_cross_scale_occurrence <- function(occ, year = NULL, cover = NULL) {
   if (!nrow(intro)) return(NULL)
   # occ is the grain snapshot F (needs 1 and 400 m^2); mean 1 m^2 cover comes
   # from the cover snapshot Q when supplied, else from F's own 1 m^2 rows.
-  wl <- invasive_watchlist(if (is.null(cover)) d else cover, year = year)
+  wl <- if (is.null(cover)) invasive_watchlist(d, year = year, units = NULL) else
+    invasive_watchlist(cover, year = year)
   mean_cov <- if (!is.null(wl) && nrow(wl))
     stats::setNames(wl$mean_cover, wl$scientificName) else numeric(0)
   per_sp <- function(sp) {
@@ -901,7 +1005,7 @@ species_cross_scale_occurrence <- function(occ, year = NULL, cover = NULL) {
                family   = mode_chr(s$family),
                plots_1m = length(p1),
                plots_400 = length(p4),
-               mean_cover_1m = round(as.numeric(mean_cov[sp] %||% NA_real_), 2),
+               mean_cover_1m = signif(as.numeric(mean_cov[sp] %||% NA_real_), 3),
                plotlist_1m  = paste(short_plot(p1), collapse = ", "),
                plotlist_400 = paste(short_plot(p4), collapse = ", "),
                stringsAsFactors = FALSE)
@@ -962,11 +1066,13 @@ species_summary <- function(grain, cover = NULL, year = NULL) {
   if (is.null(d)) return(NULL)
   if (!is.null(year)) d <- d[d$year %in% year, , drop = FALSE]
   if (!nrow(d)) return(NULL)
-  cv <- if (is.null(cover)) d else resolve_nativity_records(species_level_only(cover))
+  # the cover table keeps every rank: coarse-only quadrats are sampled units
+  cv <- if (is.null(cover)) grain else cover
+  cv_units <- attr(cv, "sampled_units", exact = TRUE)
   if (!is.null(year) && !is.null(cv) && nrow(cv)) cv <- cv[cv$year %in% year, , drop = FALSE]
-  supported_plots <- if (is.null(cv) || !nrow(cv)) character() else
-    unique(cv$plotID[.scale_num(cv$scale) %in% 1 & !is.na(cv$plotID)])
-  psc <- if (length(supported_plots)) plot_species_cover(cv) else NULL
+  nsub <- if (is.null(cv) || !nrow(cv)) NULL else cover_units_by_plot(cv, units = cv_units)
+  supported_plots <- if (is.null(nsub)) character() else nsub$plotID
+  psc <- if (length(supported_plots)) plot_species_cover(cv, units = cv_units) else NULL
   cov_by_sp <- if (!is.null(psc) && nrow(psc)) {
     tapply(psc$mean_cover, psc$scientificName, sum) / length(supported_plots)
   } else numeric(0)
@@ -978,7 +1084,7 @@ species_summary <- function(grain, cover = NULL, year = NULL) {
                      min_scale = suppressWarnings(min(.data$scale, na.rm = TRUE)),
                      .groups = "drop") %>%
     dplyr::mutate(
-      mean_cover = round(as.numeric(cov_by_sp[.data$scientificName]), 2),
+      mean_cover = as.numeric(cov_by_sp[.data$scientificName]),
       plots_with_cover = dplyr::coalesce(as.integer(n_cov_by_sp[.data$scientificName]), 0L)) %>%
     dplyr::arrange(dplyr::desc(.data$n_plots), dplyr::desc(.data$mean_cover))
   if (!length(supported_plots)) out$plots_with_cover <- NA_integer_
@@ -986,6 +1092,33 @@ species_summary <- function(grain, cover = NULL, year = NULL) {
   attr(out, "cover_event") <- labels$cover
   attr(out, "n_supported_plots") <- length(supported_plots)
   out
+}
+
+# ---------------------------------------------------------------------------
+# The site headline numbers from one site_snapshot() result, each on its own
+# event: species, plots, introduced species and species-area on the grain
+# event F (nativity conflicts resolved within F); % introduced cover, Chao2
+# and its S_obs on the cover event Q.  One definition for the hero, the PDF,
+# the compare view and scripts/verify_bundle.R (which checks it against the
+# independent oracle in scripts/plant_oracle.R).
+# ---------------------------------------------------------------------------
+snapshot_headlines <- function(ss) {
+  g <- ss$grain; q <- ss$cover
+  g_ok <- !is.null(g) && nrow(g) > 0
+  q_ok <- !is.null(q) && nrow(q) > 0
+  sp <- if (g_ok) resolve_nativity_records(species_level_only(g)) else NULL
+  sa <- if (g_ok) species_area_site(g) else NULL
+  ch <- if (q_ok) chao2(q) else NULL
+  sa_at <- function(a) if (is.null(sa)) NA_real_ else {
+    v <- sa$richness[sa$area_m2 == a]; if (length(v)) v else NA_real_ }
+  list(
+    species = if (g_ok) length(unique(sp$scientificName)) else NA_integer_,
+    n_plots = if (g_ok) length(unique(g$plotID)) else NA_integer_,
+    n_introduced_species = if (g_ok) length(unique(sp$scientificName[sp$nativity == "Introduced"])) else NA_integer_,
+    pct_introduced = if (q_ok) site_invasion(q) else NA_real_,
+    species_area = c(`1` = sa_at(1), `10` = sa_at(10), `100` = sa_at(100), `400` = sa_at(400)),
+    chao2 = if (is.null(ch)) NA_real_ else ch$chao2,
+    S_obs = if (is.null(ch)) NA_integer_ else ch$S_obs)
 }
 
 # ---------------------------------------------------------------------------
@@ -997,7 +1130,7 @@ species_summary <- function(grain, cover = NULL, year = NULL) {
 search_taxa_for_site <- function(site, bundle) {
   if (is.null(bundle$occ) || !nrow(bundle$occ))
     stop(sprintf("%s has no occurrence table", site), call. = FALSE)
-  ss <- site_snapshot(bundle$occ)
+  ss <- site_snapshot(bundle$occ, ground = bundle$ground)
   sp <- species_summary(ss$grain, ss$cover)
   if (is.null(sp) || !nrow(sp))
     stop(sprintf("%s has no species-level grain snapshot", site), call. = FALSE)
@@ -1016,9 +1149,10 @@ search_taxa_for_site <- function(site, bundle) {
 }
 
 # cover composition by a grouping column (family or nativity) for the Overview
-cover_by_group <- function(occ, by = c("family", "nativity"), year = NULL) {
+cover_by_group <- function(occ, by = c("family", "nativity"), year = NULL,
+                           units = attr(occ, "sampled_units", exact = TRUE)) {
   by <- match.arg(by)
-  psc <- plot_species_cover(occ, year = year)
+  psc <- plot_species_cover(occ, year = year, units = units)
   if (is.null(psc)) return(NULL)
   psc %>% dplyr::group_by(.data[[by]]) %>%
     dplyr::summarise(cover = round(sum(.data$mean_cover), 1),
@@ -1026,15 +1160,64 @@ cover_by_group <- function(occ, by = c("family", "nativity"), year = NULL) {
     dplyr::arrange(dplyr::desc(.data$cover))
 }
 
-# abiotic ground cover (bare soil / litter / rock ...) mean per class
-ground_summary <- function(ground, year = NULL) {
+# ---------------------------------------------------------------------------
+# Abiotic ground cover per class (PD-15).  With `cover` = the cover snapshot Q,
+# the ground rows are restricted to Q's event (year, bout, plots) and each
+# class's mean_cover is its summed cover over the event's sampled 1 m^2 units
+# (attr(Q, "sampled_units"); a unit without the class contributes zero).
+# n_units = that denominator; pct_quadrats_recorded = share of units where the
+# class was recorded with positive cover.  Repeated rows of one class in one
+# quadrat are averaged first (one value per quadrat-class).  layer = "canopy"
+# for overstory (an overlapping layer, draw it apart), else "ground".
+# Without `cover` (legacy call) every bundled row is used and the denominator
+# is every plot x subplot x year x bout visit in the table.
+# ---------------------------------------------------------------------------
+GROUND_CANOPY_CLASSES <- c("overstory")
+
+ground_summary <- function(ground, cover = NULL) {
   if (is.null(ground) || !nrow(ground)) return(NULL)
-  g <- if (!is.null(year)) ground[ground$year %in% year, ] else ground
-  g <- g[is.finite(g$percentCover) & g$percentCover > 0, ]
-  if (!nrow(g)) return(NULL)
-  g %>% dplyr::group_by(.data$otherVariables) %>%
-    dplyr::summarise(mean_cover = round(mean(.data$percentCover), 1), .groups = "drop") %>%
-    dplyr::arrange(dplyr::desc(.data$mean_cover))
+  year <- NULL
+  if (!is.null(cover) && !is.data.frame(cover)) { year <- cover; cover <- NULL }
+  g <- ground[!is.na(ground$otherVariables), , drop = FALSE]
+  bout_txt <- function(x) if ("bout" %in% names(x)) ifelse(is.na(x$bout), "", as.character(x$bout)) else ""
+  if (!is.null(cover)) {
+    ev <- attr(cover, "event", exact = TRUE)
+    if (is.null(ev)) return(NULL)
+    g <- snapshot_event(g, ev)
+    units <- attr(cover, "sampled_units", exact = TRUE) %||% sampled_units(cover, g)
+    unit_key <- paste(units$plotID, units$subplotID, sep = "\r")
+    gkey <- paste(g$plotID, g$subplotID, sep = "\r")
+    # units always contain the event's ground quadrats when built by
+    # cover_snapshot(ground = ); add them here when Q was built without ground
+    unit_key <- unique(c(unit_key, gkey))
+  } else {
+    if (!is.null(year)) g <- g[g$year %in% year, , drop = FALSE]
+    gkey <- paste(g$plotID, g$subplotID, g$year, bout_txt(g), sep = "\r")
+    unit_key <- unique(gkey)
+  }
+  n_units <- length(unit_key)
+  if (!nrow(g) || !n_units) return(NULL)
+  val <- suppressWarnings(as.numeric(g$percentCover))
+  ok <- is.finite(val)
+  if (!any(ok)) return(NULL)
+  per <- stats::aggregate(list(v = val[ok]),
+                          by = list(cls = as.character(g$otherVariables[ok]), unit = gkey[ok]),
+                          FUN = mean)
+  cls <- sort(unique(per$cls), method = "radix")
+  out <- data.frame(
+    otherVariables = cls,
+    mean_cover = vapply(cls, function(k) sum(per$v[per$cls == k]) / n_units, numeric(1)),
+    n_units = as.integer(n_units),
+    pct_quadrats_recorded = vapply(cls, function(k)
+      100 * length(unique(per$unit[per$cls == k & per$v > 0])) / n_units, numeric(1)),
+    layer = ifelse(cls %in% GROUND_CANOPY_CLASSES, "canopy", "ground"),
+    stringsAsFactors = FALSE)
+  out <- out[out$mean_cover > 0, , drop = FALSE]
+  if (!nrow(out)) return(NULL)
+  out <- out[order(out$layer == "canopy", -out$mean_cover, method = "radix"), , drop = FALSE]
+  rownames(out) <- NULL
+  attr(out, "cover_event") <- if (!is.null(cover)) attr(cover, "snapshot_label", exact = TRUE) else NA_character_
+  out
 }
 
 # modal non-NA character (ported from the mammal app)
@@ -1081,6 +1264,19 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   n_introduced   = "introduced species count (400 m^2 plot list in snapshots; mean per 1 m^2 subplot in annual series)",
   mean_richness_1m2 = "mean 1 m^2 subplot species richness per plot (the annually surveyed grain)",
   plots_with_cover = "number of cover-event plots where the species had positive 1 m^2 cover",
+  n_supported_plots = "plots in the cover event with sampled 1 m^2 units (the denominator of the site mean cover)",
+  mean_cover     = "mean 1 m^2 cover over the cover event's sampled 1 m^2 units (structural zero; relative index): per species over supported plots in species tables, per class in ground-cover tables",
+  n_units        = "number of sampled 1 m^2 units (plot x quadrat) in the cover event behind a ground-cover mean",
+  pct_quadrats_recorded = "share of the cover event's sampled 1 m^2 units where the ground-cover class was recorded with positive cover",
+  layer          = "ground (partitioning surface classes) or canopy (overstory, an overlapping layer)",
+  n_sampling_units = "sampled 1 m^2 units (occurrence rows of any rank plus ground-cover rows) behind an annual value",
+  selected_bouts = "bouts selected (one per plot-year) behind an annual value",
+  flag           = "QC flag id (nativity_mismatch, cover_sum_gt_250, duplicate_record)",
+  level          = "QC flag tier (warn / info); verify, not wrong",
+  usda_nativity  = "USDA PLANTS lower-48 nativity of the accepted symbol",
+  quadrat_cover_sum_pct = "summed plant percent cover of one 1 m^2 quadrat visit",
+  n_records      = "number of bundled records sharing one sampling key (plot, quadrat, scale, year, bout, taxon)",
+  covers         = "percent cover values of the records sharing one sampling key, separated by semicolons",
   grain_event    = "label of the grain site event (year, bout, plots; 1/10/100 m^2) behind presence and richness figures",
   cover_event    = "label of the cover site event (year, bout, plots; 1 m^2) behind cover-weighted figures",
   status         = "applicability or availability status of the row (e.g. cropland: no native reference applies)",
@@ -1115,7 +1311,10 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   artifact       = "artifact class described by this provenance row",
   builtAt        = "date the app bundle was actually built (unknown for the exact legacy family)",
   exportedAt     = "date this CSV export was generated",
-  neonRelease    = "official NEON published release selected by the query, when one was actually selected",
+  neonRelease    = "NEON data release pinned by the query (RELEASE-2026 for this family)",
+  neonReleaseDoi = "DOI of the pinned NEON data release (https://doi.org/10.48443/...)",
+  neonReleaseCitation = "CC BY 4.0 citation of the pinned NEON data release",
+  dataThrough    = "latest observation year in the bundled records (not the query cutoff)",
   repositoryImportedAt = "date the exact legacy family was imported into this repository; not an upstream build or fetch date",
   sourceStart    = "first calendar month requested by a receipt-complete source query",
   sourceCutoff   = "closed end date requested by a receipt-complete source query",
@@ -1177,7 +1376,8 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("scale", "scale_m2")] <- "m^2"
   out[cols %in% c("percentCover", "groundCoverPct", "pct_introduced", "observed_cover", "observed_cover_pct",
                   "mean_cover_pct", "rh_pct", "vswc_pct", "flowering_pct", "greenup_pct",
-                  "fruiting_pct")] <- "%"
+                  "fruiting_pct", "mean_cover", "pct_quadrats_recorded",
+                  "quadrat_cover_sum_pct")] <- "%"
   out[cols %in% c("total_cover", "intro_cover", "native_cover", "dominant_cover")] <-
     "relative cover index (summed percentage-point means)"
   out[cols %in% c("precip_mm")] <- "mm/month"
@@ -1186,7 +1386,9 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("reference_production")] <- "air-dry lb/acre at normal precipitation"
   out[cols %in% c("mean_richness_1m2")] <- "species per m^2 quadrat"
   out[cols %in% c("richness", "n_native", "n_introduced", "n_unknown", "n_plots",
-                  "plots_with_cover", "matched_years", "flowering_pct_n", "greenup_pct_n", "fruiting_pct_n")] <- "count"
+                  "plots_with_cover", "matched_years", "flowering_pct_n", "greenup_pct_n", "fruiting_pct_n",
+                  "n_supported_plots", "n_units", "n_sampling_units", "n_records")] <- "count"
+  out[cols %in% c("dataThrough")] <- "year"
   out[cols %in% c("spearman_r")] <- "unitless correlation"
   out[cols %in% c("permutation_p", "lag_search_p")] <- "unitless probability"
   unname(out)
@@ -1221,6 +1423,12 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
     "NA means the species lacks an eligible observed 1 m^2 cover estimate; absence and missing cover are not interchangeable."
   out[cols %in% c("referenceLatitude", "referenceLongitude")] <-
     "NA means the historical reference artifact did not persist its query coordinate."
+  out[cols %in% c("neonReleaseDoi", "neonReleaseCitation")] <-
+    "NA means no NEON release was pinned by the query; no DOI is invented."
+  out[cols %in% c("mean_cover")] <-
+    "NA means the species had no eligible cover-event 1 m^2 cover; a present species is never exported as 0."
+  out[cols %in% c("usda_nativity", "quadrat_cover_sum_pct", "n_records", "covers")] <-
+    "NA means the field does not apply to this QC flag row."
   unname(out)
 }
 
@@ -1232,7 +1440,15 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("richness", "n_native", "n_introduced", "n_unknown", "total_cover", "intro_cover",
                   "native_cover", "dominant", "dominant_cover", "pct_introduced", "plotType", "nlcdClass",
                   "lat", "lng")] <-
-    "one plot in the site's grain event (presence, richness) with cover from the labelled cover event; cover is a relative index over recorded 1 m^2 occurrence units."
+    "one plot in the site's grain event (presence, richness) with cover from the labelled cover event; cover is a relative index over the cover event's sampled 1 m^2 units (occurrence rows of any rank plus ground-cover rows; absence counts as zero)."
+  out[cols %in% c("mean_cover", "n_supported_plots")] <-
+    "site mean over the cover event's supported plots: per-plot mean over sampled 1 m^2 units, absent plots count as zero; unrounded."
+  out[cols %in% c("n_units", "pct_quadrats_recorded", "layer")] <-
+    "abiotic ground cover over the cover event's sampled 1 m^2 units (structural zero); overstory is a canopy layer, not a ground class."
+  out[cols %in% c("n_sampling_units", "selected_bouts")] <-
+    "support of an annual value: one deterministic bout per plot-year over the recurrent plot panel."
+  out[cols %in% c("flag", "level", "usda_nativity", "quadrat_cover_sum_pct", "n_records", "covers")] <-
+    "one QC flag row: a record to verify, not a record known to be wrong."
   out[cols %in% c("mean_richness_1m2")] <-
     "mean over a plot's recorded 1 m^2 quadrats in one deterministic bout per plot-year."
   out[cols %in% c("grain_event", "cover_event", "status")] <-
@@ -1252,7 +1468,8 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
   out[cols %in% c("referenceScope", "referenceLatitude", "referenceLongitude", "ecoclassid", "ecositeName",
                   "ecosite_name", "mlra", "queryDate")] <-
     "provenance for the single-coordinate NRCS ecological-site reference artifact."
-  out[cols %in% c("artifact", "builtAt", "exportedAt", "neonRelease",
+  out[cols %in% c("artifact", "builtAt", "exportedAt", "neonRelease", "neonReleaseDoi",
+                  "neonReleaseCitation", "dataThrough",
                   "repositoryImportedAt", "sourceStart", "sourceCutoff",
                   "sourceReceiptId", "sourceDigest", "sourceReceiptBasis",
                   "sourceProvenanceClass", "sourceBundleCommit", "queryPackage",

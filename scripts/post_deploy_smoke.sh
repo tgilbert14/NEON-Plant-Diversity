@@ -12,6 +12,9 @@ MAX_TIME="${SMOKE_MAX_TIME:-45}"
 TOTAL_DEADLINE="${SMOKE_TOTAL_DEADLINE:-780}"
 APP_MARKER="${SMOKE_APP_MARKER:-id=\"appStatus\"}"
 COVER_MARKER="${SMOKE_COVER_MARKER:-NEON Plant Diversity Explorer}"
+# The served app page must also carry the registered document title and language.
+APP_TITLE_MARKER="${SMOKE_APP_TITLE_MARKER:-<title>NEON Plant Diversity Explorer</title>}"
+APP_LANG_MARKER="${SMOKE_APP_LANG_MARKER:-lang=\"en\"}"
 failed=0
 deadline_at=$((SECONDS + TOTAL_DEADLINE))
 
@@ -95,6 +98,10 @@ check_one() {
         echo "wait [$label] HTTP $code but host error page detected ($attempt/$MAX_ATTEMPTS)"
       elif ! grep -Fq "$marker" "$body"; then
         echo "wait [$label] HTTP $code but semantic marker is absent ($attempt/$MAX_ATTEMPTS)"
+      elif [[ "$label" == *"app"* ]] && ! grep -Fq "$APP_TITLE_MARKER" "$body"; then
+        echo "wait [$label] HTTP $code but the document title marker is absent ($attempt/$MAX_ATTEMPTS)"
+      elif [[ "$label" == *"app"* ]] && ! grep -Fq "$APP_LANG_MARKER" "$body"; then
+        echo "wait [$label] HTTP $code but the lang=\"en\" marker is absent ($attempt/$MAX_ATTEMPTS)"
       else
         echo "ok [$label] HTTP $code + application shell marker (attempt $attempt)"
         if ! check_release_receipt "$label" "$url"; then

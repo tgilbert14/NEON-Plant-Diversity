@@ -41,7 +41,16 @@ semantic_equal <- function(old, new, stable_fields) {
   isTRUE(equal_at_order(old, new, names(old)))
 }
 
+# PD-18: the bundler now drops exact duplicate rows.  A site whose candidate
+# equals the committed rows with exact duplicates removed changed only by that
+# contract step; it is reported as dedup-only, never as new data.
+dedup_equal <- function(old, new, stable_fields) {
+  old <- as.data.frame(old)
+  semantic_equal(old[!duplicated(old), , drop = FALSE], as.data.frame(new), stable_fields)
+}
+
 review <- data.frame(site = sites, occ_equal = FALSE, ground_equal = FALSE,
+                     occ_dedup_only = FALSE, ground_dedup_only = FALSE,
                      schema_equal = FALSE, candidate_schema = NA_character_,
                      stringsAsFactors = FALSE)
 for (i in seq_along(sites)) {
@@ -56,6 +65,12 @@ for (i in seq_along(sites)) {
     old$ground, new$ground,
     c("plotID", "subplotID", "year", "bout", "otherVariables")
   )
+  if (!review$occ_equal[[i]])
+    review$occ_dedup_only[[i]] <- dedup_equal(old$occ, new$occ,
+      c("plotID", "subplotID", "scale", "year", "bout", "scientificName", "taxonID"))
+  if (!review$ground_equal[[i]])
+    review$ground_dedup_only[[i]] <- dedup_equal(old$ground, new$ground,
+      c("plotID", "subplotID", "year", "bout", "otherVariables"))
   review$schema_equal[[i]] <- identical(
     paste(signature(old$occ), signature(old$ground), sep = " || "),
     paste(signature(new$occ), signature(new$ground), sep = " || ")
@@ -76,6 +91,10 @@ cat(sprintf("changed occurrence sites: %s\n",
             paste(review$site[!review$occ_equal], collapse = ",")))
 cat(sprintf("changed ground sites: %s\n",
             paste(review$site[!review$ground_equal], collapse = ",")))
+cat(sprintf("occurrence changed only by exact-duplicate removal: %s\n",
+            paste(review$site[review$occ_dedup_only], collapse = ",")))
+cat(sprintf("ground changed only by exact-duplicate removal: %s\n",
+            paste(review$site[review$ground_dedup_only], collapse = ",")))
 cat(sprintf("schema-class change sites: %s\n",
             paste(review$site[!review$schema_equal], collapse = ",")))
 # The reviewer states which sites are EXPECTED to carry refreshed rows through
@@ -85,8 +104,10 @@ cat(sprintf("schema-class change sites: %s\n",
 expected_changed <- sort(unique(Filter(nzchar, trimws(strsplit(
   Sys.getenv("PDE_EXPECTED_CHANGED_SITES", ""), ",", fixed = TRUE)[[1L]]))),
   method = "radix")
-if (!identical(sort(review$site[!review$occ_equal], method = "radix"), expected_changed) ||
-    !identical(sort(review$site[!review$ground_equal], method = "radix"), expected_changed) ||
+data_changed_occ <- review$site[!review$occ_equal & !review$occ_dedup_only]
+data_changed_ground <- review$site[!review$ground_equal & !review$ground_dedup_only]
+if (!identical(sort(data_changed_occ, method = "radix"), expected_changed) ||
+    !identical(sort(data_changed_ground, method = "radix"), expected_changed) ||
     length(unique(review$candidate_schema)) != 1L) {
   stop(sprintf("row review found an unexpected changed-site family or candidate schema (expected changed sites: %s)",
                if (length(expected_changed)) paste(expected_changed, collapse = ",") else "none"),

@@ -7,6 +7,7 @@
 suppressWarnings(suppressMessages(library(dplyr)))
 source("R/site_metadata.R")
 source("R/source_receipt.R")
+source("R/plant_release.R")
 source("R/plant_helpers.R")
 source("scripts/plant_raw_portability.R")
 
@@ -70,6 +71,21 @@ if (!grepl("^[0-9a-f]{40}$", builder_commit))
   stop("PDE_BUILDER_COMMIT must be a full Git commit", call. = FALSE)
 if (!is.na(neon_release) && !grepl("^[A-Za-z0-9._:-]+$", neon_release))
   stop("NEON_RELEASE contains unsupported characters", call. = FALSE)
+if (!is.na(neon_release) && !neon_release %in% PLANT_NEON_RELEASES$release)
+  stop(sprintf("NEON_RELEASE %s is not a registered DP1.10058.001 release", neon_release),
+       call. = FALSE)
+change_log_source <- file.path(raw_dir, "neon-change-log.json")
+require_change_log <- identical(trimws(Sys.getenv("PDE_REQUIRE_CHANGE_LOG", "")), "1")
+if (!file.exists(change_log_source) && require_change_log)
+  stop("PDE_REQUIRE_CHANGE_LOG=1 but neon-change-log.json is absent from PDE_RAW_DIR",
+       call. = FALSE)
+if (file.exists(change_log_source)) {
+  parsed_log <- load_neon_change_log(change_log_source)
+  if (is.null(parsed_log) || !identical(attr(parsed_log, "product"), "DP1.10058.001") ||
+      anyNA(parsed_log$id) || anyDuplicated(parsed_log$id))
+    stop("neon-change-log.json in PDE_RAW_DIR does not parse as the DP1.10058.001 change log",
+         call. = FALSE)
+}
 if (!file.exists(source_inventory))
   stop("The canonical raw per-file SHA-256 inventory is missing", call. = FALSE)
 inventory_lines <- readLines(source_inventory, warn = FALSE)
@@ -116,6 +132,10 @@ if (!file.copy(source_inventory,
                overwrite = TRUE, copy.mode = FALSE, copy.date = FALSE))
   stop("Could not preserve the canonical raw per-file SHA-256 inventory",
        call. = FALSE)
+if (file.exists(change_log_source) &&
+    !file.copy(change_log_source, file.path(source_dir, "neon-change-log.json"),
+               overwrite = TRUE, copy.mode = FALSE, copy.date = FALSE))
+  stop("Could not copy the NEON change log into data/source", call. = FALSE)
 
 parse_scale <- function(value) {
   value <- as.character(value)
@@ -142,8 +162,10 @@ is_species_rank <- function(rank, scientific_name) {
   rank_ok & !ambiguous
 }
 
+# Total order (PD-36): the key columns first, then every remaining column, so
+# rows tied on the key (e.g. two cover values) never depend on input order.
 stable_order <- function(frame, columns) {
-  columns <- intersect(columns, names(frame))
+  columns <- c(intersect(columns, names(frame)), setdiff(names(frame), columns))
   if (!length(columns) || !nrow(frame)) return(frame)
   keys <- lapply(frame[columns], function(value) {
     value <- as.character(value)
@@ -186,6 +208,14 @@ build_site <- function(site) {
     d2, site, "div_10m2Data100m2Data", parsed_source_start,
     as.Date(source_cutoff), d2_consumed
   )
+  # Release pin (fail closed): every consumed row must carry the pinned release.
+  if (!is.na(neon_release)) {
+    release_problems <- c(
+      plant_release_row_problems(d1, neon_release, sprintf("%s div_1m2Data", site), d1_consumed),
+      plant_release_row_problems(d2, neon_release, sprintf("%s div_10m2Data100m2Data", site), d2_consumed))
+    if (length(release_problems))
+      stop(paste(release_problems, collapse = "; "), call. = FALSE)
+  }
   year_of <- function(value) as.integer(substr(as.character(value), 1L, 4L))
 
   cover <- d1 |>
@@ -195,8 +225,13 @@ build_site <- function(site) {
       taxonID, scientificName, taxonRank, family, nativeStatusCode,
       nativity = nativity_of(nativeStatusCode),
       percentCover = suppressWarnings(as.numeric(percentCover)),
-      plotType, nlcdClass, decimalLatitude, decimalLongitude
-    )
+      plotType, nlcdClass, decimalLatitude, decimalLongitude, endDate
+    ) |>
+    # PD-18: drop exact duplicates on every retained column plus endDate
+    # (mirrors neonUtilities removeDups); same-key rows with different cover
+    # stay and are flagged by flag_duplicate_records().
+    dplyr::distinct() |>
+    dplyr::select(-"endDate")
   presence <- d2 |>
     dplyr::filter(!is.na(.data$scientificName)) |>
     dplyr::transmute(
@@ -204,8 +239,10 @@ build_site <- function(site) {
       bout = boutNumber, taxonID, scientificName, taxonRank, family,
       nativeStatusCode, nativity = nativity_of(nativeStatusCode),
       percentCover = NA_real_, plotType, nlcdClass,
-      decimalLatitude, decimalLongitude
-    )
+      decimalLatitude, decimalLongitude, endDate
+    ) |>
+    dplyr::distinct() |>
+    dplyr::select(-"endDate")
   occurrence <- dplyr::bind_rows(cover, presence) |>
     dplyr::filter(!is.na(.data$scale), !is.na(.data$year)) |>
     dplyr::mutate(is_species = is_species_rank(.data$taxonRank, .data$scientificName)) |>
@@ -219,8 +256,11 @@ build_site <- function(site) {
     dplyr::filter(.data$divDataType %in% "otherVariables", !is.na(.data$otherVariables)) |>
     dplyr::transmute(
       plotID, subplotID, year = year_of(endDate), bout = boutNumber,
-      otherVariables, percentCover = suppressWarnings(as.numeric(percentCover))
+      otherVariables, percentCover = suppressWarnings(as.numeric(percentCover)),
+      endDate
     ) |>
+    dplyr::distinct() |>
+    dplyr::select(-"endDate") |>
     dplyr::filter(!is.na(.data$year))
   ground <- stable_order(ground, c("plotID", "subplotID", "year", "bout", "otherVariables"))
 
@@ -269,7 +309,7 @@ for (site in expected_sites) {
 
   # plant-snapshot-v2: richness / n_plots / dominant family from the grain
   # event F, introduced-cover share from the cover event Q.
-  ss <- site_snapshot(bundle$occ)
+  ss <- site_snapshot(bundle$occ, ground = bundle$ground)
   snapshot <- ss$grain
   species <- species_level_only(snapshot)
   families <- sort(table(species$family[!is.na(species$family)]), decreasing = TRUE)

@@ -45,11 +45,12 @@ n_species <- function(d) length(unique(species_level_only(d)$scientificName))
 
 rows <- list(); bouts <- list()
 for (site in sites) {
-  occ <- readRDS(file.path("data", "sites", paste0(site, ".rds")))$occ
+  bundle <- readRDS(file.path("data", "sites", paste0(site, ".rds")))
+  occ <- bundle$occ
   old <- legacy_plot_latest_snapshot(occ)
   old_years <- sort(unique(old$year))
   old_c <- chao_parts(old)
-  ss <- site_snapshot(occ)
+  ss <- site_snapshot(occ, ground = bundle$ground)
   g <- ss$grain; q <- ss$cover
   new_c <- chao_parts(q)
   rows[[site]] <- data.frame(

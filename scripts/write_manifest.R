@@ -179,5 +179,28 @@ if (length(problems))
   stop(sprintf("MANIFEST PROVENANCE GATE FAILED: %s",
                paste(problems, collapse = "; ")), call. = FALSE)
 
+# Round-trip gate: the written file must describe exactly the pruned, re-pinned
+# package closure held in memory, package by package (names, versions, sources,
+# repositories and every DESCRIPTION field), so a serialization quirk cannot
+# silently change what Connect installs.
+written_names <- names(check$packages %||% list())
+pruned_names <- names(manifest$packages %||% list())
+roundtrip_problems <- character(0)
+if (!identical(sort(written_names), sort(pruned_names)))
+  roundtrip_problems <- c(roundtrip_problems, sprintf(
+    "package set differs: only written=[%s] only pruned=[%s]",
+    paste(setdiff(written_names, pruned_names), collapse = ","),
+    paste(setdiff(pruned_names, written_names), collapse = ",")
+  ))
+for (package in union(written_names, pruned_names)) {
+  if (!identical(check$packages[[package]], manifest$packages[[package]]))
+    roundtrip_problems <- c(roundtrip_problems, sprintf(
+      "%s differs between the written manifest and the pruned closure", package
+    ))
+}
+if (length(roundtrip_problems))
+  stop(sprintf("MANIFEST ROUND-TRIP GATE FAILED: %s",
+               paste(unique(roundtrip_problems), collapse = "; ")), call. = FALSE)
+
 cat(sprintf("MANIFEST PASSED: R %s, %d files, %d runtime packages.\n",
             R_PLATFORM_PIN, length(check$files), length(check$packages)))
