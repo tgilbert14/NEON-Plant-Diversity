@@ -351,7 +351,10 @@ verify_plant_durable_source_inventory <- function(
   if (!identical(source_status$provenance_class, "query-snapshot"))
     stop("Plant source inventory received an unknown provenance class",
          call. = FALSE)
-  if (!identical(files, inventory_path))
+  # NEON's change log (R/plant_release.R) is the one other file allowed beside
+  # the inventory; anything else in data/source fails closed.
+  change_log <- file.path(dirname(inventory_path), "neon-change-log.json")
+  if (!identical(setdiff(files, change_log), inventory_path))
     stop("Receipt-complete plant data must carry exactly one raw-source inventory",
          call. = FALSE)
   lines <- readLines(inventory_path, warn = FALSE)

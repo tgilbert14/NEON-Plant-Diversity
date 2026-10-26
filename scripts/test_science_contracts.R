@@ -716,6 +716,20 @@ assert(identical(n_dela$id, c(110012L, 110614L)) && identical(n_srer$id, 110012L
        nrow(plant_site_notices(NULL, "SRER", as.Date("2024-12-31"))) == 0L,
        "plant_site_notices() did not select site/All notices that start after the records")
 
+# The raw-source inventory may sit beside the change log, and beside nothing else.
+inv_dir <- file.path(tempfile(), "source"); dir.create(inv_dir, recursive = TRUE)
+inv_path <- file.path(inv_dir, "plant-raw-SHA256SUMS.txt")
+writeLines(sprintf("%s  ./%s_raw.rds", strrep("a", 64), c("JORN", "SRER")), inv_path)
+inv_status <- list(provenance_class = "query-snapshot",
+                   source_digest = digest::digest(file = inv_path, algo = "sha256", serialize = FALSE))
+invisible(file.copy(cl_path, file.path(inv_dir, "neon-change-log.json")))
+assert(isTRUE(verify_plant_durable_source_inventory(inv_status, c("SRER", "JORN"), inv_path)),
+       "the raw-source inventory check rejected the NEON change log beside it")
+writeLines("x", file.path(inv_dir, "stray.txt"))
+assert(inherits(tryCatch(verify_plant_durable_source_inventory(inv_status, c("SRER", "JORN"), inv_path),
+                         error = function(e) e), "error"),
+       "the raw-source inventory check accepted a stray file in data/source")
+
 # ---- PD-34: site allowlists before any readRDS path --------------------------
 assert(is.null(load_env("../x")) && is.null(load_expected("../x")) &&
        is.null(load_env("srer")) && is.null(load_expected(c("SRER", "JORN"))),
