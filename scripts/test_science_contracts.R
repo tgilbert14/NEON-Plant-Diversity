@@ -692,6 +692,13 @@ assert(length(plant_release_row_problems(rel_fx[c(1, 3), , drop = FALSE], "RELEA
        "plant_release_row_problems() does not fail closed")
 assert(identical(plant_data_through(list(list(years = 2016:2024), list(years = 2013:2020))), 2024L),
        "plant_data_through() is not the latest observation year")
+# NEON's BibTeX carries the DOI in upper case; the key need not repeat it.
+neon_bib <- "@misc{neon2026,\n  doi = {10.48443/9G4S-HQ52},\n  url = {https://data.neonscience.org/data-products/DP1.10058.001/RELEASE-2026}\n}"
+assert(plant_citation_names_release(neon_bib, "RELEASE-2026") &&
+       !plant_citation_names_release(neon_bib, "RELEASE-2025") &&
+       !plant_citation_names_release("Plant presence and percent cover", "RELEASE-2026") &&
+       !plant_citation_names_release(neon_bib, NA_character_),
+       "plant_citation_names_release() does not match the release DOI case-insensitively")
 
 # ---- NEON change log loader and per-site notices -----------------------------
 cl_path <- tempfile(fileext = ".json")

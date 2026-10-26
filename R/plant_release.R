@@ -37,6 +37,16 @@ plant_release_doi <- function(release = PLANT_NEON_RELEASE) {
   if (is.na(i)) NA_character_ else PLANT_NEON_RELEASES$doi[i]
 }
 
+# TRUE when a citation element from loadByProduct names the DOI of `release`.
+# DOI names are case-insensitive, and NEON's BibTeX writes the doi field in
+# upper case (doi = {10.48443/9G4S-HQ52}), so the comparison ignores case.
+plant_citation_names_release <- function(text, release = PLANT_NEON_RELEASE) {
+  doi <- plant_release_doi(release)
+  if (is.na(doi)) return(FALSE)
+  name <- tolower(sub("^https://doi[.]org/", "", doi))
+  grepl(name, tolower(paste(unlist(text), collapse = " ")), fixed = TRUE)
+}
+
 # One-line CC BY 4.0 citation.  An NA release drops the release and DOI parts
 # (no release label is invented for a query that did not select one).
 plant_release_citation <- function(release = PLANT_NEON_RELEASE) {

@@ -46,7 +46,7 @@ citation_problems <- function(result, site) {
     return(character(0))
   }
   text <- paste(unlist(result[citation_names], use.names = FALSE), collapse = " ")
-  if (!grepl(release_doi_suffix, text, fixed = TRUE))
+  if (!plant_citation_names_release(text, release_pin))
     return(sprintf(
       "citation element(s) %s do not name the %s DOI suffix %s",
       paste(citation_names, collapse = ","), release_pin, release_doi_suffix
