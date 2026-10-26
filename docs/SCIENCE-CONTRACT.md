@@ -17,7 +17,7 @@ Status: registered estimator contract; source-family review updated for validate
 - Cover interpretation: relative ocular index with potentially overlapping vegetation layers; never a fraction of bare ground.
 - 1 m² sampling units: a plot's units in the cover event are its quadrats that carry any occurrence row (any taxon rank, coarse IDs included) or any ground-cover row in that event. A quadrat that held only bare soil, litter or rock is a sampled unit with zero plant cover. (Before 2026-10-22 only quadrats with a species-level record counted, so JORN used 155 of its 198 sampled quadrats.)
 - Known opportunity limitation: a quadrat with neither a plant record nor a ground-cover record stays unknown, not zero. No function may claim a complete structural-zero correction until an explicit sampled-opportunity table exists.
-- Duplicate records: the bundle drops exact duplicate rows (every retained column plus the record date) at build time. Rows that still share plot, subplot, grain, year, bout and taxon with different cover stay, are summed as before, and are listed by the duplicate-record QC flag ("verify, not wrong").
+- Duplicate records: the bundle drops exact duplicate rows (every retained column) at build time; the bout is the survey event, so identical records dated apart within one bout count once. Rows that still share plot, subplot, grain, year, bout and taxon with different cover stay, are summed as before, and are listed by the duplicate-record QC flag ("verify, not wrong").
 
 ## Plant source-receipt contract
 

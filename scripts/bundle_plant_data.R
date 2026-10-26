@@ -225,13 +225,14 @@ build_site <- function(site) {
       taxonID, scientificName, taxonRank, family, nativeStatusCode,
       nativity = nativity_of(nativeStatusCode),
       percentCover = suppressWarnings(as.numeric(percentCover)),
-      plotType, nlcdClass, decimalLatitude, decimalLongitude, endDate
+      plotType, nlcdClass, decimalLatitude, decimalLongitude
     ) |>
-    # PD-18: drop exact duplicates on every retained column plus endDate
-    # (mirrors neonUtilities removeDups); same-key rows with different cover
-    # stay and are flagged by flag_duplicate_records().
-    dplyr::distinct() |>
-    dplyr::select(-"endDate")
+    # PD-18: drop exact duplicates on every retained column. The bout is the
+    # survey event, so two identical records of one taxon in one quadrat visit
+    # count once even when NEON dated them apart; the release gate in
+    # verify_bundle.R then finds no exact duplicate. Same-key rows with
+    # different cover stay and are flagged by flag_duplicate_records().
+    dplyr::distinct()
   presence <- d2 |>
     dplyr::filter(!is.na(.data$scientificName)) |>
     dplyr::transmute(
@@ -239,10 +240,9 @@ build_site <- function(site) {
       bout = boutNumber, taxonID, scientificName, taxonRank, family,
       nativeStatusCode, nativity = nativity_of(nativeStatusCode),
       percentCover = NA_real_, plotType, nlcdClass,
-      decimalLatitude, decimalLongitude, endDate
+      decimalLatitude, decimalLongitude
     ) |>
-    dplyr::distinct() |>
-    dplyr::select(-"endDate")
+    dplyr::distinct()
   occurrence <- dplyr::bind_rows(cover, presence) |>
     dplyr::filter(!is.na(.data$scale), !is.na(.data$year)) |>
     dplyr::mutate(is_species = is_species_rank(.data$taxonRank, .data$scientificName)) |>
@@ -256,11 +256,9 @@ build_site <- function(site) {
     dplyr::filter(.data$divDataType %in% "otherVariables", !is.na(.data$otherVariables)) |>
     dplyr::transmute(
       plotID, subplotID, year = year_of(endDate), bout = boutNumber,
-      otherVariables, percentCover = suppressWarnings(as.numeric(percentCover)),
-      endDate
+      otherVariables, percentCover = suppressWarnings(as.numeric(percentCover))
     ) |>
     dplyr::distinct() |>
-    dplyr::select(-"endDate") |>
     dplyr::filter(!is.na(.data$year))
   ground <- stable_order(ground, c("plotID", "subplotID", "year", "bout", "otherVariables"))
 
